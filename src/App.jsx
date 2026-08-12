@@ -7905,7 +7905,7 @@ return (
             letterSpacing: "-0.02em",
           }}
         >
-          Maze Arsenal
+          Mist Maze
         </h1>
         <div
           style={{
@@ -9492,7 +9492,7 @@ function LevelSelectScreen({
       <main className="level-select-content">
         <header className="selector-header">
           <div>
-            <div className="selector-kicker">Maze Arsenal</div>
+            <div className="selector-kicker">Mist Maze</div>
             <h1>Choose your level</h1>
           </div>
 

@@ -1,9 +1,9 @@
-# Maze Arsenal
+# Mist Maze
 
 ## Folder structure
 
 ```text
-maze-arsenal/
+mist-maze/
 ├── api/
 │   └── country.js
 ├── src/
@@ -13,7 +13,6 @@ maze-arsenal/
 │   └── setup.sql
 ├── .env.example
 ├── .gitignore
-├── eslint.config.js
 ├── index.html
 ├── package.json
 ├── vite.config.js
@@ -22,7 +21,7 @@ maze-arsenal/
 
 ## First-time setup
 
-1. Install a current Node.js release supported by Vite 8.
+1. Install Node.js 20.19+ or 22.12+ (or newer) for Vite 8.
 2. Open a terminal in this folder.
 3. Run:
 
@@ -53,7 +52,7 @@ Do not upload `.env.local`.
 ```bash
 git init
 git add .
-git commit -m "Initial Maze Arsenal release"
+git commit -m "Rebrand game as Mist Maze"
 git branch -M main
 git remote add origin https://github.com/YOUR_USERNAME/maze-arsenal.git
 git push -u origin main

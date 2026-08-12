@@ -226,6 +226,10 @@ class MazeAudioEngine {
     this.musicDelayGain = null;
     this.musicFeedbackGain = null;
     this.sfxGain = null;
+    this.musicVolumeGain = null;
+    this.sfxVolumeGain = null;
+    this.musicVolume = 0.75;
+    this.sfxVolume = 0.85;
     this.noiseBuffer = null;
     this.currentTheme = null;
     this.enabled = true;
@@ -253,6 +257,8 @@ class MazeAudioEngine {
     this.musicDelayGain = this.context.createGain();
     this.musicFeedbackGain = this.context.createGain();
     this.sfxGain = this.context.createGain();
+    this.musicVolumeGain = this.context.createGain();
+    this.sfxVolumeGain = this.context.createGain();
 
     this.masterGain.gain.value = this.enabled ? 0.72 : 0;
     this.musicGain.gain.value = 0.2;
@@ -262,15 +268,19 @@ class MazeAudioEngine {
     this.musicDelayGain.gain.value = 0.14;
     this.musicFeedbackGain.gain.value = 0.22;
     this.sfxGain.gain.value = 0.62;
+    this.musicVolumeGain.gain.value = this.musicVolume;
+    this.sfxVolumeGain.gain.value = this.sfxVolume;
 
     this.musicGain.connect(this.musicFilter);
-    this.musicFilter.connect(this.masterGain);
+    this.musicFilter.connect(this.musicVolumeGain);
     this.musicFilter.connect(this.musicDelay);
     this.musicDelay.connect(this.musicDelayGain);
-    this.musicDelayGain.connect(this.masterGain);
+    this.musicDelayGain.connect(this.musicVolumeGain);
     this.musicDelay.connect(this.musicFeedbackGain);
     this.musicFeedbackGain.connect(this.musicDelay);
-    this.sfxGain.connect(this.masterGain);
+    this.musicVolumeGain.connect(this.masterGain);
+    this.sfxGain.connect(this.sfxVolumeGain);
+    this.sfxVolumeGain.connect(this.masterGain);
     this.masterGain.connect(this.context.destination);
 
     const frameCount = Math.max(1, Math.floor(this.context.sampleRate * 0.8));
@@ -286,9 +296,56 @@ class MazeAudioEngine {
 
   resume() {
     const context = this.ensureContext();
-    if (context?.state === "suspended") {
-      context.resume().catch(() => {});
+
+    if (!context) {
+      return Promise.resolve(false);
     }
+
+    if (context.state === "running") {
+      return Promise.resolve(true);
+    }
+
+    return context
+      .resume()
+      .then(() => context.state === "running")
+      .catch(() => false);
+  }
+
+  unlock() {
+    const context = this.ensureContext();
+
+    if (!context) {
+      return Promise.resolve(false);
+    }
+
+    const playSilentUnlockPulse = () => {
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const now = context.currentTime;
+
+      gain.gain.setValueAtTime(0.00001, now);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(now);
+      oscillator.stop(now + 0.01);
+    };
+
+    if (context.state === "running") {
+      playSilentUnlockPulse();
+      return Promise.resolve(true);
+    }
+
+    return context
+      .resume()
+      .then(() => {
+        if (context.state === "running") {
+          playSilentUnlockPulse();
+          return true;
+        }
+
+        return false;
+      })
+      .catch(() => false);
   }
 
   setEnabled(enabled) {
@@ -306,6 +363,38 @@ class MazeAudioEngine {
     const now = context.currentTime;
     this.masterGain.gain.cancelScheduledValues(now);
     this.masterGain.gain.setTargetAtTime(this.enabled ? 0.72 : 0, now, 0.035);
+  }
+
+  setMusicVolume(volume) {
+    this.musicVolume = clamp(Number(volume) || 0, 0, 1);
+
+    if (!this.musicVolumeGain || !this.context) {
+      return;
+    }
+
+    const now = this.context.currentTime;
+    this.musicVolumeGain.gain.cancelScheduledValues(now);
+    this.musicVolumeGain.gain.setTargetAtTime(
+      this.musicVolume,
+      now,
+      0.025,
+    );
+  }
+
+  setSfxVolume(volume) {
+    this.sfxVolume = clamp(Number(volume) || 0, 0, 1);
+
+    if (!this.sfxVolumeGain || !this.context) {
+      return;
+    }
+
+    const now = this.context.currentTime;
+    this.sfxVolumeGain.gain.cancelScheduledValues(now);
+    this.sfxVolumeGain.gain.setTargetAtTime(
+      this.sfxVolume,
+      now,
+      0.025,
+    );
   }
 
   startMusic(themeKey) {
@@ -962,7 +1051,7 @@ const LEVEL_WEAPON_PRESENTATIONS = {
     crowbar: { label: "Temple Crusher", description: "A stone-headed relic strong enough to crack ancient masonry." },
     machete: { label: "Emerald Fang", description: "A sweeping green blade made to cut through vines and enemies alike." },
     pistol: { label: "Pathfinder's Sting", description: "A mud-proof sidearm trusted by generations of expedition leaders." },
-    revolver: { label: "Thunder Idol", description: "A recovered temple weapon whose heavy shots echo through the trees." },
+    revolver: { label: "Jaguar's Roar", description: "A heavy jungle sidearm whose thunderous shots roar through the canopy." },
     smg: { label: "Hornet Swarm", description: "A compact automatic weapon with a furious, stinging burst." },
     shotgun: { label: "Monsoon", description: "A close-range weapon that floods the path with a wide blast." },
     rifle: { label: "Canopy Spear", description: "A dependable long arm for threats hiding beyond the leaves." },
@@ -1050,6 +1139,30 @@ let detectedCountryCodePromise = null;
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL?.trim() ?? "";
 const SUPABASE_PUBLISHABLE_KEY =
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim() ?? "";
+
+const SUPPORT_LINKS = [
+  {
+    key: "1",
+    label: "$1",
+    url: import.meta.env.VITE_SUPPORT_URL_1?.trim() ?? "",
+  },
+  {
+    key: "2",
+    label: "$2",
+    url: import.meta.env.VITE_SUPPORT_URL_2?.trim() ?? "",
+  },
+  {
+    key: "5",
+    label: "$5",
+    url: import.meta.env.VITE_SUPPORT_URL_5?.trim() ?? "",
+  },
+  {
+    key: "custom",
+    label: "CUSTOM",
+    url: import.meta.env.VITE_SUPPORT_URL_CUSTOM?.trim() ?? "",
+  },
+];
+
 const GLOBAL_LEADERBOARD_ENABLED = Boolean(
   SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY,
 );
@@ -1435,6 +1548,14 @@ async function submitGlobalLeaderboardTime(
 }
 
 const MAX_AMMO = 200;
+const AMMO_SUPPORT_RANGED_CHANCE = 0.5;
+const AMMO_SUPPORT_MELEE_CHANCE = 0.18;
+const AMMO_SUPPORT_MIN_AMOUNT = 4;
+const AMMO_SUPPORT_MAX_AMOUNT = 8;
+const AMMO_EXTRA_MIN_AMOUNT = 3;
+const AMMO_EXTRA_MAX_AMOUNT = 7;
+const AMMO_DROP_MIN_TILE_SPACING = 7;
+const AMMO_ROUTE_SPACING = 22;
 const POWER_UP_PICKUP_COUNT = 20;
 const HUD_REFRESH_INTERVAL = 0.12;
 const DISTANCE_FIELD_INTERVAL = 0.08;
@@ -1821,31 +1942,121 @@ function findTileNearPercent(world, distances, percent, spread, used) { const ma
 
 return findSpawnTile( world, distances, Math.max(4, target - spread), target + spread, used, ); }
 
-function findNearbyOpenTiles(world, originTile, radius, used, minDistance = 1) { const candidates = [];
-
-for (let dy = -radius; dy <= radius; dy += 1) { for (let dx = -radius; dx <= radius; dx += 1) { const x = originTile.x + dx; const y = originTile.y + dy; const distance = Math.abs(dx) + Math.abs(dy);
-
-  if (distance < minDistance || distance > radius) {
-    continue;
+function isTileSeparated(tile, reservedTiles, minimumSpacing) {
+  if (!reservedTiles?.length || minimumSpacing <= 0) {
+    return true;
   }
 
-  if (!isWalkable(world, x, y)) {
-    continue;
-  }
+  return reservedTiles.every((reservedTile) => {
+    const distance =
+      Math.abs(tile.x - reservedTile.x) +
+      Math.abs(tile.y - reservedTile.y);
 
-  const key = indexOfTile(world.width, x, y);
-  if (used.has(key)) {
-    continue;
-  }
-
-  candidates.push({ x, y });
+    return distance >= minimumSpacing;
+  });
 }
 
+function findNearbyOpenTiles(
+  world,
+  originTile,
+  radius,
+  used,
+  minDistance = 1,
+  reservedTiles = [],
+  minimumSpacing = 0,
+) {
+  const candidates = [];
+
+  for (let dy = -radius; dy <= radius; dy += 1) {
+    for (let dx = -radius; dx <= radius; dx += 1) {
+      const x = originTile.x + dx;
+      const y = originTile.y + dy;
+      const distance = Math.abs(dx) + Math.abs(dy);
+
+      if (distance < minDistance || distance > radius) {
+        continue;
+      }
+
+      if (!isWalkable(world, x, y)) {
+        continue;
+      }
+
+      const tile = { x, y };
+      const key = indexOfTile(world.width, x, y);
+
+      if (used.has(key)) {
+        continue;
+      }
+
+      if (!isTileSeparated(tile, reservedTiles, minimumSpacing)) {
+        continue;
+      }
+
+      candidates.push(tile);
+    }
+  }
+
+  if (!candidates.length) {
+    return null;
+  }
+
+  const tile = candidates[Math.floor(Math.random() * candidates.length)];
+  used.add(indexOfTile(world.width, tile.x, tile.y));
+  return tile;
 }
 
-if (!candidates.length) { return null; }
+function findSpacedSpawnTile(
+  world,
+  distances,
+  minDistance,
+  maxDistance,
+  used,
+  reservedTiles,
+  minimumSpacing,
+) {
+  const spacingAttempts = [
+    minimumSpacing,
+    Math.max(3, Math.floor(minimumSpacing * 0.7)),
+    0,
+  ];
 
-const tile = candidates[Math.floor(Math.random() * candidates.length)]; used.add(indexOfTile(world.width, tile.x, tile.y)); return tile; }
+  for (const spacing of spacingAttempts) {
+    const candidates = [];
+
+    for (const tile of world.floorTiles) {
+      const key = indexOfTile(world.width, tile.x, tile.y);
+      const distance = distances[key];
+
+      if (used.has(key)) {
+        continue;
+      }
+
+      if (distance < minDistance || distance > maxDistance) {
+        continue;
+      }
+
+      if (!isTileSeparated(tile, reservedTiles, spacing)) {
+        continue;
+      }
+
+      candidates.push(tile);
+    }
+
+    if (candidates.length) {
+      const tile = candidates[Math.floor(Math.random() * candidates.length)];
+      used.add(indexOfTile(world.width, tile.x, tile.y));
+      return tile;
+    }
+  }
+
+  return findSpawnTile(
+    world,
+    distances,
+    minDistance,
+    maxDistance,
+    used,
+  );
+}
 
 function addPickup(world, tile, pickup) { const position = tileCenter(tile);
 
@@ -1853,49 +2064,121 @@ world.pickups.push({ id: `pickup-${world.nextId++}`, x: position.x, y: position.
 
 function spawnProjectile(world, projectile) { world.projectiles.push({ id: `projectile-${world.nextId++}`, radius: 0.09, ttl: 1.25, piercesLeft: 0, hitIds: new Set(), ...projectile, }); }
 
-function placeProgressionItems(world, distances, used) { const supportRequests = [];
+function placeProgressionItems(world, distances, used) {
+  const supportRequests = [];
+  const ammoTiles = [];
 
-for (const entry of WEAPON_SPAWN_PLAN) { const tile = findTileNearPercent( world, distances, entry.percent, entry.spread, used, );
+  for (const entry of WEAPON_SPAWN_PLAN) {
+    const tile = findTileNearPercent(
+      world,
+      distances,
+      entry.percent,
+      entry.spread,
+      used,
+    );
 
-addPickup(world, tile, {
-  type: "weapon",
-  weapon: entry.weapon,
-  label: getWeaponLabel(world, entry.weapon),
-});
+    addPickup(world, tile, {
+      type: "weapon",
+      weapon: entry.weapon,
+      label: getWeaponLabel(world, entry.weapon),
+    });
 
-for (let i = 0; i < entry.supportDrops; i += 1) {
-  supportRequests.push({ tile, weapon: entry.weapon });
+    for (let index = 0; index < entry.supportDrops; index += 1) {
+      supportRequests.push({ tile, weapon: entry.weapon });
+    }
+  }
+
+  for (const request of supportRequests) {
+    const weapon = WEAPONS[request.weapon];
+    const shouldDropAmmo =
+      weapon.type === "ranged"
+        ? chance(AMMO_SUPPORT_RANGED_CHANCE)
+        : chance(AMMO_SUPPORT_MELEE_CHANCE);
+
+    const nearby = findNearbyOpenTiles(
+      world,
+      request.tile,
+      shouldDropAmmo ? 8 : 5,
+      used,
+      shouldDropAmmo ? 4 : 2,
+      shouldDropAmmo ? ammoTiles : [],
+      shouldDropAmmo ? AMMO_DROP_MIN_TILE_SPACING : 0,
+    );
+
+    if (!nearby) {
+      continue;
+    }
+
+    if (shouldDropAmmo) {
+      addPickup(world, nearby, {
+        type: "ammo",
+        amount: randInt(
+          AMMO_SUPPORT_MIN_AMOUNT,
+          AMMO_SUPPORT_MAX_AMOUNT,
+        ),
+        label: getAmmoPickupLabel(world),
+      });
+      ammoTiles.push(nearby);
+    } else {
+      addPickup(world, nearby, {
+        type: "medkit",
+        amount: randInt(12, 24),
+        label: "Medkit",
+      });
+    }
+  }
+
+  const extraAmmo = Math.max(
+    4,
+    Math.floor(world.exit.distance / AMMO_ROUTE_SPACING),
+  );
+  const medkits = Math.floor(world.floorTiles.length * 0.02);
+
+  for (let index = 0; index < extraAmmo; index += 1) {
+    const progress = (index + 1) / (extraAmmo + 1);
+    const targetDistance = Math.floor(world.exit.distance * progress);
+    const routeWindow = Math.max(
+      7,
+      Math.floor(world.exit.distance / Math.max(12, extraAmmo * 2)),
+    );
+
+    const tile = findSpacedSpawnTile(
+      world,
+      distances,
+      Math.max(8, targetDistance - routeWindow),
+      Math.min(world.exit.distance, targetDistance + routeWindow),
+      used,
+      ammoTiles,
+      AMMO_DROP_MIN_TILE_SPACING,
+    );
+
+    addPickup(world, tile, {
+      type: "ammo",
+      amount: randInt(
+        AMMO_EXTRA_MIN_AMOUNT,
+        AMMO_EXTRA_MAX_AMOUNT,
+      ),
+      label: getAmmoPickupLabel(world),
+    });
+    ammoTiles.push(tile);
+  }
+
+  for (let index = 0; index < medkits; index += 1) {
+    const tile = findSpawnTile(
+      world,
+      distances,
+      8,
+      world.exit.distance,
+      used,
+    );
+
+    addPickup(world, tile, {
+      type: "medkit",
+      amount: randInt(10, 22),
+      label: "Medkit",
+    });
+  }
 }
-
-}
-
-for (const request of supportRequests) { const nearby = findNearbyOpenTiles(world, request.tile, 4, used, 2); if (!nearby) { continue; }
-
-const weapon = WEAPONS[request.weapon];
-const shouldDropAmmo =
-  weapon.type === "ranged" ? chance(0.82) : chance(0.38);
-
-if (shouldDropAmmo) {
-  addPickup(world, nearby, {
-    type: "ammo",
-    amount: randInt(8, 18),
-    label: getAmmoPickupLabel(world),
-  });
-} else {
-  addPickup(world, nearby, {
-    type: "medkit",
-    amount: randInt(12, 24),
-    label: "Medkit",
-  });
-}
-
-}
-
-const extraAmmo = Math.floor(world.floorTiles.length * 0.055); const medkits = Math.floor(world.floorTiles.length * 0.02);
-
-for (let i = 0; i < extraAmmo; i += 1) { const tile = findSpawnTile(world, distances, 8, world.exit.distance, used); addPickup(world, tile, { type: "ammo", amount: randInt(5, 16), label: getAmmoPickupLabel(world), }); }
-
-for (let i = 0; i < medkits; i += 1) { const tile = findSpawnTile(world, distances, 8, world.exit.distance, used); addPickup(world, tile, { type: "medkit", amount: randInt(10, 22), label: "Medkit", }); } }
 
 function placePowerUps(world, distances, used) { const spreadBase = 7;
 
@@ -7305,6 +7588,126 @@ return (
 
 
 
+
+
+function openSupportLink(url) {
+  if (!url || typeof window === "undefined") {
+    return;
+  }
+
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+function SupportButtons({ compact = false }) {
+  const configuredCount = SUPPORT_LINKS.filter((item) => item.url).length;
+
+  return (
+    <section
+      className={`support-panel${compact ? " compact" : ""}`}
+      aria-label="Support Mist Maze"
+    >
+      <div className="support-panel-heading">
+        <strong>♥ SUPPORT MIST MAZE</strong>
+        {!compact && (
+          <span>
+            Help keep the game online and improving.
+          </span>
+        )}
+      </div>
+
+      <div className="support-button-grid">
+        {SUPPORT_LINKS.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            className="support-amount-button"
+            disabled={!item.url}
+            title={
+              item.url
+                ? `Support Mist Maze with ${item.label}`
+                : "Payment link not configured yet"
+            }
+            onClick={() => openSupportLink(item.url)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      {!compact && configuredCount === 0 && (
+        <div className="support-setup-note">
+          Add the support payment URLs in Vercel Environment Variables.
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AudioVolumeControls({
+  enabled,
+  musicVolume,
+  sfxVolume,
+  onToggle,
+  onMusicVolumeChange,
+  onSfxVolumeChange,
+}) {
+  const musicPercent = Math.round(musicVolume * 100);
+  const sfxPercent = Math.round(sfxVolume * 100);
+
+  return (
+    <div
+      className="audio-volume-controls"
+      onPointerDown={(event) => event.stopPropagation()}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <button
+        type="button"
+        className="audio-master-toggle"
+        onClick={onToggle}
+        aria-pressed={enabled}
+      >
+        {enabled ? "🔊 AUDIO" : "🔇 MUTED"}
+      </button>
+
+      <label className="audio-volume-row">
+        <span>
+          <strong>MUSIC</strong>
+          <em>{musicPercent}%</em>
+        </span>
+        <input
+          type="range"
+          min="0"
+          max="100"
+          step="1"
+          value={musicPercent}
+          aria-label="Music volume"
+          onChange={(event) =>
+            onMusicVolumeChange(Number(event.target.value) / 100)
+          }
+        />
+      </label>
+
+      <label className="audio-volume-row">
+        <span>
+          <strong>SFX</strong>
+          <em>{sfxPercent}%</em>
+        </span>
+        <input
+          type="range"
+          min="0"
+          max="100"
+          step="1"
+          value={sfxPercent}
+          aria-label="Sound effects volume"
+          onChange={(event) =>
+            onSfxVolumeChange(Number(event.target.value) / 100)
+          }
+        />
+      </label>
+    </div>
+  );
+}
+
 function MobileHudOverlay({
   world,
   mapExpanded,
@@ -7354,6 +7757,10 @@ function MobileHudOverlay({
         <button type="button" onClick={onExitLevel}>
           MENU
         </button>
+      </div>
+
+      <div className="mobile-support-panel">
+        <SupportButtons compact />
       </div>
 
       <div
@@ -7458,6 +7865,8 @@ function ThreeDStatusSidebar({
           )}
         </div>
       </section>
+
+      <SupportButtons compact />
 
       <div className="three-d-sidebar-actions">
         <button type="button" className="three-d-start-button" onClick={onStart}>
@@ -7743,6 +8152,8 @@ const hudAccumulatorRef = useRef(0);
 const recordedVictoryRef = useRef(false);
 const audioRef = useRef(null);
 const [audioEnabled, setAudioEnabled] = useState(true);
+const [musicVolume, setMusicVolume] = useState(0.75);
+const [sfxVolume, setSfxVolume] = useState(0.85);
 const [selectedLevel, setSelectedLevel] = useState(null);
 const [selectionMode, setSelectionMode] = useState("2d");
 const [gameMode, setGameMode] = useState("2d");
@@ -7754,6 +8165,7 @@ const [leaderboardStatus, setLeaderboardStatus] = useState(
 );
 const [touchControlsEnabled, setTouchControlsEnabled] = useState(false);
 const [mobileMapExpanded, setMobileMapExpanded] = useState(false);
+const [rotatePromptDismissed, setRotatePromptDismissed] = useState(false);
 const [, setRevision] = useState(0);
 
 const forceRefresh = useCallback(() => { setRevision((value) => value + 1); }, []);
@@ -7974,8 +8386,73 @@ const getAudioEngine = useCallback(() => {
 const startLevelAudio = useCallback((world) => {
   const audio = getAudioEngine();
   audio.setEnabled(audioEnabled);
+
+  if (audioEnabled) {
+    void audio.unlock();
+  }
+
   audio.startMusic(world.level.themeKey);
 }, [audioEnabled, getAudioEngine]);
+
+useEffect(() => {
+  if (!audioEnabled || typeof window === "undefined") {
+    return undefined;
+  }
+
+  const unlockAudio = () => {
+    const audio = getAudioEngine();
+    audio.setEnabled(true);
+    void audio.unlock();
+  };
+
+  const pointerOptions = { capture: true, passive: true };
+
+  window.addEventListener("pointerdown", unlockAudio, pointerOptions);
+  window.addEventListener("touchend", unlockAudio, pointerOptions);
+  window.addEventListener("keydown", unlockAudio, true);
+
+  return () => {
+    window.removeEventListener("pointerdown", unlockAudio, pointerOptions);
+    window.removeEventListener("touchend", unlockAudio, pointerOptions);
+    window.removeEventListener("keydown", unlockAudio, true);
+  };
+}, [audioEnabled, getAudioEngine]);
+
+const handleMusicVolumeChange = useCallback(
+  (nextVolume) => {
+    const normalizedVolume = clamp(Number(nextVolume) || 0, 0, 1);
+    setMusicVolume(normalizedVolume);
+
+    const audio = getAudioEngine();
+    audio.setMusicVolume(normalizedVolume);
+
+    if (audioEnabled) {
+      void audio.unlock();
+    }
+  },
+  [audioEnabled, getAudioEngine],
+);
+
+const handleSfxVolumeChange = useCallback(
+  (nextVolume) => {
+    const normalizedVolume = clamp(Number(nextVolume) || 0, 0, 1);
+    setSfxVolume(normalizedVolume);
+
+    const audio = getAudioEngine();
+    audio.setSfxVolume(normalizedVolume);
+
+    if (audioEnabled) {
+      void audio.unlock();
+    }
+  },
+  [audioEnabled, getAudioEngine],
+);
+
+useEffect(() => {
+  const audio = getAudioEngine();
+  audio.setMusicVolume(musicVolume);
+  audio.setSfxVolume(sfxVolume);
+}, [getAudioEngine, musicVolume, sfxVolume]);
 
 const toggleAudio = useCallback(() => {
   const nextEnabled = !audioEnabled;
@@ -7984,8 +8461,12 @@ const toggleAudio = useCallback(() => {
   const audio = getAudioEngine();
   audio.setEnabled(nextEnabled);
 
-  if (nextEnabled && selectedLevel) {
-    audio.startMusic(worldRef.current.level.themeKey);
+  if (nextEnabled) {
+    void audio.unlock();
+
+    if (selectedLevel) {
+      audio.startMusic(worldRef.current.level.themeKey);
+    }
   }
 }, [audioEnabled, getAudioEngine, selectedLevel]);
 
@@ -8743,6 +9224,198 @@ return (
       left: 50%;
     }
 
+
+
+    .support-panel {
+      display: grid;
+      gap: 9px;
+      padding: 12px;
+      border: 1px solid rgba(244, 114, 182, 0.28);
+      border-radius: 14px;
+      background: rgba(15, 23, 42, 0.9);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.26);
+    }
+
+    .support-panel.compact {
+      gap: 6px;
+      padding: 7px;
+      border-radius: 11px;
+      background: rgba(2, 6, 23, 0.84);
+      backdrop-filter: blur(5px);
+    }
+
+    .support-panel-heading {
+      display: grid;
+      gap: 3px;
+    }
+
+    .support-panel-heading strong {
+      color: #f9a8d4;
+      font-size: 9px;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+    }
+
+    .support-panel-heading span {
+      color: #94a3b8;
+      font-size: 10px;
+      line-height: 1.35;
+    }
+
+    .support-button-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 6px;
+    }
+
+    .support-amount-button {
+      min-width: 0;
+      min-height: 38px;
+      padding: 6px 7px;
+      border: 1px solid rgba(244, 114, 182, 0.44);
+      border-radius: 10px;
+      background: linear-gradient(
+        135deg,
+        rgba(190, 24, 93, 0.38),
+        rgba(131, 24, 67, 0.28)
+      );
+      color: #fce7f3;
+      font: inherit;
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .support-amount-button:hover:not(:disabled) {
+      filter: brightness(1.12);
+    }
+
+    .support-amount-button:active:not(:disabled) {
+      transform: scale(0.95);
+    }
+
+    .support-amount-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.38;
+    }
+
+    .support-panel.compact .support-panel-heading strong {
+      font-size: 7px;
+      text-align: center;
+    }
+
+    .support-panel.compact .support-amount-button {
+      min-height: 32px;
+      padding: 5px;
+      font-size: 8px;
+    }
+
+    .support-setup-note {
+      color: #64748b;
+      font-size: 9px;
+      line-height: 1.35;
+    }
+
+    .mobile-support-panel {
+      position: absolute;
+      left: 50%;
+      bottom: max(10px, env(safe-area-inset-bottom));
+      z-index: 12;
+      width: min(250px, 46vw);
+      transform: translateX(-50%);
+      pointer-events: auto;
+    }
+
+    .touch-mobile.mode-3d .mobile-support-panel {
+      display: none;
+    }
+
+    .game-audio-volume-panel {
+      position: absolute;
+      right: 12px;
+      bottom: 12px;
+      z-index: 14;
+      width: 170px;
+      pointer-events: auto;
+    }
+
+    .audio-volume-controls {
+      display: grid;
+      gap: 7px;
+      padding: 9px;
+      border: 1px solid rgba(74, 222, 128, 0.28);
+      border-radius: 12px;
+      background: rgba(2, 6, 23, 0.86);
+      box-shadow: 0 8px 26px rgba(0, 0, 0, 0.34);
+      backdrop-filter: blur(5px);
+    }
+
+    .audio-master-toggle {
+      width: 100%;
+      min-height: 30px;
+      padding: 5px 7px;
+      border: 1px solid rgba(74, 222, 128, 0.34);
+      border-radius: 8px;
+      background: rgba(22, 101, 52, 0.22);
+      color: #bbf7d0;
+      font: inherit;
+      font-size: 8px;
+      font-weight: 900;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .audio-volume-row {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .audio-volume-row > span {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      color: #cbd5e1;
+      font-size: 7px;
+      letter-spacing: 0.06em;
+    }
+
+    .audio-volume-row strong {
+      color: #e2e8f0;
+    }
+
+    .audio-volume-row em {
+      color: #67e8f9;
+      font-style: normal;
+      font-weight: 900;
+    }
+
+    .audio-volume-row input[type="range"] {
+      width: 100%;
+      min-height: 24px;
+      margin: 0;
+      accent-color: #22d3ee;
+      cursor: pointer;
+      touch-action: none;
+    }
+
+    .touch-mobile .game-audio-volume-panel {
+      left: max(10px, env(safe-area-inset-left));
+      right: auto;
+      top: max(92px, calc(env(safe-area-inset-top) + 88px));
+      bottom: auto;
+      width: clamp(136px, 29vw, 172px);
+    }
+
+    .touch-mobile.mode-3d .game-audio-volume-panel {
+      left: max(8px, env(safe-area-inset-left));
+      top: max(60px, calc(env(safe-area-inset-top) + 56px));
+      width: clamp(132px, 24vw, 164px);
+    }
+
     .mobile-3d-sidebar {
       display: none;
     }
@@ -9209,9 +9882,32 @@ return (
         background: rgba(2, 6, 23, 0.92);
         color: #f8fafc;
         text-align: center;
-        pointer-events: none;
+        pointer-events: auto;
         box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
         backdrop-filter: blur(8px);
+      }
+
+      .mobile-rotate-close {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        border: 1px solid rgba(226, 232, 240, 0.28);
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.9);
+        color: #f8fafc;
+        font: inherit;
+        font-size: 24px;
+        font-weight: 700;
+        line-height: 30px;
+        cursor: pointer;
+        touch-action: manipulation;
+      }
+
+      .mobile-rotate-close:active {
+        transform: scale(0.92);
       }
 
       .mobile-rotate-icon {
@@ -9280,6 +9976,16 @@ return (
         >
           START NEW MAZE
         </button>
+        <div className="game-audio-volume-panel">
+          <AudioVolumeControls
+            enabled={audioEnabled}
+            musicVolume={musicVolume}
+            sfxVolume={sfxVolume}
+            onToggle={toggleAudio}
+            onMusicVolumeChange={handleMusicVolumeChange}
+            onSfxVolumeChange={handleSfxVolumeChange}
+          />
+        </div>
         {touchControlsEnabled && (
           <TouchControls
             gameMode={gameMode}
@@ -9304,8 +10010,20 @@ return (
             onFullscreen={handleMobileFullscreen}
           />
         )}
-        {touchControlsEnabled && (
-          <div className="mobile-rotate-prompt" role="status">
+        {touchControlsEnabled && !rotatePromptDismissed && (
+          <div
+            className="mobile-rotate-prompt"
+            role="dialog"
+            aria-label="Rotate phone recommendation"
+          >
+            <button
+              type="button"
+              className="mobile-rotate-close"
+              aria-label="Close rotate phone message"
+              onClick={() => setRotatePromptDismissed(true)}
+            >
+              ×
+            </button>
             <div className="mobile-rotate-icon">↻</div>
             <strong>Rotate your phone</strong>
             <span>Landscape gives you a much larger maze view.</span>
@@ -9538,6 +10256,8 @@ return (
           {audioEnabled ? "🔊" : "🔇"} {LEVEL_AUDIO_PROFILES[world.level.themeKey].title} · {audioEnabled ? "Music + SFX On" : "Muted"}
         </button>
       </section>
+
+      <SupportButtons />
 
       <section
         style={{

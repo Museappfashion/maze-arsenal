@@ -5423,7 +5423,7 @@ if (hud.powerUps.length > 0) { let x = 520; for (const powerUp of hud.powerUps) 
 
 ctx.fillStyle = "#cbd5e1"; ctx.font = "13px sans-serif"; const controlsText = hud.controls.join(" • "); ctx.fillText(controlsText, 18, CANVAS_HEIGHT - 32);
 
-if (hud.victory) { ctx.fillStyle = "#22c55e"; ctx.font = "bold 18px sans-serif"; ctx.fillText("Exit reached. Press N for a new maze.", 18, CANVAS_HEIGHT - 52); } else if (hud.gameOver) { ctx.fillStyle = "#f87171"; ctx.font = "bold 18px sans-serif"; ctx.fillText(`${getPlayerDisplayName(world)} fell in the maze. Press N to retry.`, 18, CANVAS_HEIGHT - 52); } }
+if (hud.victory) { ctx.fillStyle = "#22c55e"; ctx.font = "bold 18px sans-serif"; ctx.fillText("Exit reached.", 18, CANVAS_HEIGHT - 52); } else if (hud.gameOver) { ctx.fillStyle = "#f87171"; ctx.font = "bold 18px sans-serif"; ctx.fillText(`${getPlayerDisplayName(world)} fell in the maze.`, 18, CANVAS_HEIGHT - 52); } }
 
 function drawWorld2D(ctx, world) {
   const zoom = getWorldRenderZoom(world);
@@ -5556,11 +5556,6 @@ function drawWorld2D(ctx, world) {
         : `${getPlayerDisplayName(world)} survived ${formatTime(world.time)}`,
       CANVAS_WIDTH / 2,
       CANVAS_HEIGHT / 2 + 10,
-    );
-    ctx.fillText(
-      "Press N for a new maze",
-      CANVAS_WIDTH / 2,
-      CANVAS_HEIGHT / 2 + 42,
     );
     ctx.textAlign = "left";
   }
@@ -7034,11 +7029,6 @@ function draw3DOverlay(ctx, world) {
       CANVAS_WIDTH / 2,
       CANVAS_HEIGHT / 2 + 10,
     );
-    ctx.fillText(
-      "Press N for a new maze",
-      CANVAS_WIDTH / 2,
-      CANVAS_HEIGHT / 2 + 42,
-    );
     ctx.textAlign = "left";
   }
 }
@@ -7101,7 +7091,7 @@ function getControlsForViewMode(viewMode) {
       "Power-up holder: maximum 2",
       "Toggle labels: L",
       "Minimap: M",
-      "New maze: START button or N",
+      "New maze: START NEW MAZE button",
       "Esc: unlock mouse / choose level",
     ];
   }
@@ -7114,7 +7104,7 @@ function getControlsForViewMode(viewMode) {
     "Power-up holder: maximum 2",
     "Toggle labels: L",
     "Minimap: M",
-    "New maze: START button or N",
+    "New maze: START NEW MAZE button",
   ];
 }
 
@@ -9286,9 +9276,9 @@ return (
           type="button"
           className="always-start-maze-button"
           onClick={resetWorld}
-          title="Start a fresh maze (keyboard shortcut: N)"
+          title="Start a fresh maze"
         >
-          START / NEW MAZE
+          START NEW MAZE
         </button>
         {touchControlsEnabled && (
           <TouchControls

@@ -13,6 +13,7 @@ const VIEW_3D_RAY_WIDTH = 3;
 const VIEW_3D_MAX_DISTANCE = 28;
 const VIEW_3D_MOUSE_SENSITIVITY = 0.0025;
 const VIEW_3D_TOUCH_SENSITIVITY = 0.012;
+const MOBILE_2D_ZOOM = 1.7;
 const VIEW_3D_TURN_SPEED = 2.15;
 
 const FLOOR = 0;
@@ -2324,11 +2325,34 @@ function setMessage(world, text, ttl = 2.5) { world.message = text; world.messag
 
 function toggleLabels(world) { world.labelsOn = !world.labelsOn; setMessage(world, world.labelsOn ? "Labels on" : "Labels off", 1); }
 
-function getCamera(world) { const halfW = CANVAS_WIDTH / DRAW_TILE / 2; const halfH = CANVAS_HEIGHT / DRAW_TILE / 2; const maxX = Math.max(0, world.width - CANVAS_WIDTH / DRAW_TILE); const maxY = Math.max(0, world.height - CANVAS_HEIGHT / DRAW_TILE);
+function getWorldRenderZoom(world) {
+  return world.mobileView && world.viewMode === "2d"
+    ? MOBILE_2D_ZOOM
+    : 1;
+}
 
-return { x: clamp(world.player.x - halfW, 0, maxX), y: clamp(world.player.y - halfH, 0, maxY), }; }
+function getCamera(world) {
+  const zoom = getWorldRenderZoom(world);
+  const visibleWidth = CANVAS_WIDTH / (DRAW_TILE * zoom);
+  const visibleHeight = CANVAS_HEIGHT / (DRAW_TILE * zoom);
+  const maxX = Math.max(0, world.width - visibleWidth);
+  const maxY = Math.max(0, world.height - visibleHeight);
 
-function screenToWorld(world, screenX, screenY) { const camera = getCamera(world); return { x: camera.x + screenX / DRAW_TILE, y: camera.y + screenY / DRAW_TILE, }; }
+  return {
+    x: clamp(world.player.x - visibleWidth / 2, 0, maxX),
+    y: clamp(world.player.y - visibleHeight / 2, 0, maxY),
+  };
+}
+
+function screenToWorld(world, screenX, screenY) {
+  const camera = getCamera(world);
+  const zoom = getWorldRenderZoom(world);
+
+  return {
+    x: camera.x + screenX / (DRAW_TILE * zoom),
+    y: camera.y + screenY / (DRAW_TILE * zoom),
+  };
+}
 
 function getAimVector(world) {
   const player = world.player;
@@ -5395,21 +5419,27 @@ ctx.fillStyle = "#cbd5e1"; ctx.font = "13px sans-serif"; const controlsText = hu
 if (hud.victory) { ctx.fillStyle = "#22c55e"; ctx.font = "bold 18px sans-serif"; ctx.fillText("Exit reached. Press N for a new maze.", 18, CANVAS_HEIGHT - 52); } else if (hud.gameOver) { ctx.fillStyle = "#f87171"; ctx.font = "bold 18px sans-serif"; ctx.fillText(`${getPlayerDisplayName(world)} fell in the maze. Press N to retry.`, 18, CANVAS_HEIGHT - 52); } }
 
 function drawWorld2D(ctx, world) {
+  const zoom = getWorldRenderZoom(world);
+  const visibleWidth = CANVAS_WIDTH / (DRAW_TILE * zoom);
+  const visibleHeight = CANVAS_HEIGHT / (DRAW_TILE * zoom);
   const camera = getCamera(world);
   const startX = Math.max(0, Math.floor(camera.x) - 1);
   const endX = Math.min(
     world.width - 1,
-    Math.ceil(camera.x + CANVAS_WIDTH / DRAW_TILE) + 1,
+    Math.ceil(camera.x + visibleWidth) + 1,
   );
   const startY = Math.max(0, Math.floor(camera.y) - 1);
   const endY = Math.min(
     world.height - 1,
-    Math.ceil(camera.y + CANVAS_HEIGHT / DRAW_TILE) + 1,
+    Math.ceil(camera.y + visibleHeight) + 1,
   );
 
   ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
   ctx.fillStyle = getTheme(world).backdrop;
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+  ctx.save();
+  ctx.scale(zoom, zoom);
 
   for (let y = startY; y <= endY; y += 1) {
     for (let x = startX; x <= endX; x += 1) {
@@ -5426,9 +5456,9 @@ function drawWorld2D(ctx, world) {
   for (const enemy of world.enemies) {
     if (
       enemy.x < camera.x - 1 ||
-      enemy.x > camera.x + CANVAS_WIDTH / DRAW_TILE + 1 ||
+      enemy.x > camera.x + visibleWidth + 1 ||
       enemy.y < camera.y - 1 ||
-      enemy.y > camera.y + CANVAS_HEIGHT / DRAW_TILE + 1
+      enemy.y > camera.y + visibleHeight + 1
     ) {
       continue;
     }
@@ -5452,9 +5482,9 @@ function drawWorld2D(ctx, world) {
   for (const projectile of world.projectiles) {
     if (
       projectile.x < camera.x - 1 ||
-      projectile.x > camera.x + CANVAS_WIDTH / DRAW_TILE + 1 ||
+      projectile.x > camera.x + visibleWidth + 1 ||
       projectile.y < camera.y - 1 ||
-      projectile.y > camera.y + CANVAS_HEIGHT / DRAW_TILE + 1
+      projectile.y > camera.y + visibleHeight + 1
     ) {
       continue;
     }
@@ -5468,6 +5498,7 @@ function drawWorld2D(ctx, world) {
   const playerY = (world.player.y - camera.y) * DRAW_TILE;
   drawPlayerBody(ctx, world, playerX, playerY);
   drawEntityLabels(ctx, world, camera);
+  ctx.restore();
 
   if (world.damageFlash > 0) {
     ctx.fillStyle = `rgba(239, 68, 68, ${world.damageFlash * 0.28})`;
@@ -5481,7 +5512,12 @@ function drawWorld2D(ctx, world) {
     ctx.fillStyle = "rgba(2, 6, 23, 0.9)";
     ctx.fillRect((CANVAS_WIDTH - width) / 2, CANVAS_HEIGHT - 60, width, 40);
     ctx.strokeStyle = "rgba(56, 189, 248, 0.38)";
-    ctx.strokeRect((CANVAS_WIDTH - width) / 2 + 0.5, CANVAS_HEIGHT - 59.5, width - 1, 39);
+    ctx.strokeRect(
+      (CANVAS_WIDTH - width) / 2 + 0.5,
+      CANVAS_HEIGHT - 59.5,
+      width - 1,
+      39,
+    );
     ctx.fillStyle = "#f8fafc";
     ctx.font = "600 17px system-ui, sans-serif";
     ctx.textAlign = "center";
@@ -5522,7 +5558,6 @@ function drawWorld2D(ctx, world) {
     ctx.textAlign = "left";
   }
 }
-
 
 function cast3DRay(world, angle) {
   const dirX = Math.cos(angle);
@@ -7059,7 +7094,7 @@ function getControlsForViewMode(viewMode) {
       "Power-up holder: maximum 2",
       "Toggle labels: L",
       "Minimap: M",
-      "New run: N",
+      "New maze: use the START button",
       "Esc: unlock mouse / choose level",
     ];
   }
@@ -7072,7 +7107,7 @@ function getControlsForViewMode(viewMode) {
     "Power-up holder: maximum 2",
     "Toggle labels: L",
     "Minimap: M",
-    "New run: N",
+    "New maze: use the START button",
   ];
 }
 
@@ -7084,6 +7119,10 @@ function setWorldViewMode(world, viewMode) {
   world.controls = getControlsForViewMode(
     normalizedViewMode,
   );
+
+  if (normalizedViewMode === "3d") {
+    world.minimapOn = true;
+  }
   world.pointer.down = false;
   world.pointer.inside = false;
 
@@ -7113,16 +7152,18 @@ placeProgressionItems(world, distancesFromStart, used); placePowerUps(world, dis
 
 return world; }
 
-function MinimapPanel({ world }) {
+function MinimapPanel({ world, compact = false }) {
 const canvasRef = useRef(null);
 
 useEffect(() => {
   const canvas = canvasRef.current;
-  if (!canvas || !world.minimapOn) {
+  const shouldShowMinimap = world.viewMode === "3d" || world.minimapOn;
+
+  if (!canvas || !shouldShowMinimap) {
     return;
   }
 
-  const maxSize = 320;
+  const maxSize = compact ? 220 : world.mobileView ? 440 : 320;
   const scale = Math.max(1, Math.floor(maxSize / Math.max(world.width, world.height)));
   const mapWidth = world.width * scale;
   const mapHeight = world.height * scale;
@@ -7150,7 +7191,29 @@ useEffect(() => {
   }
 
   ctx.fillStyle = "#22c55e";
-  ctx.fillRect(world.exit.x * scale, world.exit.y * scale, Math.max(2, scale), Math.max(2, scale));
+  ctx.fillRect(
+    world.exit.x * scale,
+    world.exit.y * scale,
+    Math.max(3, scale + 1),
+    Math.max(3, scale + 1),
+  );
+
+  if (hasPowerUp(world, "sonar")) {
+    for (const enemy of world.enemies) {
+      ctx.fillStyle =
+        enemy.kind === "warden"
+          ? "#f472b6"
+          : enemy.kind === "turret"
+            ? "#facc15"
+            : "#ef4444";
+      ctx.fillRect(
+        Math.floor(enemy.x) * scale,
+        Math.floor(enemy.y) * scale,
+        Math.max(2, scale),
+        Math.max(2, scale),
+      );
+    }
+  }
 
   ctx.fillStyle = "#38bdf8";
   ctx.fillRect(
@@ -7161,7 +7224,9 @@ useEffect(() => {
   );
 });
 
-if (!world.minimapOn) {
+const shouldShowMinimap = world.viewMode === "3d" || world.minimapOn;
+
+if (!shouldShowMinimap) {
   return (
     <div
       style={{
@@ -7218,7 +7283,7 @@ return (
           display: "block",
           width: "100%",
           height: "auto",
-          maxHeight: 320,
+          maxHeight: compact ? 190 : world.mobileView ? 420 : 320,
           objectFit: "contain",
           imageRendering: "pixelated",
         }}
@@ -7241,6 +7306,179 @@ return (
 );
 }
 
+
+
+function MobileHudOverlay({
+  world,
+  mapExpanded,
+  onMapToggle,
+  onStart,
+  onSwitchMode,
+  onExitLevel,
+  onFullscreen,
+}) {
+  return (
+    <div className="mobile-hud-overlay">
+      <div className="mobile-hud-status">
+        <div className="mobile-hud-chip">
+          <strong>HP</strong>
+          <span>
+            {Math.round(world.player.hp)}/{Math.round(world.player.maxHp)}
+          </span>
+        </div>
+        <div className="mobile-hud-chip">
+          <strong>{getAmmoLabel(world)}</strong>
+          <span>{Math.floor(world.player.ammo)}</span>
+        </div>
+        <div className="mobile-hud-chip mobile-hud-weapon">
+          <strong>WEAPON</strong>
+          <span>{getWeaponLabel(world, world.player.weapon)}</span>
+        </div>
+        <div className="mobile-hud-chip">
+          <strong>TIME</strong>
+          <span>{formatTime(world.time)}</span>
+        </div>
+      </div>
+
+      <div className="mobile-hud-actions">
+        <button
+          type="button"
+          className="mobile-start-button"
+          onClick={onStart}
+        >
+          START
+        </button>
+        <button type="button" onClick={onSwitchMode}>
+          {world.viewMode === "3d" ? "2D" : "3D"}
+        </button>
+        <button type="button" onClick={onFullscreen}>
+          FULL
+        </button>
+        <button type="button" onClick={onExitLevel}>
+          MENU
+        </button>
+      </div>
+
+      <div
+        className={`mobile-minimap-wrap${mapExpanded ? " expanded" : ""}`}
+        role="button"
+        tabIndex={0}
+        aria-label={mapExpanded ? "Shrink minimap" : "Expand minimap"}
+        onClick={onMapToggle}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onMapToggle();
+          }
+        }}
+      >
+        <MinimapPanel world={world} />
+        <div className="mobile-minimap-hint">
+          {world.minimapOn
+            ? mapExpanded
+              ? "Tap map to shrink"
+              : "Tap map to enlarge"
+            : "Tap to turn map on"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function ThreeDStatusSidebar({
+  world,
+  storedPowerUps,
+  activePowerUps,
+  onPowerUp,
+  onStart,
+  onSwitchMode,
+  onFullscreen,
+  onExitLevel,
+}) {
+  return (
+    <div className="three-d-status-sidebar-content">
+      <MinimapPanel world={world} compact />
+
+      <section className="three-d-sidebar-card">
+        <div className="three-d-sidebar-title">3D STATUS</div>
+        <div className="three-d-vitals-grid">
+          <div className="three-d-vital">
+            <strong>HEALTH</strong>
+            <span>
+              {Math.round(world.player.hp)}/{Math.round(world.player.maxHp)}
+            </span>
+          </div>
+          <div className="three-d-vital">
+            <strong>{getAmmoLabel(world)}</strong>
+            <span>
+              {Math.floor(world.player.ammo)}/{MAX_AMMO}
+            </span>
+          </div>
+          <div className="three-d-vital three-d-vital-wide">
+            <strong>WEAPON</strong>
+            <span>{getWeaponLabel(world, world.player.weapon)}</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="three-d-sidebar-card">
+        <div className="three-d-sidebar-title">POWER-UPS</div>
+
+        <div className="three-d-power-slots">
+          {storedPowerUps.map((powerUp, index) => (
+            <button
+              key={index}
+              type="button"
+              disabled={!powerUp}
+              onClick={() => onPowerUp(index)}
+              style={{
+                borderColor: powerUp
+                  ? `${powerUp.color}88`
+                  : "rgba(148, 163, 184, 0.18)",
+              }}
+            >
+              <strong>P{index + 1}</strong>
+              <span>{powerUp?.label ?? "Empty"}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="three-d-active-powers">
+          {activePowerUps.length > 0 ? (
+            activePowerUps.map((powerUp) => (
+              <div key={powerUp.key}>
+                <span
+                  className="three-d-power-dot"
+                  style={{ background: powerUp.color }}
+                />
+                <span>{powerUp.label}</span>
+                <strong>{powerUp.remaining.toFixed(1)}s</strong>
+              </div>
+            ))
+          ) : (
+            <div className="three-d-no-power">No active power-up</div>
+          )}
+        </div>
+      </section>
+
+      <div className="three-d-sidebar-actions">
+        <button type="button" className="three-d-start-button" onClick={onStart}>
+          START NEW MAZE
+        </button>
+        <button type="button" onClick={onSwitchMode}>
+          SWITCH TO 2D
+        </button>
+        <button type="button" onClick={onFullscreen}>
+          FULLSCREEN
+        </button>
+        <button type="button" onClick={onExitLevel}>
+          LEVEL MENU
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function TouchJoystick({
   label,
@@ -7518,30 +7756,28 @@ const [leaderboardStatus, setLeaderboardStatus] = useState(
   GLOBAL_LEADERBOARD_ENABLED ? "connecting" : "local",
 );
 const [touchControlsEnabled, setTouchControlsEnabled] = useState(false);
+const [mobileMapExpanded, setMobileMapExpanded] = useState(false);
 const [, setRevision] = useState(0);
 
 const forceRefresh = useCallback(() => { setRevision((value) => value + 1); }, []);
 
 
 useEffect(() => {
-  const updateTouchCapability = () => {
-    const hasTouchPoints =
-      typeof navigator !== "undefined" &&
-      navigator.maxTouchPoints > 0;
-    const hasCoarsePointer =
-      typeof window !== "undefined" &&
-      window.matchMedia?.("(pointer: coarse)")?.matches;
-
-    setTouchControlsEnabled(Boolean(hasTouchPoints || hasCoarsePointer));
-  };
-
-  updateTouchCapability();
-
   const coarsePointerQuery =
     typeof window !== "undefined"
       ? window.matchMedia?.("(pointer: coarse)")
       : null;
 
+  const updateTouchCapability = () => {
+    const hasTouchPoints =
+      typeof navigator !== "undefined" &&
+      navigator.maxTouchPoints > 0;
+    const hasCoarsePointer = Boolean(coarsePointerQuery?.matches);
+
+    setTouchControlsEnabled(Boolean(hasTouchPoints || hasCoarsePointer));
+  };
+
+  updateTouchCapability();
   coarsePointerQuery?.addEventListener?.(
     "change",
     updateTouchCapability,
@@ -7554,6 +7790,17 @@ useEffect(() => {
     );
   };
 }, []);
+
+useEffect(() => {
+  const world = worldRef.current;
+  world.mobileView = touchControlsEnabled;
+
+  if (!touchControlsEnabled) {
+    setMobileMapExpanded(false);
+  }
+
+  forceRefresh();
+}, [forceRefresh, gameMode, selectedLevel, touchControlsEnabled]);
 
 const clearTouchInput = useCallback(() => {
   touchKeysRef.current = {};
@@ -7613,6 +7860,38 @@ const handleTouchPowerUp = useCallback(
   },
   [forceRefresh],
 );
+
+
+const handleMobileMapToggle = useCallback(() => {
+  const world = worldRef.current;
+
+  if (!world.minimapOn) {
+    world.minimapOn = true;
+    setMessage(world, "Minimap on", 1);
+    setMobileMapExpanded(true);
+    forceRefresh();
+    return;
+  }
+
+  setMobileMapExpanded((current) => !current);
+}, [forceRefresh]);
+
+const handleMobileFullscreen = useCallback(async () => {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  try {
+    if (!document.fullscreenElement) {
+      await document.documentElement.requestFullscreen?.();
+    }
+
+    await window.screen?.orientation?.lock?.("landscape");
+  } catch {
+    // Browser support varies; the CSS layout still uses the full viewport.
+  }
+}, []);
+
 
 
 const refreshGlobalLeaderboards = useCallback(async ({ silent = false } = {}) => {
@@ -7837,16 +8116,17 @@ const handleKeyDown = (event) => { const world = worldRef.current; const key = e
   }
 
   if (key === "m" || key === "M") {
-    world.minimapOn = !world.minimapOn;
-    setMessage(world, world.minimapOn ? "Minimap on" : "Minimap off", 1);
+    if (world.viewMode === "3d") {
+      world.minimapOn = true;
+      setMessage(world, "Minimap stays on in 3D", 1);
+    } else {
+      world.minimapOn = !world.minimapOn;
+      setMessage(world, world.minimapOn ? "Minimap on" : "Minimap off", 1);
+    }
   }
 
   if (key === "l" || key === "L") {
     toggleLabels(world);
-  }
-
-  if (key === "n" || key === "N") {
-    resetWorld();
   }
 
   if (key === "Escape") {
@@ -8134,6 +8414,7 @@ const storedPowerUps = getStoredPowerUps(world);
 
 return (
 <div
+  className={`maze-game-root${touchControlsEnabled ? " touch-mobile" : ""} mode-${gameMode}`}
   style={{
     width: "100vw",
     height: "100vh",
@@ -8410,6 +8691,522 @@ return (
         border-left: 0;
       }
     }
+
+
+    .mobile-3d-sidebar {
+      display: none;
+    }
+
+    .desktop-3d-sticky {
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      padding-bottom: 4px;
+      background: rgba(2, 6, 23, 0.98);
+    }
+
+    .three-d-status-sidebar-content {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .three-d-status-sidebar-content > section {
+      margin: 0;
+    }
+
+    .three-d-sidebar-card {
+      padding: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.92);
+      color: #e2e8f0;
+    }
+
+    .three-d-sidebar-title {
+      margin-bottom: 8px;
+      color: #67e8f9;
+      font-size: 9px;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+    }
+
+    .three-d-vitals-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+
+    .three-d-vital {
+      min-width: 0;
+      padding: 7px;
+      border-radius: 9px;
+      background: rgba(2, 6, 23, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+    }
+
+    .three-d-vital-wide {
+      grid-column: 1 / -1;
+    }
+
+    .three-d-vital strong {
+      display: block;
+      color: #94a3b8;
+      font-size: 7px;
+      letter-spacing: 0.09em;
+    }
+
+    .three-d-vital span {
+      display: block;
+      margin-top: 2px;
+      overflow: hidden;
+      color: #f8fafc;
+      font-size: 11px;
+      font-weight: 900;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .three-d-power-slots {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+
+    .three-d-power-slots button {
+      min-width: 0;
+      min-height: 48px;
+      padding: 6px;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 9px;
+      background: rgba(2, 6, 23, 0.72);
+      color: #e2e8f0;
+      text-align: left;
+      touch-action: manipulation;
+    }
+
+    .three-d-power-slots button:disabled {
+      opacity: 0.48;
+    }
+
+    .three-d-power-slots strong {
+      display: block;
+      color: #c4b5fd;
+      font-size: 8px;
+    }
+
+    .three-d-power-slots span {
+      display: block;
+      margin-top: 2px;
+      overflow: hidden;
+      font-size: 9px;
+      font-weight: 800;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .three-d-active-powers {
+      display: grid;
+      gap: 4px;
+      margin-top: 7px;
+    }
+
+    .three-d-active-powers > div:not(.three-d-no-power) {
+      display: grid;
+      grid-template-columns: 8px minmax(0, 1fr) auto;
+      gap: 5px;
+      align-items: center;
+      color: #cbd5e1;
+      font-size: 8px;
+    }
+
+    .three-d-active-powers strong {
+      color: #f8fafc;
+    }
+
+    .three-d-power-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+    }
+
+    .three-d-no-power {
+      color: #64748b;
+      font-size: 8px;
+    }
+
+    .three-d-sidebar-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+
+    .three-d-sidebar-actions button {
+      min-height: 34px;
+      padding: 6px;
+      border: 1px solid rgba(148, 163, 184, 0.26);
+      border-radius: 9px;
+      background: rgba(30, 41, 59, 0.86);
+      color: #e2e8f0;
+      font: inherit;
+      font-size: 8px;
+      font-weight: 900;
+      letter-spacing: 0.03em;
+      touch-action: manipulation;
+    }
+
+    .three-d-sidebar-actions .three-d-start-button {
+      grid-column: 1 / -1;
+      min-height: 40px;
+      border-color: rgba(34, 211, 238, 0.54);
+      background: linear-gradient(
+        135deg,
+        rgba(8, 145, 178, 0.52),
+        rgba(14, 116, 144, 0.32)
+      );
+      color: #ecfeff;
+    }
+
+
+    .mobile-hud-overlay,
+    .mobile-rotate-prompt {
+      display: none;
+    }
+
+    .touch-mobile {
+      width: 100vw !important;
+      height: 100dvh !important;
+      overflow: hidden !important;
+      background: #000 !important;
+    }
+
+    .touch-mobile .maze-game-shell {
+      width: 100vw;
+      height: 100dvh;
+      grid-template-columns: 1fr;
+      overflow: hidden;
+      background: #000;
+    }
+
+    .touch-mobile .maze-stage {
+      width: 100vw;
+      height: 100dvh;
+      min-height: 0;
+      overflow: hidden;
+      background: #000;
+    }
+
+    .touch-mobile .maze-frame {
+      width: 100vw;
+      height: 100dvh;
+      max-width: none;
+      max-height: none;
+      aspect-ratio: auto;
+      border: 0;
+      overflow: hidden;
+      background: #000;
+    }
+
+    .touch-mobile .maze-frame > canvas {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      object-position: center;
+      filter: contrast(1.16) saturate(1.08) brightness(1.04);
+      background: #000;
+    }
+
+
+    .touch-mobile.mode-3d .maze-game-shell {
+      grid-template-columns: minmax(0, 1fr) clamp(164px, 27vw, 220px);
+    }
+
+    .touch-mobile.mode-3d .maze-stage {
+      width: 100%;
+      height: 100dvh;
+    }
+
+    .touch-mobile.mode-3d .maze-frame {
+      width: 100%;
+      height: 100dvh;
+    }
+
+    .touch-mobile.mode-3d .mobile-hud-overlay {
+      display: none;
+    }
+
+    .touch-mobile.mode-3d .mobile-3d-sidebar {
+      display: block;
+      height: 100dvh;
+      padding:
+        max(7px, env(safe-area-inset-top))
+        max(7px, env(safe-area-inset-right))
+        max(7px, env(safe-area-inset-bottom))
+        7px;
+      overflow-y: auto;
+      background: rgba(2, 6, 23, 0.98);
+      border-left: 1px solid rgba(103, 232, 249, 0.22);
+      scrollbar-width: thin;
+    }
+
+    .touch-mobile.mode-3d .mobile-3d-sidebar .three-d-status-sidebar-content {
+      gap: 6px;
+    }
+
+    .touch-mobile.mode-3d .mobile-3d-sidebar section {
+      padding: 7px !important;
+      border-radius: 10px !important;
+    }
+
+    .touch-mobile.mode-3d .mobile-3d-sidebar h2 {
+      font-size: 11px !important;
+    }
+
+    .touch-mobile.mode-3d .mobile-3d-sidebar canvas {
+      max-height: 25vh !important;
+    }
+
+    .touch-mobile.mode-3d .touch-aim-control {
+      right: max(8px, env(safe-area-inset-right));
+    }
+
+    .touch-mobile.mode-3d .touch-action-controls {
+      right: max(8px, env(safe-area-inset-right));
+    }
+
+
+    .touch-mobile .maze-sidebar {
+      display: none;
+    }
+
+    .touch-mobile .mobile-hud-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 7;
+      display: block;
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .mobile-hud-status {
+      position: absolute;
+      top: max(8px, env(safe-area-inset-top));
+      left: max(10px, env(safe-area-inset-left));
+      display: flex;
+      gap: 6px;
+      max-width: 60vw;
+      pointer-events: none;
+    }
+
+    .mobile-hud-chip {
+      display: grid;
+      gap: 1px;
+      min-width: 58px;
+      max-width: 128px;
+      padding: 5px 7px;
+      border: 1px solid rgba(226, 232, 240, 0.3);
+      border-radius: 10px;
+      background: rgba(2, 6, 23, 0.76);
+      color: #f8fafc;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+      backdrop-filter: blur(4px);
+    }
+
+    .mobile-hud-chip strong {
+      color: #94a3b8;
+      font-size: 8px;
+      line-height: 1;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .mobile-hud-chip span {
+      overflow: hidden;
+      font-size: 11px;
+      font-weight: 900;
+      line-height: 1.15;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .mobile-hud-weapon {
+      min-width: 90px;
+    }
+
+    .mobile-hud-actions {
+      position: absolute;
+      top: max(50px, calc(env(safe-area-inset-top) + 46px));
+      left: max(10px, env(safe-area-inset-left));
+      display: flex;
+      gap: 6px;
+      pointer-events: auto;
+    }
+
+    .mobile-hud-actions button {
+      min-width: 46px;
+      min-height: 34px;
+      padding: 6px 8px;
+      border: 1px solid rgba(226, 232, 240, 0.32);
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.82);
+      color: #e2e8f0;
+      font: inherit;
+      font-size: 9px;
+      font-weight: 900;
+      letter-spacing: 0.05em;
+      touch-action: manipulation;
+      box-shadow: 0 5px 16px rgba(0, 0, 0, 0.24);
+      backdrop-filter: blur(4px);
+    }
+
+    .mobile-hud-actions button:active {
+      transform: scale(0.95);
+    }
+
+    .mobile-hud-actions .mobile-start-button {
+      border-color: rgba(34, 211, 238, 0.5);
+      background: rgba(8, 145, 178, 0.58);
+      color: #ecfeff;
+    }
+
+    .mobile-minimap-wrap {
+      position: absolute;
+      top: max(8px, env(safe-area-inset-top));
+      right: max(10px, env(safe-area-inset-right));
+      width: clamp(128px, 28vw, 176px);
+      max-height: 58vh;
+      overflow: auto;
+      border-radius: 16px;
+      pointer-events: auto;
+      touch-action: manipulation;
+      transition:
+        width 160ms ease,
+        transform 160ms ease;
+      scrollbar-width: none;
+    }
+
+    .mobile-minimap-wrap::-webkit-scrollbar {
+      display: none;
+    }
+
+    .mobile-minimap-wrap.expanded {
+      width: min(44vw, 300px);
+    }
+
+    .mobile-minimap-wrap > section,
+    .mobile-minimap-wrap > div:first-child {
+      margin: 0 !important;
+      padding: 8px !important;
+      border-radius: 12px !important;
+      background: rgba(2, 6, 23, 0.9) !important;
+      backdrop-filter: blur(4px);
+    }
+
+    .mobile-minimap-wrap canvas {
+      max-height: 32vh !important;
+    }
+
+    .mobile-minimap-wrap.expanded canvas {
+      max-height: 48vh !important;
+    }
+
+    .mobile-minimap-hint {
+      margin-top: 4px;
+      padding: 4px 7px;
+      border-radius: 999px;
+      background: rgba(2, 6, 23, 0.78);
+      color: #bae6fd;
+      font-size: 8px;
+      font-weight: 900;
+      text-align: center;
+      letter-spacing: 0.04em;
+    }
+
+    .touch-mobile .touch-controls {
+      z-index: 9;
+    }
+
+    .touch-mobile .touch-joystick {
+      border-color: rgba(226, 232, 240, 0.52);
+      background: rgba(2, 6, 23, 0.38);
+    }
+
+    .touch-mobile .touch-joystick-knob {
+      background: rgba(34, 211, 238, 0.78);
+      box-shadow:
+        0 0 20px rgba(34, 211, 238, 0.52),
+        inset 0 0 8px rgba(255, 255, 255, 0.2);
+    }
+
+    .touch-mobile .mobile-rotate-prompt {
+      display: none;
+    }
+
+    @media (orientation: portrait) and (pointer: coarse) {
+      .touch-mobile .mobile-rotate-prompt {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        z-index: 20;
+        display: grid;
+        width: min(82vw, 330px);
+        gap: 6px;
+        padding: 18px 20px;
+        transform: translate(-50%, -50%);
+        border: 1px solid rgba(103, 232, 249, 0.52);
+        border-radius: 18px;
+        background: rgba(2, 6, 23, 0.92);
+        color: #f8fafc;
+        text-align: center;
+        pointer-events: none;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(8px);
+      }
+
+      .mobile-rotate-icon {
+        color: #67e8f9;
+        font-size: 36px;
+        line-height: 1;
+      }
+
+      .mobile-rotate-prompt strong {
+        font-size: 18px;
+      }
+
+      .mobile-rotate-prompt span {
+        color: #cbd5e1;
+        font-size: 12px;
+      }
+    }
+
+    @media (orientation: landscape) and (pointer: coarse) {
+      .touch-mobile .touch-joystick {
+        width: min(25vh, 112px);
+        height: min(25vh, 112px);
+      }
+
+      .touch-mobile .touch-joystick-knob {
+        width: min(10vh, 46px);
+        height: min(10vh, 46px);
+      }
+
+      .touch-mobile .touch-action-controls {
+        right: max(14px, env(safe-area-inset-right));
+        bottom: calc(
+          max(8px, env(safe-area-inset-bottom)) + min(27vh, 124px)
+        );
+      }
+
+      .touch-mobile .touch-action-button {
+        min-height: 36px;
+      }
+
+      .touch-mobile .touch-attack-button {
+        min-height: 44px;
+      }
+    }
+
   `}</style>
 
   <div className="maze-game-shell">
@@ -8438,11 +9235,59 @@ return (
             onPowerUp={handleTouchPowerUp}
           />
         )}
+        {touchControlsEnabled && (
+          <MobileHudOverlay
+            world={world}
+            mapExpanded={mobileMapExpanded}
+            onMapToggle={handleMobileMapToggle}
+            onStart={resetWorld}
+            onSwitchMode={switchGameMode}
+            onExitLevel={returnToLevelSelect}
+            onFullscreen={handleMobileFullscreen}
+          />
+        )}
+        {touchControlsEnabled && (
+          <div className="mobile-rotate-prompt" role="status">
+            <div className="mobile-rotate-icon">↻</div>
+            <strong>Rotate your phone</strong>
+            <span>Landscape gives you a much larger maze view.</span>
+          </div>
+        )}
       </div>
     </main>
 
+    {touchControlsEnabled && gameMode === "3d" && (
+      <aside className="mobile-3d-sidebar">
+        <ThreeDStatusSidebar
+          world={world}
+          storedPowerUps={storedPowerUps}
+          activePowerUps={activePowerUps}
+          onPowerUp={handleTouchPowerUp}
+          onStart={resetWorld}
+          onSwitchMode={switchGameMode}
+          onFullscreen={handleMobileFullscreen}
+          onExitLevel={returnToLevelSelect}
+        />
+      </aside>
+    )}
+
     <aside className="maze-sidebar">
-      <MinimapPanel world={world} />
+      {gameMode === "3d" ? (
+        <div className="desktop-3d-sticky">
+          <ThreeDStatusSidebar
+            world={world}
+            storedPowerUps={storedPowerUps}
+            activePowerUps={activePowerUps}
+            onPowerUp={handleTouchPowerUp}
+            onStart={resetWorld}
+            onSwitchMode={switchGameMode}
+            onFullscreen={handleMobileFullscreen}
+            onExitLevel={returnToLevelSelect}
+          />
+        </div>
+      ) : (
+        <MinimapPanel world={world} />
+      )}
       <section
         style={{
           padding: 18,
@@ -8552,6 +9397,24 @@ return (
           <StatCard label="Theme" value={world.level.themeLabel} />
           <StatCard label="Corridor" value={`${PASSAGE_WIDTH} tiles`} />
         </div>
+        <button
+          type="button"
+          onClick={resetWorld}
+          style={{
+            width: "100%",
+            marginTop: 12,
+            padding: "12px 12px",
+            borderRadius: 12,
+            border: "1px solid rgba(34, 211, 238, 0.46)",
+            background: "linear-gradient(135deg, rgba(8,145,178,0.34), rgba(14,116,144,0.2))",
+            color: "#cffafe",
+            fontWeight: 900,
+            letterSpacing: "0.04em",
+            cursor: "pointer",
+          }}
+        >
+          START NEW MAZE
+        </button>
         <button
           type="button"
           onClick={returnToLevelSelect}

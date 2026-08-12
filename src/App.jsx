@@ -397,13 +397,13 @@ class MazeAudioEngine {
     );
   }
 
-  startMusic(themeKey) {
-    const context = this.ensureContext();
-    if (!context) {
-      return;
+  beginMusic(themeKey) {
+    const context = this.context;
+
+    if (!context || context.state !== "running" || !this.enabled) {
+      return false;
     }
 
-    this.resume();
     this.currentTheme = LEVEL_AUDIO_PROFILES[themeKey] ? themeKey : "space";
     this.step = 0;
     this.nextBeatTime = context.currentTime + 0.06;
@@ -412,15 +412,60 @@ class MazeAudioEngine {
     if (this.musicGain) {
       const now = context.currentTime;
       this.musicGain.gain.cancelScheduledValues(now);
-      this.musicGain.gain.setTargetAtTime(0.2, now, 0.08);
+      this.musicGain.gain.setTargetAtTime(0.28, now, 0.06);
     }
 
-    if (this.scheduler) {
+    if (this.scheduler && typeof window !== "undefined") {
       window.clearInterval(this.scheduler);
     }
 
-    this.scheduler = window.setInterval(() => this.scheduleMusic(), 50);
+    this.scheduler =
+      typeof window !== "undefined"
+        ? window.setInterval(() => this.scheduleMusic(), 50)
+        : null;
+
     this.scheduleMusic();
+    return true;
+  }
+
+  startMusic(themeKey) {
+    const context = this.ensureContext();
+
+    if (!context || !this.enabled) {
+      return Promise.resolve(false);
+    }
+
+    if (context.state === "running") {
+      return Promise.resolve(this.beginMusic(themeKey));
+    }
+
+    return this.unlock().then((running) => {
+      if (!running) {
+        return false;
+      }
+
+      return this.beginMusic(themeKey);
+    });
+  }
+
+  playTestSound() {
+    const context = this.ensureContext();
+
+    if (!context || !this.enabled) {
+      return Promise.resolve(false);
+    }
+
+    return this.unlock().then((running) => {
+      if (!running || !this.sfxGain) {
+        return false;
+      }
+
+      const now = context.currentTime + 0.01;
+      this.tone(523.25, now, 0.14, 0.16, "sine", this.sfxGain);
+      this.tone(659.25, now + 0.1, 0.16, 0.14, "triangle", this.sfxGain);
+      this.tone(783.99, now + 0.2, 0.2, 0.12, "sine", this.sfxGain);
+      return true;
+    });
   }
 
   stopMusic() {
@@ -485,7 +530,12 @@ class MazeAudioEngine {
 
   scheduleMusic() {
     const context = this.context;
-    if (!context || !this.enabled || !this.currentTheme) {
+    if (
+      !context ||
+      context.state !== "running" ||
+      !this.enabled ||
+      !this.currentTheme
+    ) {
       return;
     }
 
@@ -7648,6 +7698,7 @@ function AudioVolumeControls({
   musicVolume,
   sfxVolume,
   onToggle,
+  onTestSound,
   onMusicVolumeChange,
   onSfxVolumeChange,
 }) {
@@ -7660,14 +7711,23 @@ function AudioVolumeControls({
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => event.stopPropagation()}
     >
-      <button
-        type="button"
-        className="audio-master-toggle"
-        onClick={onToggle}
-        aria-pressed={enabled}
-      >
-        {enabled ? "🔊 AUDIO" : "🔇 MUTED"}
-      </button>
+      <div className="audio-top-actions">
+        <button
+          type="button"
+          className="audio-master-toggle"
+          onClick={onToggle}
+          aria-pressed={enabled}
+        >
+          {enabled ? "🔊 SOUND ON" : "🔇 MUTED"}
+        </button>
+        <button
+          type="button"
+          className="audio-test-button"
+          onClick={onTestSound}
+        >
+          TEST SOUND
+        </button>
+      </div>
 
       <label className="audio-volume-row">
         <span>
@@ -8166,6 +8226,8 @@ const [leaderboardStatus, setLeaderboardStatus] = useState(
 const [touchControlsEnabled, setTouchControlsEnabled] = useState(false);
 const [mobileMapExpanded, setMobileMapExpanded] = useState(false);
 const [rotatePromptDismissed, setRotatePromptDismissed] = useState(false);
+const [supportOpen, setSupportOpen] = useState(false);
+const [audioStatus, setAudioStatus] = useState("Tap TEST SOUND to verify audio");
 const [, setRevision] = useState(0);
 
 const forceRefresh = useCallback(() => { setRevision((value) => value + 1); }, []);
@@ -8385,14 +8447,29 @@ const getAudioEngine = useCallback(() => {
 
 const startLevelAudio = useCallback((world) => {
   const audio = getAudioEngine();
+  audio.setMusicVolume(musicVolume);
+  audio.setSfxVolume(sfxVolume);
   audio.setEnabled(audioEnabled);
 
-  if (audioEnabled) {
-    void audio.unlock();
+  if (!audioEnabled) {
+    return;
   }
 
-  audio.startMusic(world.level.themeKey);
-}, [audioEnabled, getAudioEngine]);
+  setAudioStatus("Starting sound…");
+
+  void audio.startMusic(world.level.themeKey).then((started) => {
+    setAudioStatus(
+      started
+        ? "Sound ready"
+        : "Tap TEST SOUND to enable audio",
+    );
+  });
+}, [
+  audioEnabled,
+  getAudioEngine,
+  musicVolume,
+  sfxVolume,
+]);
 
 useEffect(() => {
   if (!audioEnabled || typeof window === "undefined") {
@@ -8402,7 +8479,21 @@ useEffect(() => {
   const unlockAudio = () => {
     const audio = getAudioEngine();
     audio.setEnabled(true);
-    void audio.unlock();
+
+    void audio.unlock().then((running) => {
+      if (!running) {
+        return;
+      }
+
+      setAudioStatus("Sound ready");
+
+      if (
+        selectedLevel &&
+        (!audio.currentTheme || !audio.scheduler)
+      ) {
+        void audio.startMusic(worldRef.current.level.themeKey);
+      }
+    });
   };
 
   const pointerOptions = { capture: true, passive: true };
@@ -8416,7 +8507,7 @@ useEffect(() => {
     window.removeEventListener("touchend", unlockAudio, pointerOptions);
     window.removeEventListener("keydown", unlockAudio, true);
   };
-}, [audioEnabled, getAudioEngine]);
+}, [audioEnabled, getAudioEngine, selectedLevel]);
 
 const handleMusicVolumeChange = useCallback(
   (nextVolume) => {
@@ -8454,6 +8545,34 @@ useEffect(() => {
   audio.setSfxVolume(sfxVolume);
 }, [getAudioEngine, musicVolume, sfxVolume]);
 
+const handleTestSound = useCallback(() => {
+  const audio = getAudioEngine();
+
+  setAudioEnabled(true);
+  audio.setEnabled(true);
+  audio.setMusicVolume(musicVolume);
+  audio.setSfxVolume(Math.max(0.35, sfxVolume));
+  setAudioStatus("Testing sound…");
+
+  void audio.playTestSound().then((played) => {
+    if (!played) {
+      setAudioStatus("Audio blocked — tap TEST SOUND again");
+      return;
+    }
+
+    setAudioStatus("Sound working ✓");
+
+    if (selectedLevel) {
+      void audio.startMusic(worldRef.current.level.themeKey);
+    }
+  });
+}, [
+  getAudioEngine,
+  musicVolume,
+  selectedLevel,
+  sfxVolume,
+]);
+
 const toggleAudio = useCallback(() => {
   const nextEnabled = !audioEnabled;
   setAudioEnabled(nextEnabled);
@@ -8462,13 +8581,32 @@ const toggleAudio = useCallback(() => {
   audio.setEnabled(nextEnabled);
 
   if (nextEnabled) {
-    void audio.unlock();
+    audio.setMusicVolume(musicVolume);
+    audio.setSfxVolume(sfxVolume);
+    setAudioStatus("Starting sound…");
 
-    if (selectedLevel) {
-      audio.startMusic(worldRef.current.level.themeKey);
-    }
+    void audio.unlock().then((running) => {
+      if (!running) {
+        setAudioStatus("Tap TEST SOUND to enable audio");
+        return;
+      }
+
+      setAudioStatus("Sound ready");
+
+      if (selectedLevel) {
+        void audio.startMusic(worldRef.current.level.themeKey);
+      }
+    });
+  } else {
+    setAudioStatus("Muted");
   }
-}, [audioEnabled, getAudioEngine, selectedLevel]);
+}, [
+  audioEnabled,
+  getAudioEngine,
+  musicVolume,
+  selectedLevel,
+  sfxVolume,
+]);
 
 const returnToLevelSelect = useCallback(() => {
   if (
@@ -9332,6 +9470,90 @@ return (
       display: none;
     }
 
+
+    .game-support-widget {
+      position: absolute;
+      right: 12px;
+      top: max(12px, env(safe-area-inset-top));
+      z-index: 18;
+      pointer-events: auto;
+    }
+
+    .game-support-toggle {
+      min-height: 40px;
+      padding: 8px 13px;
+      border: 1px solid rgba(244, 114, 182, 0.68);
+      border-radius: 11px;
+      background: linear-gradient(
+        135deg,
+        rgba(190, 24, 93, 0.92),
+        rgba(131, 24, 67, 0.88)
+      );
+      color: #fdf2f8;
+      font: inherit;
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      touch-action: manipulation;
+      box-shadow:
+        0 8px 24px rgba(0, 0, 0, 0.35),
+        0 0 18px rgba(244, 114, 182, 0.18);
+    }
+
+    .game-support-toggle:active {
+      transform: scale(0.96);
+    }
+
+    .game-support-popover {
+      position: absolute;
+      top: calc(100% + 7px);
+      right: 0;
+      width: min(290px, 72vw);
+      padding-top: 8px;
+    }
+
+    .game-support-close {
+      position: absolute;
+      top: 13px;
+      right: 6px;
+      z-index: 2;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border: 1px solid rgba(226, 232, 240, 0.28);
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.94);
+      color: #f8fafc;
+      font: inherit;
+      font-size: 20px;
+      line-height: 24px;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .game-support-popover .support-panel {
+      padding-top: 14px;
+      background: rgba(2, 6, 23, 0.97);
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.52);
+    }
+
+    .touch-mobile .game-support-widget {
+      right: max(8px, env(safe-area-inset-right));
+      top: max(54px, calc(env(safe-area-inset-top) + 50px));
+    }
+
+    .touch-mobile .game-support-toggle {
+      min-height: 34px;
+      padding: 6px 9px;
+      font-size: 8px;
+    }
+
+    .touch-mobile.mode-3d .game-support-widget {
+      right: max(8px, env(safe-area-inset-right));
+      top: max(8px, env(safe-area-inset-top));
+    }
+
     .game-audio-volume-panel {
       position: absolute;
       right: 12px;
@@ -9352,20 +9574,53 @@ return (
       backdrop-filter: blur(5px);
     }
 
-    .audio-master-toggle {
+    .audio-top-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px;
+    }
+
+    .audio-master-toggle,
+    .audio-test-button {
       width: 100%;
-      min-height: 30px;
-      padding: 5px 7px;
-      border: 1px solid rgba(74, 222, 128, 0.34);
+      min-height: 32px;
+      padding: 5px 6px;
       border-radius: 8px;
-      background: rgba(22, 101, 52, 0.22);
-      color: #bbf7d0;
       font: inherit;
-      font-size: 8px;
+      font-size: 7px;
       font-weight: 900;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.04em;
       cursor: pointer;
       touch-action: manipulation;
+    }
+
+    .audio-master-toggle {
+      border: 1px solid rgba(74, 222, 128, 0.4);
+      background: rgba(22, 101, 52, 0.28);
+      color: #bbf7d0;
+    }
+
+    .audio-test-button {
+      border: 1px solid rgba(103, 232, 249, 0.48);
+      background: rgba(8, 145, 178, 0.3);
+      color: #cffafe;
+    }
+
+    .audio-test-button:active,
+    .audio-master-toggle:active {
+      transform: scale(0.96);
+    }
+
+    .audio-status-text {
+      margin-top: 5px;
+      padding: 4px 6px;
+      border-radius: 7px;
+      background: rgba(2, 6, 23, 0.84);
+      color: #bae6fd;
+      font-size: 7px;
+      font-weight: 800;
+      text-align: center;
+      line-height: 1.25;
     }
 
     .audio-volume-row {
@@ -9982,10 +10237,38 @@ return (
             musicVolume={musicVolume}
             sfxVolume={sfxVolume}
             onToggle={toggleAudio}
+            onTestSound={handleTestSound}
             onMusicVolumeChange={handleMusicVolumeChange}
             onSfxVolumeChange={handleSfxVolumeChange}
           />
+          <div className="audio-status-text" role="status">
+            {audioStatus}
+          </div>
         </div>
+        <div className="game-support-widget">
+          <button
+            type="button"
+            className="game-support-toggle"
+            aria-expanded={supportOpen}
+            onClick={() => setSupportOpen((open) => !open)}
+          >
+            ♥ SUPPORT
+          </button>
+          {supportOpen && (
+            <div className="game-support-popover">
+              <button
+                type="button"
+                className="game-support-close"
+                aria-label="Close support panel"
+                onClick={() => setSupportOpen(false)}
+              >
+                ×
+              </button>
+              <SupportButtons />
+            </div>
+          )}
+        </div>
+
         {touchControlsEnabled && (
           <TouchControls
             gameMode={gameMode}

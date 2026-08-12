@@ -12,6 +12,7 @@ const VIEW_3D_FOV = Math.PI * 0.38;
 const VIEW_3D_RAY_WIDTH = 3;
 const VIEW_3D_MAX_DISTANCE = 28;
 const VIEW_3D_MOUSE_SENSITIVITY = 0.0025;
+const VIEW_3D_TOUCH_SENSITIVITY = 0.012;
 const VIEW_3D_TURN_SPEED = 2.15;
 
 const FLOOR = 0;
@@ -7064,8 +7065,8 @@ function getControlsForViewMode(viewMode) {
   }
 
   return [
-    "Move: WASD or arrow keys",
-    "Attack: Space, Enter, or left mouse",
+    "Move: WASD, arrow keys, or touch joystick",
+    "Attack: Space, Enter, left mouse, or touch ATTACK",
     `Switch weapon: ${WEAPON_HOTKEY_LABEL} or click the sidebar`,
     "Use stored power-up: Z / X",
     "Power-up holder: maximum 2",
@@ -7240,10 +7241,260 @@ return (
 );
 }
 
+
+function TouchJoystick({
+  label,
+  mode = "vector",
+  onVector,
+  onLookDelta,
+}) {
+  const padRef = useRef(null);
+  const pointerIdRef = useRef(null);
+  const lastPointRef = useRef(null);
+  const [knob, setKnob] = useState({ x: 0, y: 0 });
+
+  const updateJoystick = useCallback(
+    (event) => {
+      const pad = padRef.current;
+      if (!pad) {
+        return;
+      }
+
+      const rect = pad.getBoundingClientRect();
+      const radius = Math.max(
+        1,
+        Math.min(rect.width, rect.height) / 2 - 20,
+      );
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      let offsetX = event.clientX - centerX;
+      let offsetY = event.clientY - centerY;
+      const distance = Math.hypot(offsetX, offsetY);
+
+      if (distance > radius) {
+        const scale = radius / distance;
+        offsetX *= scale;
+        offsetY *= scale;
+      }
+
+      setKnob({ x: offsetX, y: offsetY });
+
+      if (mode === "look") {
+        const previousPoint = lastPointRef.current;
+        if (previousPoint) {
+          onLookDelta?.(
+            event.clientX - previousPoint.x,
+            event.clientY - previousPoint.y,
+          );
+        }
+        lastPointRef.current = {
+          x: event.clientX,
+          y: event.clientY,
+        };
+        return;
+      }
+
+      onVector?.(offsetX / radius, offsetY / radius);
+    },
+    [mode, onLookDelta, onVector],
+  );
+
+  const handlePointerDown = useCallback(
+    (event) => {
+      event.preventDefault();
+
+      if (pointerIdRef.current !== null) {
+        return;
+      }
+
+      pointerIdRef.current = event.pointerId;
+      lastPointRef.current = {
+        x: event.clientX,
+        y: event.clientY,
+      };
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      updateJoystick(event);
+    },
+    [updateJoystick],
+  );
+
+  const handlePointerMove = useCallback(
+    (event) => {
+      if (pointerIdRef.current !== event.pointerId) {
+        return;
+      }
+
+      event.preventDefault();
+      updateJoystick(event);
+    },
+    [updateJoystick],
+  );
+
+  const releasePointer = useCallback(
+    (event) => {
+      if (
+        pointerIdRef.current !== null &&
+        event.pointerId !== pointerIdRef.current
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      pointerIdRef.current = null;
+      lastPointRef.current = null;
+      setKnob({ x: 0, y: 0 });
+
+      if (mode !== "look") {
+        onVector?.(0, 0);
+      }
+    },
+    [mode, onVector],
+  );
+
+  return (
+    <div
+      ref={padRef}
+      className="touch-joystick"
+      role="application"
+      aria-label={`${label} joystick`}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={releasePointer}
+      onPointerCancel={releasePointer}
+      onContextMenu={(event) => event.preventDefault()}
+    >
+      <span className="touch-joystick-label">{label}</span>
+      <span
+        className="touch-joystick-knob"
+        style={{
+          transform: `translate(${knob.x}px, ${knob.y}px)`,
+        }}
+      />
+    </div>
+  );
+}
+
+function TouchControls({
+  gameMode,
+  storedPowerUps,
+  onMove,
+  onAim,
+  onLookDelta,
+  onAttackStart,
+  onAttackEnd,
+  onNextWeapon,
+  onPowerUp,
+}) {
+  const handleAttackPointerDown = useCallback(
+    (event) => {
+      event.preventDefault();
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+      onAttackStart();
+    },
+    [onAttackStart],
+  );
+
+  const handleAttackPointerEnd = useCallback(
+    (event) => {
+      event.preventDefault();
+      onAttackEnd();
+    },
+    [onAttackEnd],
+  );
+
+  return (
+    <div className="touch-controls" aria-label="Touch game controls">
+      <div className="touch-move-control">
+        <TouchJoystick label="MOVE" onVector={onMove} />
+      </div>
+
+      <div className="touch-aim-control">
+        <TouchJoystick
+          label={gameMode === "3d" ? "LOOK" : "AIM"}
+          mode={gameMode === "3d" ? "look" : "vector"}
+          onVector={onAim}
+          onLookDelta={onLookDelta}
+        />
+      </div>
+
+      <div className="touch-action-controls">
+        <button
+          type="button"
+          className="touch-action-button touch-attack-button"
+          aria-label="Attack"
+          onPointerDown={handleAttackPointerDown}
+          onPointerUp={handleAttackPointerEnd}
+          onPointerCancel={handleAttackPointerEnd}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          ATTACK
+        </button>
+
+        <button
+          type="button"
+          className="touch-action-button"
+          aria-label="Switch to next weapon"
+          onClick={onNextWeapon}
+        >
+          WEAPON
+        </button>
+
+        <div className="touch-power-buttons">
+          {[0, 1].map((slotIndex) => (
+            <button
+              key={slotIndex}
+              type="button"
+              className="touch-action-button touch-power-button"
+              aria-label={`Use power-up slot ${slotIndex + 1}`}
+              disabled={!storedPowerUps[slotIndex]}
+              onClick={() => onPowerUp(slotIndex)}
+            >
+              P{slotIndex + 1}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function selectNextOwnedWeapon(world) {
+  const currentIndex = Math.max(
+    0,
+    WEAPON_ORDER.indexOf(world.player.weapon),
+  );
+
+  for (let offset = 1; offset <= WEAPON_ORDER.length; offset += 1) {
+    const nextIndex = (currentIndex + offset) % WEAPON_ORDER.length;
+    const nextWeaponKey = WEAPON_ORDER[nextIndex];
+
+    if (
+      world.player.ownedWeapons[nextWeaponKey] &&
+      nextWeaponKey !== world.player.weapon
+    ) {
+      return selectWeapon(world, nextWeaponKey);
+    }
+  }
+
+  return false;
+}
+
+function mergeInputKeys(keyboardKeys, touchKeys) {
+  return {
+    ...keyboardKeys,
+    w: Boolean(keyboardKeys.w || touchKeys.w),
+    a: Boolean(keyboardKeys.a || touchKeys.a),
+    s: Boolean(keyboardKeys.s || touchKeys.s),
+    d: Boolean(keyboardKeys.d || touchKeys.d),
+    " ": Boolean(keyboardKeys[" "] || touchKeys[" "]),
+  };
+}
+
 export default function App() {
 const canvasRef = useRef(null);
 const worldRef = useRef(createWorld(DEFAULT_LEVEL_KEY));
 const keysRef = useRef({});
+const touchKeysRef = useRef({});
 const frameRef = useRef(0);
 const lastTimeRef = useRef(0);
 const hudAccumulatorRef = useRef(0);
@@ -7259,9 +7510,103 @@ const [userRanks, setUserRanks] = useState(() => createEmptyUserRanks());
 const [leaderboardStatus, setLeaderboardStatus] = useState(
   GLOBAL_LEADERBOARD_ENABLED ? "connecting" : "local",
 );
+const [touchControlsEnabled, setTouchControlsEnabled] = useState(false);
 const [, setRevision] = useState(0);
 
 const forceRefresh = useCallback(() => { setRevision((value) => value + 1); }, []);
+
+
+useEffect(() => {
+  const updateTouchCapability = () => {
+    const hasTouchPoints =
+      typeof navigator !== "undefined" &&
+      navigator.maxTouchPoints > 0;
+    const hasCoarsePointer =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(pointer: coarse)")?.matches;
+
+    setTouchControlsEnabled(Boolean(hasTouchPoints || hasCoarsePointer));
+  };
+
+  updateTouchCapability();
+
+  const coarsePointerQuery =
+    typeof window !== "undefined"
+      ? window.matchMedia?.("(pointer: coarse)")
+      : null;
+
+  coarsePointerQuery?.addEventListener?.(
+    "change",
+    updateTouchCapability,
+  );
+
+  return () => {
+    coarsePointerQuery?.removeEventListener?.(
+      "change",
+      updateTouchCapability,
+    );
+  };
+}, []);
+
+const clearTouchInput = useCallback(() => {
+  touchKeysRef.current = {};
+  const world = worldRef.current;
+  world.pointer.down = false;
+}, []);
+
+const handleTouchMove = useCallback((x, y) => {
+  const deadZone = 0.28;
+  const touchKeys = touchKeysRef.current;
+
+  touchKeys.w = y < -deadZone;
+  touchKeys.s = y > deadZone;
+  touchKeys.a = x < -deadZone;
+  touchKeys.d = x > deadZone;
+}, []);
+
+const handleTouchAim = useCallback((x, y) => {
+  if (Math.hypot(x, y) < 0.18) {
+    return;
+  }
+
+  const world = worldRef.current;
+  world.player.facing = Math.atan2(y, x);
+  world.pointer.inside = false;
+}, []);
+
+const handleTouchLook = useCallback((deltaX) => {
+  if (!Number.isFinite(deltaX) || deltaX === 0) {
+    return;
+  }
+
+  const world = worldRef.current;
+  world.player.facing += deltaX * VIEW_3D_TOUCH_SENSITIVITY;
+  world.pointer.inside = false;
+}, []);
+
+const handleTouchAttackStart = useCallback(() => {
+  touchKeysRef.current[" "] = true;
+  attack(worldRef.current);
+}, []);
+
+const handleTouchAttackEnd = useCallback(() => {
+  touchKeysRef.current[" "] = false;
+}, []);
+
+const handleTouchNextWeapon = useCallback(() => {
+  if (selectNextOwnedWeapon(worldRef.current)) {
+    forceRefresh();
+  }
+}, [forceRefresh]);
+
+const handleTouchPowerUp = useCallback(
+  (slotIndex) => {
+    activateStoredPowerUp(worldRef.current, slotIndex);
+    forceRefresh();
+  },
+  [forceRefresh],
+);
+
 
 const refreshGlobalLeaderboards = useCallback(async ({ silent = false } = {}) => {
   if (!GLOBAL_LEADERBOARD_ENABLED) {
@@ -7371,8 +7716,9 @@ const returnToLevelSelect = useCallback(() => {
 
   audioRef.current?.stopMusic();
   keysRef.current = {};
+  clearTouchInput();
   setSelectedLevel(null);
-}, []);
+}, [clearTouchInput]);
 
 useEffect(() => {
   return () => {
@@ -7407,6 +7753,7 @@ const startLevel = useCallback((levelKey, requestedViewMode = selectionMode, req
   worldRef.current = nextWorld;
   startLevelAudio(nextWorld);
   keysRef.current = {};
+  clearTouchInput();
   lastTimeRef.current = 0;
   hudAccumulatorRef.current = 0;
   recordedVictoryRef.current = false;
@@ -7415,7 +7762,7 @@ const startLevel = useCallback((levelKey, requestedViewMode = selectionMode, req
   setPlayerName(nextPlayerName);
   setSelectedLevel(levelKey);
   forceRefresh();
-}, [forceRefresh, selectionMode, startLevelAudio]);
+}, [clearTouchInput, forceRefresh, selectionMode, startLevelAudio]);
 
 const resetWorld = useCallback(() => {
   if (!selectedLevel) {
@@ -7426,11 +7773,12 @@ const resetWorld = useCallback(() => {
   worldRef.current = nextWorld;
   startLevelAudio(nextWorld);
   keysRef.current = {};
+  clearTouchInput();
   lastTimeRef.current = 0;
   hudAccumulatorRef.current = 0;
   recordedVictoryRef.current = false;
   forceRefresh();
-}, [forceRefresh, gameMode, playerName, selectedLevel, startLevelAudio]);
+}, [clearTouchInput, forceRefresh, gameMode, playerName, selectedLevel, startLevelAudio]);
 
 const switchGameMode = useCallback(() => {
   const nextViewMode = gameMode === "3d" ? "2d" : "3d";
@@ -7444,10 +7792,11 @@ const switchGameMode = useCallback(() => {
 
   setWorldViewMode(worldRef.current, nextViewMode);
   keysRef.current = {};
+  clearTouchInput();
   setGameMode(nextViewMode);
   setSelectionMode(nextViewMode);
   forceRefresh();
-}, [forceRefresh, gameMode]);
+}, [clearTouchInput, forceRefresh, gameMode]);
 
 useEffect(() => {
 if (!selectedLevel) {
@@ -7686,7 +8035,11 @@ const loop = (timestamp) => {
     world.fogPulse += dt;
 
     updatePowerUps(world, dt);
-    updatePlayer(world, keysRef.current, dt);
+    updatePlayer(
+      world,
+      mergeInputKeys(keysRef.current, touchKeysRef.current),
+      dt,
+    );
     updateVisionCache(world);
     updatePickups(world, dt);
 
@@ -7827,6 +8180,161 @@ return (
       height: 100%;
     }
 
+
+    .maze-frame {
+      position: relative;
+    }
+
+    .maze-stage,
+    .maze-frame canvas {
+      touch-action: none;
+    }
+
+    .touch-controls {
+      position: absolute;
+      inset: 0;
+      z-index: 8;
+      pointer-events: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+
+    .touch-move-control,
+    .touch-aim-control,
+    .touch-action-controls {
+      position: absolute;
+      pointer-events: auto;
+    }
+
+    .touch-move-control {
+      left: max(12px, env(safe-area-inset-left));
+      bottom: max(12px, env(safe-area-inset-bottom));
+    }
+
+    .touch-aim-control {
+      right: max(12px, env(safe-area-inset-right));
+      bottom: max(12px, env(safe-area-inset-bottom));
+    }
+
+    .touch-joystick {
+      position: relative;
+      width: 124px;
+      height: 124px;
+      border-radius: 999px;
+      touch-action: none;
+      background: rgba(2, 6, 23, 0.46);
+      border: 2px solid rgba(226, 232, 240, 0.36);
+      box-shadow:
+        inset 0 0 28px rgba(15, 23, 42, 0.72),
+        0 8px 28px rgba(0, 0, 0, 0.24);
+      backdrop-filter: blur(3px);
+    }
+
+    .touch-joystick::before,
+    .touch-joystick::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      background: rgba(226, 232, 240, 0.16);
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+
+    .touch-joystick::before {
+      width: 2px;
+      height: 72%;
+    }
+
+    .touch-joystick::after {
+      width: 72%;
+      height: 2px;
+    }
+
+    .touch-joystick-knob {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 50px;
+      height: 50px;
+      margin-left: -25px;
+      margin-top: -25px;
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.72);
+      border: 2px solid rgba(224, 242, 254, 0.86);
+      box-shadow: 0 0 18px rgba(56, 189, 248, 0.36);
+      pointer-events: none;
+    }
+
+    .touch-joystick-label {
+      position: absolute;
+      left: 50%;
+      bottom: 7px;
+      transform: translateX(-50%);
+      color: rgba(248, 250, 252, 0.82);
+      font-size: 9px;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      pointer-events: none;
+    }
+
+    .touch-action-controls {
+      right: max(18px, env(safe-area-inset-right));
+      bottom: calc(max(12px, env(safe-area-inset-bottom)) + 136px);
+      display: grid;
+      justify-items: end;
+      gap: 7px;
+    }
+
+    .touch-action-button {
+      min-width: 58px;
+      min-height: 44px;
+      padding: 8px 10px;
+      border: 1px solid rgba(226, 232, 240, 0.42);
+      border-radius: 14px;
+      background: rgba(15, 23, 42, 0.76);
+      color: #f8fafc;
+      font: inherit;
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      touch-action: none;
+      box-shadow: 0 7px 22px rgba(0, 0, 0, 0.24);
+      backdrop-filter: blur(3px);
+    }
+
+    .touch-action-button:active {
+      transform: scale(0.94);
+      background: rgba(30, 41, 59, 0.94);
+    }
+
+    .touch-attack-button {
+      min-width: 72px;
+      min-height: 58px;
+      border-color: rgba(251, 113, 133, 0.7);
+      background: rgba(159, 18, 57, 0.72);
+      color: #fff1f2;
+    }
+
+    .touch-power-buttons {
+      display: flex;
+      gap: 7px;
+    }
+
+    .touch-power-button {
+      min-width: 44px;
+      min-height: 40px;
+      padding: 6px;
+      border-color: rgba(196, 181, 253, 0.55);
+      background: rgba(76, 29, 149, 0.62);
+    }
+
+    .touch-action-button:disabled {
+      opacity: 0.36;
+      filter: grayscale(0.7);
+    }
+
     .maze-sidebar {
       min-width: 0;
       height: 100vh;
@@ -7862,6 +8370,33 @@ return (
         border-bottom: 1px solid rgba(148, 163, 184, 0.16);
       }
 
+
+      .touch-joystick {
+        width: 104px;
+        height: 104px;
+      }
+
+      .touch-joystick-knob {
+        width: 44px;
+        height: 44px;
+        margin-left: -22px;
+        margin-top: -22px;
+      }
+
+      .touch-action-controls {
+        bottom: calc(max(10px, env(safe-area-inset-bottom)) + 112px);
+      }
+
+      .touch-action-button {
+        min-width: 52px;
+        min-height: 40px;
+      }
+
+      .touch-attack-button {
+        min-width: 66px;
+        min-height: 52px;
+      }
+
       .maze-sidebar {
         height: auto;
         overflow: visible;
@@ -7883,6 +8418,19 @@ return (
             imageRendering: "auto",
           }}
         />
+        {touchControlsEnabled && (
+          <TouchControls
+            gameMode={gameMode}
+            storedPowerUps={storedPowerUps}
+            onMove={handleTouchMove}
+            onAim={handleTouchAim}
+            onLookDelta={handleTouchLook}
+            onAttackStart={handleTouchAttackStart}
+            onAttackEnd={handleTouchAttackEnd}
+            onNextWeapon={handleTouchNextWeapon}
+            onPowerUp={handleTouchPowerUp}
+          />
+        )}
       </div>
     </main>
 

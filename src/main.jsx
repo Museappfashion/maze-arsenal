@@ -1,3 +1,4 @@
+import { Analytics } from "@vercel/analytics/react";
 import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
 
@@ -7,4 +8,9 @@ if (!rootElement) {
   throw new Error("Missing #root element.");
 }
 
-createRoot(rootElement).render(<App />);
+createRoot(rootElement).render(
+  <>
+    <App />
+    <Analytics />
+  </>,
+);

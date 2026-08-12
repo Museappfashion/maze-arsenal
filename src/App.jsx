@@ -2836,7 +2836,14 @@ if (world.player.hp <= 0) {
   });
   world.gameOver = true;
   queueSfx(world, "gameOver");
-  setMessage(world, `${getPlayerDisplayName(world)} was overwhelmed.`, 99);
+  const displayName = getPlayerDisplayName(world);
+  setMessage(
+    world,
+    displayName === "You"
+      ? "You were overwhelmed."
+      : `${displayName} was overwhelmed.`,
+    99,
+  );
 } }
 
 function updateEnemies(world, dt) { const player = world.player; const alive = [];
@@ -7094,7 +7101,7 @@ function getControlsForViewMode(viewMode) {
       "Power-up holder: maximum 2",
       "Toggle labels: L",
       "Minimap: M",
-      "New maze: use the START button",
+      "New maze: START button or N",
       "Esc: unlock mouse / choose level",
     ];
   }
@@ -7107,7 +7114,7 @@ function getControlsForViewMode(viewMode) {
     "Power-up holder: maximum 2",
     "Toggle labels: L",
     "Minimap: M",
-    "New maze: use the START button",
+    "New maze: START button or N",
   ];
 }
 
@@ -8129,6 +8136,12 @@ const handleKeyDown = (event) => { const world = worldRef.current; const key = e
     toggleLabels(world);
   }
 
+  if (key === "n" || key === "N") {
+    event.preventDefault();
+    resetWorld();
+    return;
+  }
+
   if (key === "Escape") {
     if (
       typeof document !== "undefined" &&
@@ -8693,6 +8706,53 @@ return (
     }
 
 
+    .always-start-maze-button {
+      position: absolute;
+      left: 50%;
+      top: max(10px, env(safe-area-inset-top));
+      z-index: 14;
+      min-height: 42px;
+      padding: 9px 16px;
+      transform: translateX(-50%);
+      border: 1px solid rgba(103, 232, 249, 0.72);
+      border-radius: 12px;
+      background: linear-gradient(
+        135deg,
+        rgba(8, 145, 178, 0.94),
+        rgba(14, 116, 144, 0.88)
+      );
+      color: #ecfeff;
+      font: inherit;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      white-space: nowrap;
+      cursor: pointer;
+      touch-action: manipulation;
+      box-shadow:
+        0 8px 26px rgba(0, 0, 0, 0.34),
+        0 0 18px rgba(34, 211, 238, 0.2);
+    }
+
+    .always-start-maze-button:hover {
+      filter: brightness(1.1);
+    }
+
+    .always-start-maze-button:active {
+      transform: translateX(-50%) scale(0.96);
+    }
+
+    .touch-mobile .always-start-maze-button {
+      top: max(8px, env(safe-area-inset-top));
+      min-height: 38px;
+      padding: 7px 11px;
+      font-size: 9px;
+    }
+
+    .touch-mobile.mode-3d .always-start-maze-button {
+      left: 50%;
+    }
+
     .mobile-3d-sidebar {
       display: none;
     }
@@ -9222,6 +9282,14 @@ return (
             imageRendering: "auto",
           }}
         />
+        <button
+          type="button"
+          className="always-start-maze-button"
+          onClick={resetWorld}
+          title="Start a fresh maze (keyboard shortcut: N)"
+        >
+          START / NEW MAZE
+        </button>
         {touchControlsEnabled && (
           <TouchControls
             gameMode={gameMode}

@@ -7247,6 +7247,8 @@ function TouchJoystick({
   mode = "vector",
   onVector,
   onLookDelta,
+  onPointerStart,
+  onPointerEnd,
 }) {
   const padRef = useRef(null);
   const pointerIdRef = useRef(null);
@@ -7314,8 +7316,9 @@ function TouchJoystick({
       };
       event.currentTarget.setPointerCapture?.(event.pointerId);
       updateJoystick(event);
+      onPointerStart?.();
     },
-    [updateJoystick],
+    [onPointerStart, updateJoystick],
   );
 
   const handlePointerMove = useCallback(
@@ -7347,8 +7350,10 @@ function TouchJoystick({
       if (mode !== "look") {
         onVector?.(0, 0);
       }
+
+      onPointerEnd?.();
     },
-    [mode, onVector],
+    [mode, onPointerEnd, onVector],
   );
 
   return (
@@ -7414,6 +7419,8 @@ function TouchControls({
           mode={gameMode === "3d" ? "look" : "vector"}
           onVector={onAim}
           onLookDelta={onLookDelta}
+          onPointerStart={onAttackStart}
+          onPointerEnd={onAttackEnd}
         />
       </div>
 

@@ -1598,14 +1598,14 @@ async function submitGlobalLeaderboardTime(
 }
 
 const MAX_AMMO = 200;
-const AMMO_SUPPORT_RANGED_CHANCE = 0.5;
-const AMMO_SUPPORT_MELEE_CHANCE = 0.18;
-const AMMO_SUPPORT_MIN_AMOUNT = 4;
-const AMMO_SUPPORT_MAX_AMOUNT = 8;
-const AMMO_EXTRA_MIN_AMOUNT = 3;
-const AMMO_EXTRA_MAX_AMOUNT = 7;
-const AMMO_DROP_MIN_TILE_SPACING = 7;
-const AMMO_ROUTE_SPACING = 22;
+const AMMO_SUPPORT_RANGED_CHANCE = 0.68;
+const AMMO_SUPPORT_MELEE_CHANCE = 0.28;
+const AMMO_SUPPORT_MIN_AMOUNT = 6;
+const AMMO_SUPPORT_MAX_AMOUNT = 12;
+const AMMO_EXTRA_MIN_AMOUNT = 5;
+const AMMO_EXTRA_MAX_AMOUNT = 11;
+const AMMO_DROP_MIN_TILE_SPACING = 5;
+const AMMO_ROUTE_SPACING = 16;
 const POWER_UP_PICKUP_COUNT = 20;
 const HUD_REFRESH_INTERVAL = 0.12;
 const DISTANCE_FIELD_INTERVAL = 0.08;
@@ -2179,7 +2179,8 @@ function placeProgressionItems(world, distances, used) {
   }
 
   const extraAmmo = Math.max(
-    4,
+    6,
+    Math.floor(world.floorTiles.length * 0.028),
     Math.floor(world.exit.distance / AMMO_ROUTE_SPACING),
   );
   const medkits = Math.floor(world.floorTiles.length * 0.02);
@@ -7768,6 +7769,49 @@ function AudioVolumeControls({
   );
 }
 
+
+function SettingsControls({
+  viewMode,
+  onToggleViewMode,
+  audioEnabled,
+  musicVolume,
+  sfxVolume,
+  onToggleAudio,
+  onTestSound,
+  onMusicVolumeChange,
+  onSfxVolumeChange,
+  audioStatus,
+}) {
+  return (
+    <div className="settings-controls">
+      <div className="settings-section-title">VIEW</div>
+      <button
+        type="button"
+        className="settings-view-toggle"
+        onClick={onToggleViewMode}
+      >
+        {viewMode === "3d"
+          ? "✓ 3D BETA · SWITCH TO 2D"
+          : "2D CLASSIC · SWITCH TO 3D"}
+      </button>
+
+      <div className="settings-section-title">SOUND</div>
+      <AudioVolumeControls
+        enabled={audioEnabled}
+        musicVolume={musicVolume}
+        sfxVolume={sfxVolume}
+        onToggle={onToggleAudio}
+        onTestSound={onTestSound}
+        onMusicVolumeChange={onMusicVolumeChange}
+        onSfxVolumeChange={onSfxVolumeChange}
+      />
+      <div className="audio-status-text" role="status">
+        {audioStatus}
+      </div>
+    </div>
+  );
+}
+
 function MobileHudOverlay({
   world,
   mapExpanded,
@@ -7808,19 +7852,12 @@ function MobileHudOverlay({
         >
           START
         </button>
-        <button type="button" onClick={onSwitchMode}>
-          {world.viewMode === "3d" ? "2D" : "3D"}
-        </button>
         <button type="button" onClick={onFullscreen}>
           FULL
         </button>
         <button type="button" onClick={onExitLevel}>
           MENU
         </button>
-      </div>
-
-      <div className="mobile-support-panel">
-        <SupportButtons compact />
       </div>
 
       <div
@@ -7926,14 +7963,9 @@ function ThreeDStatusSidebar({
         </div>
       </section>
 
-      <SupportButtons compact />
-
       <div className="three-d-sidebar-actions">
         <button type="button" className="three-d-start-button" onClick={onStart}>
           START NEW MAZE
-        </button>
-        <button type="button" onClick={onSwitchMode}>
-          SWITCH TO 2D
         </button>
         <button type="button" onClick={onFullscreen}>
           FULLSCREEN
@@ -8226,7 +8258,7 @@ const [leaderboardStatus, setLeaderboardStatus] = useState(
 const [touchControlsEnabled, setTouchControlsEnabled] = useState(false);
 const [mobileMapExpanded, setMobileMapExpanded] = useState(false);
 const [rotatePromptDismissed, setRotatePromptDismissed] = useState(false);
-const [supportOpen, setSupportOpen] = useState(false);
+const [settingsOpen, setSettingsOpen] = useState(false);
 const [audioStatus, setAudioStatus] = useState("Tap TEST SOUND to verify audio");
 const [, setRevision] = useState(0);
 
@@ -9026,6 +9058,14 @@ if (!selectedLevel) {
       viewMode={selectionMode}
       onViewModeChange={setSelectionMode}
       initialPlayerName={playerName}
+      audioEnabled={audioEnabled}
+      musicVolume={musicVolume}
+      sfxVolume={sfxVolume}
+      onToggleAudio={toggleAudio}
+      onTestSound={handleTestSound}
+      onMusicVolumeChange={handleMusicVolumeChange}
+      onSfxVolumeChange={handleSfxVolumeChange}
+      audioStatus={audioStatus}
     />
   );
 }
@@ -9470,6 +9510,112 @@ return (
       display: none;
     }
 
+
+
+    .game-settings-widget {
+      position: absolute;
+      right: 12px;
+      top: max(12px, env(safe-area-inset-top));
+      z-index: 18;
+      pointer-events: auto;
+    }
+
+    .game-settings-toggle {
+      min-height: 40px;
+      padding: 8px 13px;
+      border: 1px solid rgba(103, 232, 249, 0.56);
+      border-radius: 11px;
+      background: rgba(8, 47, 73, 0.94);
+      color: #e0f2fe;
+      font: inherit;
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      touch-action: manipulation;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    .game-settings-toggle:active {
+      transform: scale(0.96);
+    }
+
+    .game-settings-popover {
+      position: absolute;
+      top: calc(100% + 7px);
+      right: 0;
+      width: min(310px, 78vw);
+      padding: 12px;
+      border: 1px solid rgba(103, 232, 249, 0.3);
+      border-radius: 14px;
+      background: rgba(2, 6, 23, 0.98);
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.52);
+    }
+
+    .game-settings-close {
+      position: absolute;
+      top: 7px;
+      right: 7px;
+      z-index: 2;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border: 1px solid rgba(226, 232, 240, 0.28);
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.94);
+      color: #f8fafc;
+      font: inherit;
+      font-size: 20px;
+      line-height: 24px;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .settings-controls {
+      display: grid;
+      gap: 8px;
+      padding-top: 4px;
+    }
+
+    .settings-section-title {
+      color: #67e8f9;
+      font-size: 8px;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+    }
+
+    .settings-view-toggle {
+      width: 100%;
+      min-height: 36px;
+      padding: 7px 9px;
+      border: 1px solid rgba(167, 139, 250, 0.4);
+      border-radius: 9px;
+      background: rgba(76, 29, 149, 0.24);
+      color: #ede9fe;
+      font: inherit;
+      font-size: 9px;
+      font-weight: 900;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .touch-mobile .game-settings-widget {
+      left: max(10px, env(safe-area-inset-left));
+      right: auto;
+      top: max(92px, calc(env(safe-area-inset-top) + 88px));
+    }
+
+    .touch-mobile .game-settings-toggle {
+      min-height: 34px;
+      padding: 6px 9px;
+      font-size: 8px;
+    }
+
+    .touch-mobile .game-settings-popover {
+      left: 0;
+      right: auto;
+      width: min(300px, 74vw);
+    }
 
     .game-support-widget {
       position: absolute;
@@ -10231,45 +10377,42 @@ return (
         >
           START NEW MAZE
         </button>
-        <div className="game-audio-volume-panel">
-          <AudioVolumeControls
-            enabled={audioEnabled}
-            musicVolume={musicVolume}
-            sfxVolume={sfxVolume}
-            onToggle={toggleAudio}
-            onTestSound={handleTestSound}
-            onMusicVolumeChange={handleMusicVolumeChange}
-            onSfxVolumeChange={handleSfxVolumeChange}
-          />
-          <div className="audio-status-text" role="status">
-            {audioStatus}
-          </div>
-        </div>
-        <div className="game-support-widget">
+        <div className="game-settings-widget">
           <button
             type="button"
-            className="game-support-toggle"
-            aria-expanded={supportOpen}
-            onClick={() => setSupportOpen((open) => !open)}
+            className="game-settings-toggle"
+            aria-expanded={settingsOpen}
+            onClick={() => setSettingsOpen((open) => !open)}
           >
-            ♥ SUPPORT
+            ⚙ SETTINGS
           </button>
-          {supportOpen && (
-            <div className="game-support-popover">
+          {settingsOpen && (
+            <div className="game-settings-popover">
               <button
                 type="button"
-                className="game-support-close"
-                aria-label="Close support panel"
-                onClick={() => setSupportOpen(false)}
+                className="game-settings-close"
+                aria-label="Close settings"
+                onClick={() => setSettingsOpen(false)}
               >
                 ×
               </button>
-              <SupportButtons />
+              <SettingsControls
+                viewMode={gameMode}
+                onToggleViewMode={switchGameMode}
+                audioEnabled={audioEnabled}
+                musicVolume={musicVolume}
+                sfxVolume={sfxVolume}
+                onToggleAudio={toggleAudio}
+                onTestSound={handleTestSound}
+                onMusicVolumeChange={handleMusicVolumeChange}
+                onSfxVolumeChange={handleSfxVolumeChange}
+                audioStatus={audioStatus}
+              />
             </div>
           )}
         </div>
 
-        {touchControlsEnabled && (
+                {touchControlsEnabled && (
           <TouchControls
             gameMode={gameMode}
             storedPowerUps={storedPowerUps}
@@ -10491,56 +10634,8 @@ return (
         >
           Choose another level
         </button>
-        <button
-          type="button"
-          onClick={switchGameMode}
-          style={{
-            width: "100%",
-            marginTop: 8,
-            padding: "10px 12px",
-            borderRadius: 12,
-            border:
-              gameMode === "3d"
-                ? "1px solid rgba(167, 139, 250, 0.46)"
-                : "1px solid rgba(56, 189, 248, 0.34)",
-            background:
-              gameMode === "3d"
-                ? "rgba(76, 29, 149, 0.28)"
-                : "rgba(8, 145, 178, 0.14)",
-            color:
-              gameMode === "3d"
-                ? "#e9d5ff"
-                : "#bae6fd",
-            fontWeight: 800,
-            cursor: "pointer",
-          }}
-        >
-          Switch to {gameMode === "3d" ? "2D Classic" : "3D Beta"}
-        </button>
-        <button
-          type="button"
-          onClick={toggleAudio}
-          style={{
-            width: "100%",
-            marginTop: 8,
-            padding: "10px 12px",
-            borderRadius: 12,
-            border: audioEnabled
-              ? "1px solid rgba(74, 222, 128, 0.35)"
-              : "1px solid rgba(148, 163, 184, 0.22)",
-            background: audioEnabled
-              ? "rgba(22, 101, 52, 0.18)"
-              : "rgba(30, 41, 59, 0.72)",
-            color: audioEnabled ? "#bbf7d0" : "#94a3b8",
-            fontWeight: 800,
-            cursor: "pointer",
-          }}
-        >
-          {audioEnabled ? "🔊" : "🔇"} {LEVEL_AUDIO_PROFILES[world.level.themeKey].title} · {audioEnabled ? "Music + SFX On" : "Muted"}
-        </button>
-      </section>
 
-      <SupportButtons />
+      </section>
 
       <section
         style={{
@@ -11322,9 +11417,19 @@ function LevelSelectScreen({
   viewMode,
   onViewModeChange,
   initialPlayerName = "",
+  audioEnabled,
+  musicVolume,
+  sfxVolume,
+  onToggleAudio,
+  onTestSound,
+  onMusicVolumeChange,
+  onSfxVolumeChange,
+  audioStatus,
 }) {
   const levels = Object.values(LEVELS);
   const [pendingLevelKey, setPendingLevelKey] = useState(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
   const [draftPlayerName, setDraftPlayerName] = useState(
     sanitizePlayerName(initialPlayerName),
   );
@@ -11423,6 +11528,213 @@ function LevelSelectScreen({
         .selector-header h1 {
           font-size: clamp(38px, 5vw, 72px);
           line-height: 0.96;
+        }
+
+
+        .first-page-header-actions {
+          position: relative;
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+          gap: 10px;
+        }
+
+        .first-page-settings-button,
+        .first-page-support-button {
+          min-height: 46px;
+          padding: 10px 14px;
+          border-radius: 14px;
+          color: #f8fafc;
+          font-weight: 900;
+          cursor: pointer;
+          transition:
+            transform 160ms ease,
+            filter 160ms ease;
+        }
+
+        .first-page-settings-button {
+          border: 1px solid rgba(103, 232, 249, 0.44);
+          background: rgba(8, 47, 73, 0.72);
+          color: #cffafe;
+        }
+
+        .first-page-support-button {
+          border: 1px solid rgba(244, 114, 182, 0.58);
+          background: linear-gradient(
+            135deg,
+            rgba(190, 24, 93, 0.68),
+            rgba(131, 24, 67, 0.54)
+          );
+          color: #fdf2f8;
+        }
+
+        .first-page-settings-button:hover,
+        .first-page-support-button:hover {
+          transform: translateY(-2px);
+          filter: brightness(1.08);
+        }
+
+        .first-page-expanded-panel {
+          width: min(520px, 100%);
+          justify-self: end;
+          padding: 16px;
+          border: 1px solid rgba(103, 232, 249, 0.22);
+          border-radius: 18px;
+          background: rgba(2, 6, 23, 0.9);
+          box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
+        }
+
+        .first-page-expanded-panel.support-expanded {
+          border-color: rgba(244, 114, 182, 0.24);
+        }
+
+        .settings-controls {
+          display: grid;
+          gap: 9px;
+        }
+
+        .settings-section-title {
+          color: #67e8f9;
+          font-size: 9px;
+          font-weight: 900;
+          letter-spacing: 0.12em;
+        }
+
+        .settings-view-toggle {
+          width: 100%;
+          min-height: 42px;
+          padding: 9px 12px;
+          border: 1px solid rgba(167, 139, 250, 0.42);
+          border-radius: 10px;
+          background: rgba(76, 29, 149, 0.28);
+          color: #ede9fe;
+          font-weight: 900;
+          cursor: pointer;
+        }
+
+        .audio-volume-controls {
+          display: grid;
+          gap: 8px;
+          padding: 10px;
+          border: 1px solid rgba(74, 222, 128, 0.22);
+          border-radius: 12px;
+          background: rgba(15, 23, 42, 0.72);
+        }
+
+        .audio-top-actions {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 7px;
+        }
+
+        .audio-master-toggle,
+        .audio-test-button {
+          min-height: 38px;
+          padding: 7px 9px;
+          border-radius: 9px;
+          font-weight: 900;
+          cursor: pointer;
+        }
+
+        .audio-master-toggle {
+          border: 1px solid rgba(74, 222, 128, 0.36);
+          background: rgba(22, 101, 52, 0.22);
+          color: #bbf7d0;
+        }
+
+        .audio-test-button {
+          border: 1px solid rgba(103, 232, 249, 0.42);
+          background: rgba(8, 145, 178, 0.22);
+          color: #cffafe;
+        }
+
+        .audio-volume-row {
+          display: grid;
+          gap: 4px;
+        }
+
+        .audio-volume-row > span {
+          display: flex;
+          justify-content: space-between;
+          gap: 8px;
+          color: #cbd5e1;
+          font-size: 10px;
+        }
+
+        .audio-volume-row em {
+          color: #67e8f9;
+          font-style: normal;
+          font-weight: 900;
+        }
+
+        .audio-volume-row input[type="range"] {
+          width: 100%;
+          min-height: 28px;
+          margin: 0;
+          accent-color: #22d3ee;
+        }
+
+        .audio-status-text {
+          padding: 6px 8px;
+          border-radius: 8px;
+          background: rgba(15, 23, 42, 0.72);
+          color: #bae6fd;
+          font-size: 10px;
+          font-weight: 800;
+          text-align: center;
+        }
+
+        .support-panel {
+          display: grid;
+          gap: 10px;
+          padding: 14px;
+          border: 1px solid rgba(244, 114, 182, 0.3);
+          border-radius: 14px;
+          background: rgba(15, 23, 42, 0.76);
+        }
+
+        .support-panel-heading {
+          display: grid;
+          gap: 4px;
+        }
+
+        .support-panel-heading strong {
+          color: #f9a8d4;
+          font-size: 11px;
+          font-weight: 900;
+          letter-spacing: 0.08em;
+        }
+
+        .support-panel-heading span {
+          color: #94a3b8;
+          font-size: 11px;
+        }
+
+        .support-button-grid {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 8px;
+        }
+
+        .support-amount-button {
+          min-height: 42px;
+          padding: 7px 8px;
+          border: 1px solid rgba(244, 114, 182, 0.44);
+          border-radius: 10px;
+          background: rgba(190, 24, 93, 0.28);
+          color: #fce7f3;
+          font-weight: 900;
+          cursor: pointer;
+        }
+
+        .support-amount-button:disabled {
+          opacity: 0.42;
+          cursor: not-allowed;
+        }
+
+        .support-setup-note {
+          color: #64748b;
+          font-size: 10px;
         }
 
         .version-beta-button {
@@ -11940,8 +12252,24 @@ function LevelSelectScreen({
             display: grid;
           }
 
+          .first-page-header-actions {
+            display: grid;
+            grid-template-columns: 1fr;
+            justify-content: stretch;
+          }
+
+          .first-page-settings-button,
+          .first-page-support-button,
           .version-beta-button {
             width: 100%;
+          }
+
+          .first-page-expanded-panel {
+            justify-self: stretch;
+          }
+
+          .support-button-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
           }
 
           .level-choice {
@@ -11975,29 +12303,56 @@ function LevelSelectScreen({
             <h1>Choose your level</h1>
           </div>
 
-          <button
-            type="button"
-            className={`version-beta-button${viewMode === "3d" ? " active" : ""}`}
-            aria-pressed={viewMode === "3d"}
-            title={
-              viewMode === "3d"
-                ? "3D Beta selected. Click to return to 2D."
-                : "Select the playable 3D Beta, then choose a level."
-            }
-            onClick={() =>
-              onViewModeChange(
-                viewMode === "3d" ? "2d" : "3d",
-              )
-            }
-          >
-            <span>
-              {viewMode === "3d"
-                ? "3D Version On"
-                : "3D Version"}
-            </span>
-            <span className="beta-badge">Beta</span>
-          </button>
+          <div className="first-page-header-actions">
+            <button
+              type="button"
+              className="first-page-settings-button"
+              aria-expanded={settingsOpen}
+              onClick={() => {
+                setSettingsOpen((open) => !open);
+                setSupportOpen(false);
+              }}
+            >
+              ⚙ SETTINGS
+            </button>
+            <button
+              type="button"
+              className="first-page-support-button"
+              aria-expanded={supportOpen}
+              onClick={() => {
+                setSupportOpen((open) => !open);
+                setSettingsOpen(false);
+              }}
+            >
+              ♥ SUPPORT MIST MAZE
+            </button>
+          </div>
         </header>
+
+        {settingsOpen && (
+          <section className="first-page-expanded-panel">
+            <SettingsControls
+              viewMode={viewMode}
+              onToggleViewMode={() =>
+                onViewModeChange(viewMode === "3d" ? "2d" : "3d")
+              }
+              audioEnabled={audioEnabled}
+              musicVolume={musicVolume}
+              sfxVolume={sfxVolume}
+              onToggleAudio={onToggleAudio}
+              onTestSound={onTestSound}
+              onMusicVolumeChange={onMusicVolumeChange}
+              onSfxVolumeChange={onSfxVolumeChange}
+              audioStatus={audioStatus}
+            />
+          </section>
+        )}
+
+        {supportOpen && (
+          <section className="first-page-expanded-panel support-expanded">
+            <SupportButtons />
+          </section>
+        )}
 
         <section className="level-choice-grid" aria-label="Level selection">
           {levels.map((level) => (

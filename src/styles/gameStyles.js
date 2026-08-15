@@ -270,55 +270,6 @@ export const GAME_STYLES = `
     }
 
 
-    .always-start-maze-button {
-      position: absolute;
-      left: 50%;
-      top: max(10px, env(safe-area-inset-top));
-      z-index: 14;
-      min-height: 42px;
-      padding: 9px 16px;
-      transform: translateX(-50%);
-      border: 1px solid rgba(103, 232, 249, 0.72);
-      border-radius: 12px;
-      background: linear-gradient(
-        135deg,
-        rgba(8, 145, 178, 0.94),
-        rgba(14, 116, 144, 0.88)
-      );
-      color: #ecfeff;
-      font: inherit;
-      font-size: 11px;
-      font-weight: 900;
-      letter-spacing: 0.06em;
-      white-space: nowrap;
-      cursor: pointer;
-      touch-action: manipulation;
-      box-shadow:
-        0 8px 26px rgba(0, 0, 0, 0.34),
-        0 0 18px rgba(34, 211, 238, 0.2);
-    }
-
-    .always-start-maze-button:hover {
-      filter: brightness(1.1);
-    }
-
-    .always-start-maze-button:active {
-      transform: translateX(-50%) scale(0.96);
-    }
-
-    .touch-mobile .always-start-maze-button {
-      top: max(8px, env(safe-area-inset-top));
-      min-height: 38px;
-      padding: 7px 11px;
-      font-size: 9px;
-    }
-
-    .touch-mobile.mode-3d .always-start-maze-button {
-      left: 50%;
-    }
-
-
-
     .support-panel {
       display: grid;
       gap: 9px;
@@ -427,65 +378,6 @@ export const GAME_STYLES = `
 
 
 
-    .game-settings-widget {
-      position: absolute;
-      right: 12px;
-      top: max(12px, env(safe-area-inset-top));
-      z-index: 18;
-      pointer-events: auto;
-    }
-
-    .game-settings-toggle {
-      min-height: 40px;
-      padding: 8px 13px;
-      border: 1px solid rgba(103, 232, 249, 0.56);
-      border-radius: 11px;
-      background: rgba(8, 47, 73, 0.94);
-      color: #e0f2fe;
-      font: inherit;
-      font-size: 10px;
-      font-weight: 900;
-      letter-spacing: 0.06em;
-      cursor: pointer;
-      touch-action: manipulation;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-    }
-
-    .game-settings-toggle:active {
-      transform: scale(0.96);
-    }
-
-    .game-settings-popover {
-      position: absolute;
-      top: calc(100% + 7px);
-      right: 0;
-      width: min(310px, 78vw);
-      padding: 12px;
-      border: 1px solid rgba(103, 232, 249, 0.3);
-      border-radius: 14px;
-      background: rgba(2, 6, 23, 0.98);
-      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.52);
-    }
-
-    .game-settings-close {
-      position: absolute;
-      top: 7px;
-      right: 7px;
-      z-index: 2;
-      width: 28px;
-      height: 28px;
-      padding: 0;
-      border: 1px solid rgba(226, 232, 240, 0.28);
-      border-radius: 999px;
-      background: rgba(15, 23, 42, 0.94);
-      color: #f8fafc;
-      font: inherit;
-      font-size: 20px;
-      line-height: 24px;
-      cursor: pointer;
-      touch-action: manipulation;
-    }
-
     .settings-controls {
       display: grid;
       gap: 8px;
@@ -512,24 +404,6 @@ export const GAME_STYLES = `
       font-weight: 900;
       cursor: pointer;
       touch-action: manipulation;
-    }
-
-    .touch-mobile .game-settings-widget {
-      left: max(10px, env(safe-area-inset-left));
-      right: auto;
-      top: max(92px, calc(env(safe-area-inset-top) + 88px));
-    }
-
-    .touch-mobile .game-settings-toggle {
-      min-height: 34px;
-      padding: 6px 9px;
-      font-size: 8px;
-    }
-
-    .touch-mobile .game-settings-popover {
-      left: 0;
-      right: auto;
-      width: min(300px, 74vw);
     }
 
     .game-support-widget {
@@ -730,6 +604,120 @@ export const GAME_STYLES = `
       left: max(8px, env(safe-area-inset-left));
       top: max(60px, calc(env(safe-area-inset-top) + 56px));
       width: clamp(132px, 24vw, 164px);
+    }
+
+
+    .sidebar-tools-card {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid rgba(103, 232, 249, 0.2);
+      border-radius: 14px;
+      background: rgba(15, 23, 42, 0.88);
+    }
+
+    .sidebar-tools-card.compact {
+      gap: 7px;
+      padding: 8px;
+      border-radius: 11px;
+      background: rgba(2, 6, 23, 0.84);
+    }
+
+    .sidebar-tools-actions {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 42px;
+      gap: 8px;
+    }
+
+    .sidebar-new-maze-button,
+    .sidebar-settings-gear {
+      min-height: 42px;
+      border-radius: 10px;
+      font: inherit;
+      font-weight: 900;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .sidebar-new-maze-button {
+      min-width: 0;
+      padding: 8px 10px;
+      border: 1px solid rgba(34, 211, 238, 0.5);
+      background: linear-gradient(
+        135deg,
+        rgba(8, 145, 178, 0.48),
+        rgba(14, 116, 144, 0.28)
+      );
+      color: #ecfeff;
+      font-size: 9px;
+      letter-spacing: 0.04em;
+    }
+
+    .sidebar-settings-gear {
+      width: 42px;
+      padding: 0;
+      border: 1px solid rgba(103, 232, 249, 0.42);
+      background: rgba(8, 47, 73, 0.82);
+      color: #cffafe;
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    .sidebar-new-maze-button:active,
+    .sidebar-settings-gear:active,
+    .mobile-settings-gear:active {
+      transform: scale(0.96);
+    }
+
+    .sidebar-tools-card.compact .sidebar-tools-actions {
+      grid-template-columns: minmax(0, 1fr) 36px;
+      gap: 6px;
+    }
+
+    .sidebar-tools-card.compact .sidebar-new-maze-button,
+    .sidebar-tools-card.compact .sidebar-settings-gear {
+      min-height: 36px;
+    }
+
+    .sidebar-tools-card.compact .sidebar-settings-gear {
+      width: 36px;
+      font-size: 17px;
+    }
+
+    .sidebar-tools-card.compact .sidebar-new-maze-button {
+      font-size: 8px;
+    }
+
+    .mobile-2d-tools-sidebar {
+      display: none;
+    }
+
+    .touch-mobile.mode-2d .mobile-2d-tools-sidebar {
+      position: fixed;
+      top: max(8px, env(safe-area-inset-top));
+      right: max(8px, env(safe-area-inset-right));
+      z-index: 19;
+      display: block;
+      width: min(300px, 74vw);
+      max-height: calc(100dvh - 16px);
+      overflow-y: auto;
+      padding: 8px;
+      border: 1px solid rgba(103, 232, 249, 0.24);
+      border-radius: 14px;
+      background: rgba(2, 6, 23, 0.97);
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.48);
+      pointer-events: auto;
+    }
+
+    .mobile-hud-actions .mobile-settings-gear {
+      min-width: 36px;
+      width: 36px;
+      padding: 0;
+      border-color: rgba(103, 232, 249, 0.48);
+      background: rgba(8, 47, 73, 0.88);
+      color: #cffafe;
+      font-size: 18px;
+      line-height: 1;
     }
 
     .mobile-3d-sidebar {
@@ -1101,12 +1089,6 @@ export const GAME_STYLES = `
 
     .mobile-hud-actions button:active {
       transform: scale(0.95);
-    }
-
-    .mobile-hud-actions .mobile-start-button {
-      border-color: rgba(34, 211, 238, 0.5);
-      background: rgba(8, 145, 178, 0.58);
-      color: #ecfeff;
     }
 
     .mobile-minimap-wrap {

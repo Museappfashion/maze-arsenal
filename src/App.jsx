@@ -1,12 +1,12 @@
 // src/App.jsx
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { GAME_STYLES } from "./styles/gameStyles.js";
 import { MazeAudioEngine, queueSfx } from "./audio/MazeAudioEngine.js";
-import { MinimapPanel, MobileHudOverlay, SettingsControls, ThreeDStatusSidebar, TouchControls, mergeInputKeys, selectNextOwnedWeapon } from "./components/GameUi.jsx";
+import { MinimapPanel, MobileHudOverlay, SidebarSettings, ThreeDStatusSidebar, TouchControls, mergeInputKeys, selectNextOwnedWeapon } from "./components/GameUi.jsx";
 import { LevelSelectScreen } from "./components/LevelSelectScreen.jsx";
 import { StatCard } from "./components/StatCard.jsx";
 import { MAX_AMMO } from "./config/ammo.js";
-import { CANVAS_HEIGHT, CANVAS_WIDTH, DEFAULT_LEVEL_KEY, GRAPHICS_VERSION, LEVELS, PASSAGE_WIDTH, VIEW_3D_MOUSE_SENSITIVITY, VIEW_3D_TOUCH_SENSITIVITY } from "./config/constants.js";
+import { CANVAS_HEIGHT, CANVAS_WIDTH, DEFAULT_LEVEL_KEY, PASSAGE_WIDTH, VIEW_3D_MOUSE_SENSITIVITY, VIEW_3D_TOUCH_SENSITIVITY } from "./config/constants.js";
 import { getAmmoLabel, getWeaponLabel, getWeaponPresentation } from "./config/presentations.js";
 import { DISTANCE_FIELD_INTERVAL, HUD_REFRESH_INTERVAL } from "./config/runtime.js";
 import { WEAPONS, WEAPON_HOTKEY_MAP, WEAPON_ORDER } from "./config/weapons.js";
@@ -16,7 +16,7 @@ import { drawWorld } from "./game/rendering.js";
 import { createWorld, setWorldViewMode } from "./game/world.js";
 import { GLOBAL_LEADERBOARD_ENABLED, addLeaderboardTime, createEmptyUserRanks, detectCountryCode, fetchGlobalLeaderboards, loadLeaderboards, saveLeaderboards, submitGlobalLeaderboardTime } from "./services/leaderboard.js";
 import { clamp, formatTime } from "./utils/math.js";
-import { getPlayerDisplayName, sanitizePlayerName } from "./utils/player.js";
+import { sanitizePlayerName } from "./utils/player.js";
 
 export default function App() {
 const canvasRef = useRef(null);
@@ -562,12 +562,6 @@ const handleKeyDown = (event) => { const world = worldRef.current; const key = e
     toggleLabels(world);
   }
 
-  if (key === "n" || key === "N") {
-    event.preventDefault();
-    resetWorld();
-    return;
-  }
-
   if (key === "Escape") {
     if (
       typeof document !== "undefined" &&
@@ -594,7 +588,7 @@ return () => {
   window.removeEventListener("keyup", handleKeyUp);
 };
 
-}, [resetWorld, returnToLevelSelect, selectedLevel]);
+}, [returnToLevelSelect, selectedLevel]);
 
 useEffect(() => {
 if (!selectedLevel) {
@@ -831,8 +825,6 @@ return () => {
 
 }, [forceRefresh, recordLeaderboardScore, selectedLevel]);
 
-const legend = useMemo( () => [ { label: getPlayerDisplayName(playerName), color: "#38bdf8" }, { label: "Exit", color: "#22c55e" }, { label: "Weapon", color: "#fbbf24" }, { label: LEVELS[selectedLevel]?.themeKey === "medieval" ? "Arrows" : "Ammo", color: "#60a5fa" }, { label: "Medkit", color: "#f43f5e" }, { label: "Power-up", color: "#a78bfa" }, ], [playerName, selectedLevel], );
-
 if (!selectedLevel) {
   return (
     <LevelSelectScreen
@@ -886,50 +878,7 @@ return (
             imageRendering: "auto",
           }}
         />
-        <button
-          type="button"
-          className="always-start-maze-button"
-          onClick={resetWorld}
-          title="Start a fresh maze"
-        >
-          START NEW MAZE
-        </button>
-        <div className="game-settings-widget">
-          <button
-            type="button"
-            className="game-settings-toggle"
-            aria-expanded={settingsOpen}
-            onClick={() => setSettingsOpen((open) => !open)}
-          >
-            ⚙ SETTINGS
-          </button>
-          {settingsOpen && (
-            <div className="game-settings-popover">
-              <button
-                type="button"
-                className="game-settings-close"
-                aria-label="Close settings"
-                onClick={() => setSettingsOpen(false)}
-              >
-                ×
-              </button>
-              <SettingsControls
-                viewMode={gameMode}
-                onToggleViewMode={switchGameMode}
-                audioEnabled={audioEnabled}
-                musicVolume={musicVolume}
-                sfxVolume={sfxVolume}
-                onToggleAudio={toggleAudio}
-                onTestSound={handleTestSound}
-                onMusicVolumeChange={handleMusicVolumeChange}
-                onSfxVolumeChange={handleSfxVolumeChange}
-                audioStatus={audioStatus}
-              />
-            </div>
-          )}
-        </div>
-
-                {touchControlsEnabled && (
+{touchControlsEnabled && (
           <TouchControls
             gameMode={gameMode}
             storedPowerUps={storedPowerUps}
@@ -947,8 +896,7 @@ return (
             world={world}
             mapExpanded={mobileMapExpanded}
             onMapToggle={handleMobileMapToggle}
-            onStart={resetWorld}
-            onSwitchMode={switchGameMode}
+            onSettings={() => setSettingsOpen((open) => !open)}
             onExitLevel={returnToLevelSelect}
             onFullscreen={handleMobileFullscreen}
           />
@@ -975,6 +923,27 @@ return (
       </div>
     </main>
 
+    {touchControlsEnabled && gameMode === "2d" && settingsOpen && (
+      <aside className="mobile-2d-tools-sidebar">
+        <SidebarSettings
+          open
+          onToggle={() => setSettingsOpen(false)}
+          viewMode={gameMode}
+          onToggleViewMode={switchGameMode}
+          audioEnabled={audioEnabled}
+          musicVolume={musicVolume}
+          sfxVolume={sfxVolume}
+          onToggleAudio={toggleAudio}
+          onTestSound={handleTestSound}
+          onMusicVolumeChange={handleMusicVolumeChange}
+          onSfxVolumeChange={handleSfxVolumeChange}
+          audioStatus={audioStatus}
+          onStart={resetWorld}
+          compact
+        />
+      </aside>
+    )}
+
     {touchControlsEnabled && gameMode === "3d" && (
       <aside className="mobile-3d-sidebar">
         <ThreeDStatusSidebar
@@ -986,6 +955,16 @@ return (
           onSwitchMode={switchGameMode}
           onFullscreen={handleMobileFullscreen}
           onExitLevel={returnToLevelSelect}
+          settingsOpen={settingsOpen}
+          onToggleSettings={() => setSettingsOpen((open) => !open)}
+          audioEnabled={audioEnabled}
+          musicVolume={musicVolume}
+          sfxVolume={sfxVolume}
+          onToggleAudio={toggleAudio}
+          onTestSound={handleTestSound}
+          onMusicVolumeChange={handleMusicVolumeChange}
+          onSfxVolumeChange={handleSfxVolumeChange}
+          audioStatus={audioStatus}
         />
       </aside>
     )}
@@ -1002,10 +981,37 @@ return (
             onSwitchMode={switchGameMode}
             onFullscreen={handleMobileFullscreen}
             onExitLevel={returnToLevelSelect}
+            settingsOpen={settingsOpen}
+            onToggleSettings={() => setSettingsOpen((open) => !open)}
+            audioEnabled={audioEnabled}
+            musicVolume={musicVolume}
+            sfxVolume={sfxVolume}
+            onToggleAudio={toggleAudio}
+            onTestSound={handleTestSound}
+            onMusicVolumeChange={handleMusicVolumeChange}
+            onSfxVolumeChange={handleSfxVolumeChange}
+            audioStatus={audioStatus}
           />
         </div>
       ) : (
-        <MinimapPanel world={world} />
+        <>
+          <MinimapPanel world={world} />
+          <SidebarSettings
+            open={settingsOpen}
+            onToggle={() => setSettingsOpen((open) => !open)}
+            viewMode={gameMode}
+            onToggleViewMode={switchGameMode}
+            audioEnabled={audioEnabled}
+            musicVolume={musicVolume}
+            sfxVolume={sfxVolume}
+            onToggleAudio={toggleAudio}
+            onTestSound={handleTestSound}
+            onMusicVolumeChange={handleMusicVolumeChange}
+            onSfxVolumeChange={handleSfxVolumeChange}
+            audioStatus={audioStatus}
+            onStart={resetWorld}
+          />
+        </>
       )}
       <section
         style={{
@@ -1037,35 +1043,6 @@ return (
           }}
         >
           {world.level.label} · {world.level.themeLabel} · {world.level.subtitle}
-        </div>
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 7,
-            marginTop: 10,
-            padding: "6px 9px",
-            borderRadius: 999,
-            background: "rgba(8, 145, 178, 0.13)",
-            border: "1px solid rgba(103, 232, 249, 0.42)",
-            color: "#a5f3fc",
-            fontSize: 11,
-            fontWeight: 900,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
-            boxShadow: "0 0 24px rgba(34, 211, 238, 0.12)",
-          }}
-        >
-          <span
-            style={{
-              width: 7,
-              height: 7,
-              borderRadius: 999,
-              background: "#22d3ee",
-              boxShadow: "0 0 12px #22d3ee",
-            }}
-          />
-          {gameMode === "3d" ? "3D Raycast Beta" : GRAPHICS_VERSION}
         </div>
         <p
           style={{
@@ -1116,24 +1093,6 @@ return (
           <StatCard label="Theme" value={world.level.themeLabel} />
           <StatCard label="Corridor" value={`${PASSAGE_WIDTH} tiles`} />
         </div>
-        <button
-          type="button"
-          onClick={resetWorld}
-          style={{
-            width: "100%",
-            marginTop: 12,
-            padding: "12px 12px",
-            borderRadius: 12,
-            border: "1px solid rgba(34, 211, 238, 0.46)",
-            background: "linear-gradient(135deg, rgba(8,145,178,0.34), rgba(14,116,144,0.2))",
-            color: "#cffafe",
-            fontWeight: 900,
-            letterSpacing: "0.04em",
-            cursor: "pointer",
-          }}
-        >
-          START NEW MAZE
-        </button>
         <button
           type="button"
           onClick={returnToLevelSelect}
@@ -1536,59 +1495,7 @@ return (
         </ul>
       </section>
 
-      <section
-        style={{
-          padding: 18,
-          borderRadius: 18,
-          background: "rgba(15, 23, 42, 0.85)",
-          border: "1px solid rgba(148, 163, 184, 0.14)",
-        }}
-      >
-        <h2
-          style={{
-            margin: 0,
-            fontSize: 16,
-            fontWeight: 700,
-          }}
-        >
-          Legend
-        </h2>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 10,
-            marginTop: 14,
-          }}
-        >
-          {legend.map((item) => (
-            <div
-              key={item.label}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "10px 12px",
-                borderRadius: 14,
-                background: "rgba(15, 23, 42, 0.72)",
-                border: "1px solid rgba(148, 163, 184, 0.12)",
-                fontSize: 13,
-              }}
-            >
-              <div
-                style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: 999,
-                  background: item.color,
-                }}
-              />
-              {item.label}
-            </div>
-          ))}
-        </div>
-      </section>
     </aside>
   </div>
 </div>

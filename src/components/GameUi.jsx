@@ -334,12 +334,70 @@ export function SettingsControls({
   );
 }
 
+export function SidebarSettings({
+  open,
+  onToggle,
+  viewMode,
+  onToggleViewMode,
+  audioEnabled,
+  musicVolume,
+  sfxVolume,
+  onToggleAudio,
+  onTestSound,
+  onMusicVolumeChange,
+  onSfxVolumeChange,
+  audioStatus,
+  onStart,
+  compact = false,
+}) {
+  return (
+    <section
+      className={`sidebar-tools-card${compact ? " compact" : ""}`}
+      aria-label="Game tools"
+    >
+      <div className="sidebar-tools-actions">
+        <button
+          type="button"
+          className="sidebar-new-maze-button"
+          onClick={onStart}
+        >
+          START NEW MAZE
+        </button>
+        <button
+          type="button"
+          className="sidebar-settings-gear"
+          aria-label="Settings"
+          title="Settings"
+          aria-expanded={open}
+          onClick={onToggle}
+        >
+          ⚙
+        </button>
+      </div>
+
+      {open && (
+        <SettingsControls
+          viewMode={viewMode}
+          onToggleViewMode={onToggleViewMode}
+          audioEnabled={audioEnabled}
+          musicVolume={musicVolume}
+          sfxVolume={sfxVolume}
+          onToggleAudio={onToggleAudio}
+          onTestSound={onTestSound}
+          onMusicVolumeChange={onMusicVolumeChange}
+          onSfxVolumeChange={onSfxVolumeChange}
+          audioStatus={audioStatus}
+        />
+      )}
+    </section>
+  );
+}
+
 export function MobileHudOverlay({
   world,
   mapExpanded,
   onMapToggle,
-  onStart,
-  onSwitchMode,
+  onSettings,
   onExitLevel,
   onFullscreen,
 }) {
@@ -367,13 +425,17 @@ export function MobileHudOverlay({
       </div>
 
       <div className="mobile-hud-actions">
-        <button
-          type="button"
-          className="mobile-start-button"
-          onClick={onStart}
-        >
-          START
-        </button>
+        {world.viewMode !== "3d" && (
+          <button
+            type="button"
+            className="mobile-settings-gear"
+            aria-label="Settings"
+            title="Settings"
+            onClick={onSettings}
+          >
+            ⚙
+          </button>
+        )}
         <button type="button" onClick={onFullscreen}>
           FULL
         </button>
@@ -417,6 +479,16 @@ export function ThreeDStatusSidebar({
   onSwitchMode,
   onFullscreen,
   onExitLevel,
+  settingsOpen,
+  onToggleSettings,
+  audioEnabled,
+  musicVolume,
+  sfxVolume,
+  onToggleAudio,
+  onTestSound,
+  onMusicVolumeChange,
+  onSfxVolumeChange,
+  audioStatus,
 }) {
   return (
     <div className="three-d-status-sidebar-content">
@@ -484,10 +556,24 @@ export function ThreeDStatusSidebar({
         </div>
       </section>
 
+      <SidebarSettings
+        open={settingsOpen}
+        onToggle={onToggleSettings}
+        viewMode={world.viewMode}
+        onToggleViewMode={onSwitchMode}
+        audioEnabled={audioEnabled}
+        musicVolume={musicVolume}
+        sfxVolume={sfxVolume}
+        onToggleAudio={onToggleAudio}
+        onTestSound={onTestSound}
+        onMusicVolumeChange={onMusicVolumeChange}
+        onSfxVolumeChange={onSfxVolumeChange}
+        audioStatus={audioStatus}
+        onStart={onStart}
+        compact
+      />
+
       <div className="three-d-sidebar-actions">
-        <button type="button" className="three-d-start-button" onClick={onStart}>
-          START NEW MAZE
-        </button>
         <button type="button" onClick={onFullscreen}>
           FULLSCREEN
         </button>

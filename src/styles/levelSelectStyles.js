@@ -90,9 +90,14 @@ export const LEVEL_SELECT_STYLES = `
         }
 
         .first-page-settings-button {
+          width: 46px;
+          min-width: 46px;
+          padding: 0;
           border: 1px solid rgba(103, 232, 249, 0.44);
           background: rgba(8, 47, 73, 0.72);
           color: #cffafe;
+          font-size: 21px;
+          line-height: 1;
         }
 
         .first-page-support-button {
@@ -791,11 +796,14 @@ export const LEVEL_SELECT_STYLES = `
 
           .first-page-header-actions {
             display: grid;
-            grid-template-columns: 1fr;
+            grid-template-columns: 46px minmax(0, 1fr);
             justify-content: stretch;
           }
 
-          .first-page-settings-button,
+          .first-page-settings-button {
+            width: 46px;
+          }
+
           .first-page-support-button,
           .version-beta-button {
             width: 100%;

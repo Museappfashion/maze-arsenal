@@ -18,7 +18,7 @@ export function getControlsForViewMode(viewMode) {
       "Power-up holder: maximum 2",
       "Toggle labels: L",
       "Minimap: M",
-      "New maze: START NEW MAZE button",
+      "New maze: START NEW MAZE in sidebar",
       "Esc: unlock mouse / choose level",
     ];
   }
@@ -31,7 +31,7 @@ export function getControlsForViewMode(viewMode) {
     "Power-up holder: maximum 2",
     "Toggle labels: L",
     "Minimap: M",
-    "New maze: START NEW MAZE button",
+    "New maze: START NEW MAZE in sidebar",
   ];
 }
 

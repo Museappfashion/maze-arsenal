@@ -405,13 +405,15 @@ export function LevelSelectScreen({
             <button
               type="button"
               className="first-page-settings-button"
+              aria-label="Settings"
+              title="Settings"
               aria-expanded={settingsOpen}
               onClick={() => {
                 setSettingsOpen((open) => !open);
                 setSupportOpen(false);
               }}
             >
-              ⚙ SETTINGS
+              ⚙
             </button>
             <button
               type="button"

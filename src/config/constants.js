@@ -7,8 +7,6 @@ export const DRAW_TILE = 24;
 
 export const PASSAGE_WIDTH = 4;
 
-export const GRAPHICS_VERSION = "Themed Graphics v7";
-
 export const MAX_EFFECTS = 900;
 
 export const VIEW_3D_FOV = Math.PI * 0.38;

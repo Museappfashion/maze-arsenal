@@ -709,6 +709,94 @@ export const GAME_STYLES = `
       line-height: 1;
     }
 
+
+    .labyrinth-status-panel {
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+      border: 1px solid rgba(192, 132, 252, 0.22);
+      border-radius: 16px;
+      background:
+        linear-gradient(145deg, rgba(10, 5, 16, 0.96), rgba(2, 6, 12, 0.94));
+      box-shadow: inset 0 0 28px rgba(192, 132, 252, 0.035);
+    }
+
+    .labyrinth-status-panel.compact {
+      gap: 8px;
+      padding: 10px;
+      border-radius: 12px;
+    }
+
+    .labyrinth-status-title {
+      color: #e9d5ff;
+      font-size: 11px;
+      font-weight: 1000;
+      letter-spacing: 0.14em;
+    }
+
+    .labyrinth-status-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 7px;
+    }
+
+    .labyrinth-status-grid > div {
+      display: grid;
+      gap: 3px;
+      padding: 8px;
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      border-radius: 9px;
+      background: rgba(2, 6, 12, 0.62);
+    }
+
+    .labyrinth-status-grid strong {
+      color: #64748b;
+      font-size: 8px;
+      letter-spacing: 0.08em;
+    }
+
+    .labyrinth-status-grid span {
+      color: #f1f5f9;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .labyrinth-breaker-button,
+    .labyrinth-touch-breaker {
+      border-color: rgba(192, 132, 252, 0.52) !important;
+      background: rgba(88, 28, 135, 0.56) !important;
+      color: #f3e8ff !important;
+      font-weight: 900 !important;
+    }
+
+    .labyrinth-breaker-button {
+      min-height: 42px;
+      padding: 9px 10px;
+      border: 1px solid rgba(192, 132, 252, 0.52);
+      border-radius: 10px;
+      cursor: pointer;
+    }
+
+    .labyrinth-breaker-button:disabled,
+    .labyrinth-touch-breaker:disabled {
+      opacity: 0.42;
+      cursor: not-allowed;
+    }
+
+    .labyrinth-status-note {
+      color: #94a3b8;
+      font-size: 9px;
+      line-height: 1.45;
+    }
+
+    .labyrinth-touch-controls .touch-action-controls {
+      min-width: 112px;
+    }
+
+    .labyrinth-mobile-hud .mobile-hud-status {
+      max-width: min(70vw, 430px);
+    }
+
     .mobile-3d-sidebar {
       display: none;
     }

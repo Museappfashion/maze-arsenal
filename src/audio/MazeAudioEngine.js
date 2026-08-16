@@ -71,6 +71,29 @@ export const LEVEL_AUDIO_PROFILES = {
     delayFeedback: 0.28,
     filterFrequency: 2600,
   },
+  labyrinth: {
+    title: "The Walls Remember",
+    bpm: 58,
+    root: 55,
+    chordRoots: [0, 1, -6, -1],
+    chordShape: [0, 1, 6, 10],
+    melody: [
+      12, null, null, null, 13, null, null, 18,
+      null, null, 11, null, null, null, 6, null,
+      12, null, 19, null, null, 13, null, null,
+      7, null, null, 6, null, null, 1, null,
+    ],
+    bassPattern: [0, null, null, null, null, null, 1, null, 0, null, null, null, -6, null, null, null],
+    leadWave: "sine",
+    bassWave: "triangle",
+    padWave: "sawtooth",
+    pitch: 0.62,
+    swing: 0.02,
+    delayTime: 0.61,
+    delayMix: 0.32,
+    delayFeedback: 0.48,
+    filterFrequency: 1150,
+  },
 };
 
 export function noteFrequency(root, semitones) {

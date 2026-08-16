@@ -242,7 +242,12 @@ export function addLeaderboardTime(
   time,
   playerName,
 ) {
-  if (!LEVELS[levelKey] || !Number.isFinite(time) || time <= 0) {
+  if (
+    !LEVELS[levelKey] ||
+    LEVELS[levelKey].leaderboard === false ||
+    !Number.isFinite(time) ||
+    time <= 0
+  ) {
     return leaderboards;
   }
 
@@ -319,7 +324,12 @@ export async function fetchGlobalLeaderboards() {
     const globalRank = Number(row.global_rank);
     const time = Number(row.time_seconds);
 
-    if (!LEVELS[levelKey] || !Number.isFinite(time) || time <= 0) {
+    if (
+      !LEVELS[levelKey] ||
+      LEVELS[levelKey].leaderboard === false ||
+      !Number.isFinite(time) ||
+      time <= 0
+    ) {
       continue;
     }
 
@@ -366,7 +376,13 @@ export async function submitGlobalLeaderboardTime(
   playerName,
   countryCode,
 ) {
-  if (!supabase || !LEVELS[levelKey] || !Number.isFinite(time) || time <= 0) {
+  if (
+    !supabase ||
+    !LEVELS[levelKey] ||
+    LEVELS[levelKey].leaderboard === false ||
+    !Number.isFinite(time) ||
+    time <= 0
+  ) {
     return false;
   }
 

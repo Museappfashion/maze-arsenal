@@ -142,7 +142,7 @@ for (let y = 0; y < logicalRows; y += 1) { for (let x = 0; x < logicalCols; x +=
 
 }
 
-return { grid, width, height }; }
+return { grid, width, height, connections, logicalCols, logicalRows }; }
 
 export function isWalkable(world, x, y) { return ( x >= 0 && y >= 0 && x < world.width && y < world.height && world.grid[y][x] === FLOOR ); }
 
@@ -200,7 +200,7 @@ export function circleHitsWall(world, x, y, radius) { const minX = Math.floor(x 
 
 for (let tileY = minY; tileY <= maxY; tileY += 1) { for (let tileX = minX; tileX <= maxX; tileX += 1) { if ( tileX < 0 || tileY < 0 || tileX >= world.width || tileY >= world.height ) { return true; }
 
-  if (world.grid[tileY][tileX] !== WALL) {
+  if (world.grid[tileY][tileX] === FLOOR) {
     continue;
   }
 
@@ -236,7 +236,15 @@ return true; }
 
 export function hashNoise(x, y) { const n = ((x * 374761393) ^ (y * 668265263)) >>> 0; return (n % 1000) / 1000; }
 
-export function getDiscoveredPercent(world) { return Math.round( (world.player.discoveredFloor / Math.max(1, world.floorCount)) * 100, ); }
+export function getDiscoveredPercent(world) {
+  return clamp(
+    Math.round(
+      (world.player.discoveredFloor / Math.max(1, world.floorCount)) * 100,
+    ),
+    0,
+    100,
+  );
+}
 
 export function findSpawnTile(world, distances, minDistance, maxDistance, used) { const candidates = [];
 

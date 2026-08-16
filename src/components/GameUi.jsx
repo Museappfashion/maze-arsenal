@@ -1,11 +1,12 @@
 // src/components/GameUi.jsx
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MAX_AMMO } from "../config/ammo.js";
-import { WALL } from "../config/constants.js";
+import { STEEL_WALL, WALL } from "../config/constants.js";
 import { getAmmoLabel, getTheme, getWeaponLabel } from "../config/presentations.js";
 import { SUPPORT_LINKS } from "../config/support.js";
 import { WEAPON_ORDER } from "../config/weapons.js";
 import { hasPowerUp, selectWeapon } from "../game/gameplay.js";
+import { getLabyrinthTimeRemaining, labyrinthBreakerActive } from "../game/labyrinth.js";
 import { getDiscoveredPercent } from "../game/maze.js";
 import { formatTime, indexOfTile } from "../utils/math.js";
 import { getPlayerDisplayName } from "../utils/player.js";
@@ -38,6 +39,8 @@ useEffect(() => {
       const theme = getTheme(world);
       if (!discovered) {
         ctx.fillStyle = theme.backdrop;
+      } else if (world.grid[y][x] === STEEL_WALL) {
+        ctx.fillStyle = theme.steelA ?? "#7c8794";
       } else if (world.grid[y][x] === WALL) {
         ctx.fillStyle = theme.wallB;
       } else {
@@ -313,7 +316,7 @@ export function SettingsControls({
         onClick={onToggleViewMode}
       >
         {viewMode === "3d"
-          ? "✓ 3D BETA · SWITCH TO 2D"
+          ? "✓ 3D · SWITCH TO 2D"
           : "2D CLASSIC · SWITCH TO 3D"}
       </button>
 
@@ -393,6 +396,63 @@ export function SidebarSettings({
   );
 }
 
+export function LabyrinthStatusPanel({
+  world,
+  onActivateBreaker,
+  compact = false,
+}) {
+  const remaining = getLabyrinthTimeRemaining(world);
+  const active = labyrinthBreakerActive(world);
+  const activeRemaining = active
+    ? Math.max(0, world.labyrinth.breakerEndsAt - world.time)
+    : 0;
+
+  return (
+    <section
+      className={`labyrinth-status-panel${compact ? " compact" : ""}`}
+      aria-label="Labyrinth status"
+    >
+      <div className="labyrinth-status-title">LABYRINTH</div>
+      <div className="labyrinth-status-grid">
+        <div>
+          <strong>TIME LEFT</strong>
+          <span>{formatTime(remaining)}</span>
+        </div>
+        <div>
+          <strong>DIFFICULTY</strong>
+          <span>{world.labyrinth.difficultyLabel}</span>
+        </div>
+        <div>
+          <strong>WALL BREAKERS</strong>
+          <span>{world.labyrinth.breakerCharges}/10</span>
+        </div>
+        <div>
+          <strong>MAZE</strong>
+          <span>
+            {world.logicalCols}×{world.logicalRows}
+          </span>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        className="labyrinth-breaker-button"
+        disabled={world.labyrinth.breakerCharges <= 0}
+        onClick={onActivateBreaker}
+      >
+        {active
+          ? `BREAKER ACTIVE ${activeRemaining.toFixed(1)}s`
+          : `USE WALL BREAKER (${world.labyrinth.breakerCharges})`}
+      </button>
+
+      <div className="labyrinth-status-note">
+        Purple pickups give one 10-second Wall Breaker. Carry up to 10.
+        Silver steel walls cannot be smashed.
+      </div>
+    </section>
+  );
+}
+
 export function MobileHudOverlay({
   world,
   mapExpanded,
@@ -400,7 +460,62 @@ export function MobileHudOverlay({
   onSettings,
   onExitLevel,
   onFullscreen,
+  onActivateBreaker,
 }) {
+  if (world.labyrinthMode) {
+    return (
+      <div className="mobile-hud-overlay labyrinth-mobile-hud">
+        <div className="mobile-hud-status">
+          <div className="mobile-hud-chip">
+            <strong>TIME LEFT</strong>
+            <span>{formatTime(getLabyrinthTimeRemaining(world))}</span>
+          </div>
+          <div className="mobile-hud-chip">
+            <strong>BREAKERS</strong>
+            <span>{world.labyrinth.breakerCharges}/10</span>
+          </div>
+          <div className="mobile-hud-chip mobile-hud-weapon">
+            <strong>DIFFICULTY</strong>
+            <span>{world.labyrinth.difficultyLabel}</span>
+          </div>
+        </div>
+
+        <div className="mobile-hud-actions">
+          {world.viewMode !== "3d" && (
+            <button
+              type="button"
+              className="mobile-settings-gear"
+              aria-label="Settings"
+              title="Settings"
+              onClick={onSettings}
+            >
+              ⚙
+            </button>
+          )}
+          <button type="button" onClick={onFullscreen}>
+            FULL
+          </button>
+          <button type="button" onClick={onExitLevel}>
+            MENU
+          </button>
+        </div>
+
+        <div
+          className={`mobile-minimap-wrap${mapExpanded ? " expanded" : ""}`}
+          role="button"
+          tabIndex={0}
+          aria-label={mapExpanded ? "Shrink minimap" : "Expand minimap"}
+          onClick={onMapToggle}
+        >
+          <MinimapPanel world={world} />
+          <div className="mobile-minimap-hint">
+            {mapExpanded ? "Tap map to shrink" : "Tap map to enlarge"}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mobile-hud-overlay">
       <div className="mobile-hud-status">
@@ -475,6 +590,7 @@ export function ThreeDStatusSidebar({
   storedPowerUps,
   activePowerUps,
   onPowerUp,
+  onBreaker,
   onStart,
   onSwitchMode,
   onFullscreen,
@@ -490,6 +606,45 @@ export function ThreeDStatusSidebar({
   onSfxVolumeChange,
   audioStatus,
 }) {
+  if (world.labyrinthMode) {
+    return (
+      <div className="three-d-status-sidebar-content">
+        <MinimapPanel world={world} compact />
+        <LabyrinthStatusPanel
+          world={world}
+          onActivateBreaker={onBreaker}
+          compact
+        />
+
+        <SidebarSettings
+          open={settingsOpen}
+          onToggle={onToggleSettings}
+          viewMode={world.viewMode}
+          onToggleViewMode={onSwitchMode}
+          audioEnabled={audioEnabled}
+          musicVolume={musicVolume}
+          sfxVolume={sfxVolume}
+          onToggleAudio={onToggleAudio}
+          onTestSound={onTestSound}
+          onMusicVolumeChange={onMusicVolumeChange}
+          onSfxVolumeChange={onSfxVolumeChange}
+          audioStatus={audioStatus}
+          onStart={onStart}
+          compact
+        />
+
+        <div className="three-d-sidebar-actions">
+          <button type="button" onClick={onFullscreen}>
+            FULLSCREEN
+          </button>
+          <button type="button" onClick={onExitLevel}>
+            LEVEL MENU
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="three-d-status-sidebar-content">
       <MinimapPanel world={world} compact />
@@ -732,48 +887,69 @@ export function TouchControls({
   onAttackEnd,
   onNextWeapon,
   onPowerUp,
+  labyrinthMode = false,
+  labyrinthBreakers = 0,
+  onBreaker,
 }) {
   return (
-    <div className="touch-controls" aria-label="Touch game controls">
+    <div
+      className={`touch-controls${labyrinthMode ? " labyrinth-touch-controls" : ""}`}
+      aria-label="Touch game controls"
+    >
       <div className="touch-move-control">
         <TouchJoystick label="MOVE" onVector={onMove} />
       </div>
 
-      <div className="touch-aim-control">
-        <TouchJoystick
-          label={gameMode === "3d" ? "LOOK" : "AIM"}
-          mode={gameMode === "3d" ? "look" : "vector"}
-          onVector={onAim}
-          onLookDelta={onLookDelta}
-          onPointerStart={onAttackStart}
-          onPointerEnd={onAttackEnd}
-        />
-      </div>
+      {(!labyrinthMode || gameMode === "3d") && (
+        <div className="touch-aim-control">
+          <TouchJoystick
+            label={gameMode === "3d" ? "LOOK" : "AIM"}
+            mode={gameMode === "3d" ? "look" : "vector"}
+            onVector={onAim}
+            onLookDelta={onLookDelta}
+            onPointerStart={labyrinthMode ? undefined : onAttackStart}
+            onPointerEnd={labyrinthMode ? undefined : onAttackEnd}
+          />
+        </div>
+      )}
 
       <div className="touch-action-controls">
-        <button
-          type="button"
-          className="touch-action-button"
-          aria-label="Switch to next weapon"
-          onClick={onNextWeapon}
-        >
-          WEAPON
-        </button>
-
-        <div className="touch-power-buttons">
-          {[0, 1].map((slotIndex) => (
+        {labyrinthMode ? (
+          <button
+            type="button"
+            className="touch-action-button labyrinth-touch-breaker"
+            disabled={labyrinthBreakers <= 0}
+            onClick={onBreaker}
+          >
+            BREAKER {labyrinthBreakers}/10
+          </button>
+        ) : (
+          <>
             <button
-              key={slotIndex}
               type="button"
-              className="touch-action-button touch-power-button"
-              aria-label={`Use power-up slot ${slotIndex + 1}`}
-              disabled={!storedPowerUps[slotIndex]}
-              onClick={() => onPowerUp(slotIndex)}
+              className="touch-action-button"
+              aria-label="Switch to next weapon"
+              onClick={onNextWeapon}
             >
-              P{slotIndex + 1}
+              WEAPON
             </button>
-          ))}
-        </div>
+
+            <div className="touch-power-buttons">
+              {[0, 1].map((slotIndex) => (
+                <button
+                  key={slotIndex}
+                  type="button"
+                  className="touch-action-button touch-power-button"
+                  aria-label={`Use power-up slot ${slotIndex + 1}`}
+                  disabled={!storedPowerUps[slotIndex]}
+                  onClick={() => onPowerUp(slotIndex)}
+                >
+                  P{slotIndex + 1}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

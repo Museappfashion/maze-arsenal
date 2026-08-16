@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { GAME_STYLES } from "./styles/gameStyles.js";
 import { MazeAudioEngine, queueSfx } from "./audio/MazeAudioEngine.js";
-import { MinimapPanel, MobileHudOverlay, SidebarSettings, ThreeDStatusSidebar, TouchControls, mergeInputKeys, selectNextOwnedWeapon } from "./components/GameUi.jsx";
+import { LabyrinthStatusPanel, MinimapPanel, MobileHudOverlay, SidebarSettings, ThreeDStatusSidebar, TouchControls, mergeInputKeys, selectNextOwnedWeapon } from "./components/GameUi.jsx";
 import { LevelSelectScreen } from "./components/LevelSelectScreen.jsx";
 import { StatCard } from "./components/StatCard.jsx";
 import { MAX_AMMO } from "./config/ammo.js";
@@ -11,6 +11,7 @@ import { getAmmoLabel, getWeaponLabel, getWeaponPresentation } from "./config/pr
 import { DISTANCE_FIELD_INTERVAL, HUD_REFRESH_INTERVAL } from "./config/runtime.js";
 import { WEAPONS, WEAPON_HOTKEY_MAP, WEAPON_ORDER } from "./config/weapons.js";
 import { activateStoredPowerUp, attack, computeDistanceField, getActivePowerUps, getStoredPowerUps, revealAroundPlayer, selectWeapon, setMessage, toggleLabels, updateEffects, updateEnemies, updatePickups, updatePlayer, updatePowerUps, updateProjectiles, updateVisionCache } from "./game/gameplay.js";
+import { activateLabyrinthBreaker, updateLabyrinth } from "./game/labyrinth.js";
 import { getDiscoveredPercent } from "./game/maze.js";
 import { drawWorld } from "./game/rendering.js";
 import { createWorld, setWorldViewMode } from "./game/world.js";
@@ -149,6 +150,12 @@ const handleTouchPowerUp = useCallback(
   [forceRefresh],
 );
 
+const handleLabyrinthBreaker = useCallback(() => {
+  if (activateLabyrinthBreaker(worldRef.current)) {
+    forceRefresh();
+  }
+}, [forceRefresh]);
+
 
 const handleMobileMapToggle = useCallback(() => {
   const world = worldRef.current;
@@ -212,6 +219,10 @@ const refreshGlobalLeaderboards = useCallback(async ({ silent = false } = {}) =>
 
 const recordLeaderboardScore = useCallback(
   (world) => {
+    if (world.labyrinthMode) {
+      return;
+    }
+
     const completedTime = world.time;
     const levelKey = world.level.key;
     const mode = world.runMode;
@@ -465,10 +476,20 @@ useEffect(() => {
   };
 }, [refreshGlobalLeaderboards, selectedLevel]);
 
-const startLevel = useCallback((levelKey, requestedViewMode = selectionMode, requestedPlayerName = "") => {
+const startLevel = useCallback((
+  levelKey,
+  requestedViewMode = selectionMode,
+  requestedPlayerName = "",
+  runOptions = {},
+) => {
   const nextViewMode = requestedViewMode === "3d" ? "3d" : "2d";
   const nextPlayerName = sanitizePlayerName(requestedPlayerName);
-  const nextWorld = createWorld(levelKey, nextViewMode, nextPlayerName);
+  const nextWorld = createWorld(
+    levelKey,
+    nextViewMode,
+    nextPlayerName,
+    runOptions,
+  );
   worldRef.current = nextWorld;
   startLevelAudio(nextWorld);
   keysRef.current = {};
@@ -488,7 +509,19 @@ const resetWorld = useCallback(() => {
     return;
   }
 
-  const nextWorld = createWorld(selectedLevel, gameMode, playerName);
+  const currentWorld = worldRef.current;
+  const runOptions = currentWorld.labyrinthMode
+    ? {
+        difficulty: currentWorld.labyrinth.difficulty,
+        timeMinutes: currentWorld.labyrinth.timeMinutes,
+      }
+    : {};
+  const nextWorld = createWorld(
+    selectedLevel,
+    gameMode,
+    playerName,
+    runOptions,
+  );
   worldRef.current = nextWorld;
   startLevelAudio(nextWorld);
   keysRef.current = {};
@@ -531,21 +564,31 @@ const handleKeyDown = (event) => { const world = worldRef.current; const key = e
   keysRef.current[key] = true;
   keysRef.current[key.toLowerCase()] = true;
 
-  if (key === " " || key === "Enter") {
-    attack(world);
-  }
+  if (world.labyrinthMode) {
+    if (
+      !event.repeat &&
+      (key === "b" || key === "B" || key === " " || key === "Enter")
+    ) {
+      activateLabyrinthBreaker(world);
+      forceRefresh();
+    }
+  } else {
+    if (key === " " || key === "Enter") {
+      attack(world);
+    }
 
-  if (key === "z" || key === "Z") {
-    activateStoredPowerUp(world, 0);
-  }
+    if (key === "z" || key === "Z") {
+      activateStoredPowerUp(world, 0);
+    }
 
-  if (key === "x" || key === "X") {
-    activateStoredPowerUp(world, 1);
-  }
+    if (key === "x" || key === "X") {
+      activateStoredPowerUp(world, 1);
+    }
 
-  const directWeapon = WEAPON_HOTKEY_MAP[key];
-  if (directWeapon) {
-    selectWeapon(world, directWeapon);
+    const directWeapon = WEAPON_HOTKEY_MAP[key];
+    if (directWeapon) {
+      selectWeapon(world, directWeapon);
+    }
   }
 
   if (key === "m" || key === "M") {
@@ -558,7 +601,7 @@ const handleKeyDown = (event) => { const world = worldRef.current; const key = e
     }
   }
 
-  if (key === "l" || key === "L") {
+  if (!world.labyrinthMode && (key === "l" || key === "L")) {
     toggleLabels(world);
   }
 
@@ -641,15 +684,20 @@ const handlePointerDown = (event) => {
       return;
     }
 
-    world.pointer.down = true;
-    attack(world);
+    if (!world.labyrinthMode) {
+      world.pointer.down = true;
+      attack(world);
+    }
     return;
   }
 
   handlePointerMove(event);
-  world.pointer.down = true;
+  world.pointer.down = !world.labyrinthMode;
   world.pointer.inside = true;
-  attack(world);
+
+  if (!world.labyrinthMode) {
+    attack(world);
+  }
 };
 
 const handlePointerUp = () => {
@@ -754,40 +802,56 @@ const loop = (timestamp) => {
     world.time += dt;
     world.fogPulse += dt;
 
-    updatePowerUps(world, dt);
-    updatePlayer(
-      world,
-      mergeInputKeys(keysRef.current, touchKeysRef.current),
-      dt,
-    );
-    updateVisionCache(world);
-    updatePickups(world, dt);
-
-    if (world.distanceFieldDirty) {
-      world.distanceTimer += dt;
-      if (world.distanceTimer >= DISTANCE_FIELD_INTERVAL) {
-        computeDistanceField(world);
-        world.distanceTimer = 0;
-      }
+    if (world.labyrinthMode) {
+      updateLabyrinth(world);
+    } else {
+      updatePowerUps(world, dt);
     }
 
-    updateEnemies(world, dt);
-    updateProjectiles(world, dt);
-    revealAroundPlayer(world);
+    if (!world.gameOver) {
+      updatePlayer(
+        world,
+        mergeInputKeys(keysRef.current, touchKeysRef.current),
+        dt,
+      );
+      updateVisionCache(world);
+      updatePickups(world, dt);
 
-    const exitDistance = Math.hypot(
-      world.player.x - (world.exit.x + 0.5),
-      world.player.y - (world.exit.y + 0.5),
-    );
+      if (world.distanceFieldDirty) {
+        world.distanceTimer += dt;
+        if (world.distanceTimer >= DISTANCE_FIELD_INTERVAL) {
+          computeDistanceField(world);
+          world.distanceTimer = 0;
+        }
+      }
 
-    if (exitDistance <= world.player.radius + 0.33) {
-      world.victory = true;
-      queueSfx(world, "victory");
-      setMessage(world, "Escape complete!", 99);
+      if (!world.labyrinthMode) {
+        updateEnemies(world, dt);
+        updateProjectiles(world, dt);
+      }
 
-      if (!recordedVictoryRef.current) {
-        recordedVictoryRef.current = true;
-        recordLeaderboardScore(world);
+      revealAroundPlayer(world);
+
+      const exitDistance = Math.hypot(
+        world.player.x - (world.exit.x + 0.5),
+        world.player.y - (world.exit.y + 0.5),
+      );
+
+      if (exitDistance <= world.player.radius + 0.33) {
+        world.victory = true;
+        queueSfx(world, "victory");
+        setMessage(
+          world,
+          world.labyrinthMode
+            ? "You escaped the Labyrinth!"
+            : "Escape complete!",
+          99,
+        );
+
+        if (!world.labyrinthMode && !recordedVictoryRef.current) {
+          recordedVictoryRef.current = true;
+          recordLeaderboardScore(world);
+        }
       }
     }
   }
@@ -858,7 +922,9 @@ return (
     width: "100vw",
     height: "100vh",
     overflow: "hidden",
-    background: "radial-gradient(circle at top, #0f172a 0%, #020617 50%, #000000 100%)",
+    background: world.labyrinthMode
+      ? "radial-gradient(circle at 50% 18%, #111827 0%, #030509 28%, #000000 72%)"
+      : "radial-gradient(circle at top, #0f172a 0%, #020617 50%, #000000 100%)",
     color: "#e2e8f0",
     fontFamily: 'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
   }}
@@ -889,6 +955,9 @@ return (
             onAttackEnd={handleTouchAttackEnd}
             onNextWeapon={handleTouchNextWeapon}
             onPowerUp={handleTouchPowerUp}
+            labyrinthMode={world.labyrinthMode}
+            labyrinthBreakers={world.labyrinth?.breakerCharges ?? 0}
+            onBreaker={handleLabyrinthBreaker}
           />
         )}
         {touchControlsEnabled && (
@@ -899,6 +968,7 @@ return (
             onSettings={() => setSettingsOpen((open) => !open)}
             onExitLevel={returnToLevelSelect}
             onFullscreen={handleMobileFullscreen}
+            onActivateBreaker={handleLabyrinthBreaker}
           />
         )}
         {touchControlsEnabled && !rotatePromptDismissed && (
@@ -951,6 +1021,7 @@ return (
           storedPowerUps={storedPowerUps}
           activePowerUps={activePowerUps}
           onPowerUp={handleTouchPowerUp}
+          onBreaker={handleLabyrinthBreaker}
           onStart={resetWorld}
           onSwitchMode={switchGameMode}
           onFullscreen={handleMobileFullscreen}
@@ -977,6 +1048,7 @@ return (
             storedPowerUps={storedPowerUps}
             activePowerUps={activePowerUps}
             onPowerUp={handleTouchPowerUp}
+            onBreaker={handleLabyrinthBreaker}
             onStart={resetWorld}
             onSwitchMode={switchGameMode}
             onFullscreen={handleMobileFullscreen}
@@ -1052,11 +1124,21 @@ return (
             fontSize: 14,
           }}
         >
-          Fight through a braided maze, collect weapons and power-ups, and
-          reach the exit before the maze overwhelms you.
+          {world.labyrinthMode
+            ? "The walls move in the dark. Reach the exit before time expires. Longer time limits create larger, harder Labyrinths."
+            : "Fight through a braided maze, collect weapons and power-ups, and reach the exit before the maze overwhelms you."}
         </p>
       </section>
 
+      {gameMode === "2d" && world.labyrinthMode && (
+        <LabyrinthStatusPanel
+          world={world}
+          onActivateBreaker={handleLabyrinthBreaker}
+        />
+      )}
+
+      {!world.labyrinthMode && (
+        <>
       <section
         style={{
           padding: 18,
@@ -1459,6 +1541,9 @@ return (
           )}
         </div>
       </section>
+
+        </>
+      )}
 
       <section
         style={{

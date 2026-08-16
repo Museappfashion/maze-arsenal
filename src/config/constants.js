@@ -27,6 +27,8 @@ export const FLOOR = 0;
 
 export const WALL = 1;
 
+export const STEEL_WALL = 2;
+
 export const LEVELS = {
   level1: {
     key: "level1",
@@ -82,6 +84,26 @@ export const LEVELS = {
     enemySpeedMultiplier: 1.12,
     enemyBudgetMultiplier: 1.55,
   },
+  labyrinth: {
+    key: "labyrinth",
+    label: "Labyrinth",
+    subtitle: "The Shifting Dark",
+    themeKey: "labyrinth",
+    themeLabel: "Shifting Dark",
+    description: "A massive timed maze that changes around you. No enemies. No weapons. Only the exit.",
+    labyrinthMode: true,
+    leaderboard: false,
+    logicalCols: 33,
+    logicalRows: 33,
+    straightBias: 0.5,
+    newestBias: 0.58,
+    braidDeadEndChance: 0.28,
+    extraLoopChance: 0.045,
+    enemyHpMultiplier: 0,
+    enemyDamageMultiplier: 0,
+    enemySpeedMultiplier: 0,
+    enemyBudgetMultiplier: 0,
+  },
 };
 
 export const LEVEL_THEMES = {
@@ -129,6 +151,24 @@ export const LEVEL_THEMES = {
     mist: [214, 211, 209],
     playerGlow: "#f59e0b",
     playerAccent: "#e7e5e4",
+  },
+  labyrinth: {
+    label: "Labyrinth",
+    backdrop: "#010204",
+    floorA: "#07090c",
+    floorB: "#0b0e12",
+    floorLine: "rgba(148, 163, 184, 0.045)",
+    wallA: "#242a31",
+    wallB: "#151a20",
+    wallC: "#05070a",
+    wallEdge: "rgba(148, 163, 184, 0.12)",
+    steelA: "#7c8794",
+    steelB: "#3f4853",
+    steelEdge: "#d5dde7",
+    fog: [0, 1, 3],
+    mist: [107, 114, 128],
+    playerGlow: "#94a3b8",
+    playerAccent: "#e5e7eb",
   },
 };
 

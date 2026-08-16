@@ -1,7 +1,7 @@
 // src/game/gameplay.js
 import { queueSfx } from "../audio/MazeAudioEngine.js";
 import { AMMO_DROP_MIN_TILE_SPACING, AMMO_EXTRA_MAX_AMOUNT, AMMO_EXTRA_MIN_AMOUNT, AMMO_ROUTE_SPACING, AMMO_SUPPORT_MAX_AMOUNT, AMMO_SUPPORT_MELEE_CHANCE, AMMO_SUPPORT_MIN_AMOUNT, AMMO_SUPPORT_RANGED_CHANCE, MAX_AMMO } from "../config/ammo.js";
-import { CANVAS_HEIGHT, CANVAS_WIDTH, DRAW_TILE, FLOOR, MAX_EFFECTS, MOBILE_2D_ZOOM, VIEW_3D_TURN_SPEED, WALL } from "../config/constants.js";
+import { CANVAS_HEIGHT, CANVAS_WIDTH, DRAW_TILE, FLOOR, MAX_EFFECTS, MOBILE_2D_ZOOM, STEEL_WALL, VIEW_3D_TURN_SPEED, WALL } from "../config/constants.js";
 import {
   ENEMY_COSTS,
   ENEMY_DIFFICULTY_STAGES,
@@ -16,6 +16,7 @@ import { getAmmoLabel, getAmmoMessageLabel, getAmmoPickupLabel, getPowerUpPresen
 import { VISION_MARGIN } from "../config/runtime.js";
 import { WEAPONS, WEAPON_ORDER, WEAPON_SPAWN_PLAN } from "../config/weapons.js";
 import { addPickup, bfsDistances, circleHitsWall, findNearbyOpenTiles, findSpacedSpawnTile, findSpawnTile, findTileNearPercent, hasLineOfSight, isWalkable, moveWithCollisions, spawnProjectile } from "./maze.js";
+import { collectLabyrinthBreaker, isLabyrinthWorld, labyrinthBreakerActive } from "./labyrinth.js";
 import { angleDelta, chance, clamp, indexOfTile, lerp, normalize, rand, randInt, shuffle, tileCenter, weightedChoice } from "../utils/math.js";
 import { getPlayerDisplayName } from "../utils/player.js";
 
@@ -267,7 +268,13 @@ for (let i = 0; i < encounterCount; i += 1) {
 placeGuaranteedTurrets(world, distances, used);
 placeFinalGuardPack(world, distances, used); }
 
-export function hasPowerUp(world, key) { return (world.player.powerUps[key]?.endsAt ?? -Infinity) > world.time; }
+export function hasPowerUp(world, key) {
+  if (key === "breaker" && isLabyrinthWorld(world)) {
+    return labyrinthBreakerActive(world);
+  }
+
+  return (world.player.powerUps[key]?.endsAt ?? -Infinity) > world.time;
+}
 
 export function getActivePowerUps(world) { return Object.entries(world.player.powerUps) .filter(([, state]) => state.endsAt > world.time) .sort((a, b) => a[1].endsAt - b[1].endsAt) .map(([key, state]) => ({ key, label: getPowerUpPresentation(world, key).label, short: getPowerUpPresentation(world, key).short, color: POWER_UPS[key].color, remaining: Math.max(0, state.endsAt - world.time), })); }
 
@@ -408,15 +415,28 @@ export function smashWallTile(world, tileX, tileY, powerUpKey = null) {
     return false;
   }
 
+  if (world.grid[tileY][tileX] === STEEL_WALL) {
+    if (isLabyrinthWorld(world)) {
+      setMessage(world, "Steel wall — cannot be smashed", 0.75);
+    }
+    return false;
+  }
+
   if (world.grid[tileY][tileX] !== WALL) {
     return false;
   }
 
   if (powerUpKey) {
-    const state = world.player.powerUps[powerUpKey];
+    if (isLabyrinthWorld(world) && powerUpKey === "breaker") {
+      if (!labyrinthBreakerActive(world)) {
+        return false;
+      }
+    } else {
+      const state = world.player.powerUps[powerUpKey];
 
-    if (!state || state.endsAt <= world.time || (state.charges ?? 0) <= 0) {
-      return false;
+      if (!state || state.endsAt <= world.time || (state.charges ?? 0) <= 0) {
+        return false;
+      }
     }
   }
 
@@ -427,7 +447,7 @@ export function smashWallTile(world, tileX, tileY, powerUpKey = null) {
   world.distanceFieldDirty = true;
   world.minimapDirty = true;
 
-  if (powerUpKey) {
+  if (powerUpKey && !isLabyrinthWorld(world)) {
     const state = world.player.powerUps[powerUpKey];
     state.charges = Math.max(0, (state.charges ?? 1) - 1);
 
@@ -529,7 +549,34 @@ export function updateVisionCache(world) {
   };
 }
 
-export function visibleStrengthAt(world, tileX, tileY) { const player = world.player; const centerX = tileX + 0.5; const centerY = tileY + 0.5; const dx = centerX - player.x; const dy = centerY - player.y; const distance = Math.hypot(dx, dy); const vision = world.vision ?? { sightBonus: hasPowerUp(world, "sonar") ? 3 : 0, facingX: Math.cos(player.facing), facingY: Math.sin(player.facing), }; const dot = distance > 0 ? (dx * vision.facingX + dy * vision.facingY) / distance : 1;
+export function visibleStrengthAt(world, tileX, tileY) {
+const player = world.player;
+const centerX = tileX + 0.5;
+const centerY = tileY + 0.5;
+const dx = centerX - player.x;
+const dy = centerY - player.y;
+const distance = Math.hypot(dx, dy);
+const vision = world.vision ?? {
+  sightBonus: hasPowerUp(world, "sonar") ? 3 : 0,
+  facingX: Math.cos(player.facing),
+  facingY: Math.sin(player.facing),
+};
+const dot =
+  distance > 0
+    ? (dx * vision.facingX + dy * vision.facingY) / distance
+    : 1;
+
+if (isLabyrinthWorld(world)) {
+  const radius = world.labyrinth.sightRadius;
+
+  if (distance <= radius) { return 1; }
+
+  if (distance <= radius + 2.6 && dot > 0.88) { return 0.62; }
+
+  if (distance <= radius + 1.2 && dot > 0.62) { return 0.28; }
+
+  return 0;
+}
 
 if (distance <= 5 + vision.sightBonus) { return 1; }
 
@@ -537,7 +584,8 @@ if (distance <= 7.25 + vision.sightBonus && dot > 0.82) { return 0.72; }
 
 if (distance <= 6.25 + vision.sightBonus && dot > 0.55) { return 0.34; }
 
-return 0; }
+return 0;
+}
 
 export function revealAroundPlayer(world) { let discoveredCount = world.player.discoveredFloor; let minimapChanged = false; const sightBonus = world.vision?.sightBonus ?? 0; const revealRadius = Math.ceil(VISION_MARGIN + sightBonus); const minX = Math.max(0, Math.floor(world.player.x) - revealRadius); const maxX = Math.min(world.width - 1, Math.ceil(world.player.x) + revealRadius); const minY = Math.max(0, Math.floor(world.player.y) - revealRadius); const maxY = Math.min(world.height - 1, Math.ceil(world.player.y) + revealRadius);
 
@@ -765,7 +813,10 @@ spawnProjectile(world, {
 
 } }
 
-export function attack(world) { const player = world.player;
+export function attack(world) {
+const player = world.player;
+
+if (isLabyrinthWorld(world)) { return; }
 
 if (world.gameOver || world.victory || world.time < player.nextAttackAt) { return; }
 
@@ -883,6 +934,16 @@ for (const pickup of world.pickups) {
   }
 
 if (distance > collectRadius) {
+  remaining.push(pickup);
+  continue;
+}
+
+if (pickup.type === "labyrinthBreaker") {
+  if (collectLabyrinthBreaker(world)) {
+    queueSfx(world, "pickupPowerUp", { powerUpKey: "breaker" });
+    continue;
+  }
+
   remaining.push(pickup);
   continue;
 }

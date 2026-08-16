@@ -1,6 +1,6 @@
 // src/game/rendering.js
 import { MAX_AMMO } from "../config/ammo.js";
-import { CANVAS_HEIGHT, CANVAS_WIDTH, DRAW_TILE, VIEW_3D_FOV, VIEW_3D_MAX_DISTANCE, VIEW_3D_RAY_WIDTH, WALL } from "../config/constants.js";
+import { CANVAS_HEIGHT, CANVAS_WIDTH, DRAW_TILE, FLOOR, STEEL_WALL, VIEW_3D_FOV, VIEW_3D_MAX_DISTANCE, VIEW_3D_RAY_WIDTH, WALL } from "../config/constants.js";
 import { ENEMY_TYPES } from "../config/enemies.js";
 import { POWER_UPS } from "../config/powerUps.js";
 import { getAmmoLabel, getTheme, getWeaponLabel, isMedievalTheme } from "../config/presentations.js";
@@ -8,6 +8,7 @@ import { WORLD_LABEL_BG, WORLD_LABEL_BORDER, WORLD_LABEL_FONT, WORLD_LABEL_TEXT 
 import { WEAPONS } from "../config/weapons.js";
 import { getActivePowerUps, getCamera, getWeaponCooldown, getWorldRenderZoom, hasPowerUp, visibleStrengthAt } from "./gameplay.js";
 import { getDiscoveredPercent, hashNoise } from "./maze.js";
+import { getLabyrinthTimeRemaining, labyrinthBreakerActive } from "./labyrinth.js";
 import { angleDelta, clamp, formatTime, indexOfTile, lerp, normalize, tileCenter } from "../utils/math.js";
 import { getPlayerDisplayName } from "../utils/player.js";
 
@@ -126,6 +127,53 @@ export function drawMazeTile(ctx, world, tileX, tileY, screenX, screenY) {
   const themeKey = world.level.themeKey;
   const noise = hashNoise(tileX * 7 + 3, tileY * 11 + 5);
 
+  if (world.grid[tileY][tileX] === STEEL_WALL) {
+    const steelGradient = ctx.createLinearGradient(
+      screenX,
+      screenY,
+      screenX + DRAW_TILE,
+      screenY + DRAW_TILE,
+    );
+    steelGradient.addColorStop(0, theme.steelA ?? "#8b96a3");
+    steelGradient.addColorStop(0.48, theme.steelB ?? "#46515d");
+    steelGradient.addColorStop(1, "#222a33");
+    ctx.fillStyle = steelGradient;
+    ctx.fillRect(screenX, screenY, DRAW_TILE, DRAW_TILE);
+
+    ctx.strokeStyle = theme.steelEdge ?? "#d5dde7";
+    ctx.lineWidth = 1.6;
+    ctx.strokeRect(
+      screenX + 1,
+      screenY + 1,
+      DRAW_TILE - 2,
+      DRAW_TILE - 2,
+    );
+
+    ctx.globalAlpha = 0.64;
+    ctx.strokeStyle = "#dce4ec";
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(screenX + 4, screenY + 4);
+    ctx.lineTo(screenX + DRAW_TILE - 4, screenY + DRAW_TILE - 4);
+    ctx.moveTo(screenX + DRAW_TILE - 4, screenY + 4);
+    ctx.lineTo(screenX + 4, screenY + DRAW_TILE - 4);
+    ctx.stroke();
+
+    ctx.fillStyle = "#e5e7eb";
+    for (const [rx, ry] of [
+      [4, 4],
+      [DRAW_TILE - 5, 4],
+      [4, DRAW_TILE - 5],
+      [DRAW_TILE - 5, DRAW_TILE - 5],
+    ]) {
+      ctx.beginPath();
+      ctx.arc(screenX + rx, screenY + ry, 1.35, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    return;
+  }
+
   if (world.grid[tileY][tileX] === WALL) {
     const gradient = ctx.createLinearGradient(
       screenX,
@@ -172,6 +220,25 @@ export function drawMazeTile(ctx, world, tileX, tileY, screenX, screenY) {
         screenY + DRAW_TILE,
       );
       ctx.stroke();
+    } else if (themeKey === "labyrinth") {
+      ctx.strokeStyle = "rgba(100, 116, 139, 0.2)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(screenX + 3, screenY + DRAW_TILE * 0.3);
+      ctx.lineTo(screenX + DRAW_TILE - 3, screenY + DRAW_TILE * 0.34);
+      ctx.moveTo(screenX + DRAW_TILE * 0.27, screenY + 3);
+      ctx.lineTo(screenX + DRAW_TILE * 0.3, screenY + DRAW_TILE - 3);
+      ctx.stroke();
+
+      if (noise > 0.72) {
+        ctx.fillStyle = `rgba(148, 163, 184, ${0.025 + noise * 0.04})`;
+        ctx.fillRect(
+          screenX + DRAW_TILE * 0.12,
+          screenY + DRAW_TILE * 0.12,
+          DRAW_TILE * 0.76,
+          2,
+        );
+      }
     } else {
       ctx.strokeStyle = "rgba(28, 25, 23, 0.62)";
       ctx.lineWidth = 1;
@@ -1571,6 +1638,46 @@ export function drawPlayerBody(ctx, world, x, y) {
     ctx.beginPath();
     ctx.arc(radius * 0.86, 0, radius * 0.09, 0, Math.PI * 2);
     ctx.fill();
+  } else if (themeKey === "labyrinth") {
+    const body = ctx.createRadialGradient(
+      radius * 0.3,
+      -radius * 0.18,
+      0,
+      0,
+      0,
+      radius,
+    );
+    body.addColorStop(0, "#d1d5db");
+    body.addColorStop(0.45, "#64748b");
+    body.addColorStop(1, "#111827");
+    ctx.fillStyle = body;
+    ctx.strokeStyle = "#020617";
+    ctx.beginPath();
+    ctx.ellipse(0, 0, radius * 0.7, radius * 0.52, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "#cbd5e1";
+    ctx.beginPath();
+    ctx.arc(radius * 0.56, 0, radius * 0.31, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "#020617";
+    ctx.beginPath();
+    ctx.arc(radius * 0.68, -radius * 0.1, radius * 0.055, 0, Math.PI * 2);
+    ctx.arc(radius * 0.68, radius * 0.1, radius * 0.055, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = "#475569";
+    ctx.lineWidth = Math.max(2, radius * 0.18);
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(-radius * 0.28, -radius * 0.34);
+    ctx.lineTo(-radius * 0.72, -radius * 0.62);
+    ctx.moveTo(-radius * 0.28, radius * 0.34);
+    ctx.lineTo(-radius * 0.72, radius * 0.62);
+    ctx.stroke();
   } else {
     // A red cape and steel boots create a readable knight silhouette.
     ctx.fillStyle = "#991b1b";
@@ -1683,6 +1790,11 @@ export function drawPlayerBody(ctx, world, x, y) {
     ctx.stroke();
   }
 
+  if (world.labyrinthMode) {
+    ctx.restore();
+    return;
+  }
+
   const swing = player.meleeSwing;
   const swingElapsed = swing ? world.time - swing.startedAt : Infinity;
   const swingActive = Boolean(
@@ -1750,20 +1862,42 @@ export function drawPlayerBody(ctx, world, x, y) {
   ctx.restore();
 }
 
-export function drawVignette(ctx) {
+export function drawVignette(ctx, world) {
+  const labyrinth = Boolean(world?.labyrinthMode);
+  const pulse = labyrinth
+    ? 0.04 + 0.025 * Math.sin((world?.time ?? 0) * 2.15)
+    : 0;
   const gradient = ctx.createRadialGradient(
     CANVAS_WIDTH / 2,
-    CANVAS_HEIGHT / 2,
-    CANVAS_HEIGHT * 0.18,
+    CANVAS_HEIGHT * (labyrinth ? 0.47 : 0.5),
+    CANVAS_HEIGHT * (labyrinth ? 0.08 : 0.18),
     CANVAS_WIDTH / 2,
     CANVAS_HEIGHT / 2,
-    CANVAS_HEIGHT * 0.72,
+    CANVAS_HEIGHT * (labyrinth ? 0.66 : 0.72),
   );
-  gradient.addColorStop(0, "rgba(0,0,0,0)");
-  gradient.addColorStop(0.72, "rgba(0,0,0,0.08)");
-  gradient.addColorStop(1, "rgba(0,0,0,0.52)");
+  gradient.addColorStop(
+    0,
+    labyrinth ? `rgba(0, 0, 0, ${0.04 + pulse})` : "rgba(0,0,0,0)",
+  );
+  gradient.addColorStop(
+    labyrinth ? 0.48 : 0.72,
+    labyrinth ? "rgba(0, 0, 0, 0.2)" : "rgba(0,0,0,0.08)",
+  );
+  gradient.addColorStop(
+    1,
+    labyrinth ? `rgba(0, 0, 0, ${0.86 + pulse})` : "rgba(0,0,0,0.52)",
+  );
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+  if (labyrinth) {
+    const flicker =
+      0.018 +
+      0.018 * Math.max(0, Math.sin(world.time * 7.1)) +
+      0.012 * Math.max(0, Math.sin(world.time * 13.7));
+    ctx.fillStyle = `rgba(99, 102, 241, ${flicker})`;
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  }
 }
 
 export function drawTile(ctx, x, y, size, fill, stroke = null) { ctx.fillStyle = fill; ctx.fillRect(x, y, size, size);
@@ -1794,8 +1928,14 @@ export function drawFog(ctx, world, camera, startX, endX, startY, endY) {
       const visible = visibleStrengthAt(world, x, y);
       const discovered = world.discovered[indexOfTile(world.width, x, y)] === 1;
 
-      let alpha = 0.92;
-      if (discovered) {
+      let alpha = world.labyrinthMode ? 0.985 : 0.92;
+      if (world.labyrinthMode) {
+        if (discovered) {
+          alpha = lerp(0.72, 0.07, visible);
+        } else if (visible > 0) {
+          alpha = lerp(0.9, 0.12, visible);
+        }
+      } else if (discovered) {
         alpha = lerp(0.34, 0.02, visible);
       } else if (visible > 0) {
         alpha = lerp(0.72, 0.08, visible);
@@ -1898,7 +2038,19 @@ drawWorldLabel(ctx, label, x, y - enemy.radius * DRAW_TILE - 22, {
 
 const playerX = (world.player.x - camera.x) * DRAW_TILE; const playerY = (world.player.y - camera.y) * DRAW_TILE;
 
-drawWorldLabel( ctx, `${getPlayerDisplayName(world).toUpperCase()} • ${getWeaponLabel(world, world.player.weapon)}`, playerX, playerY - world.player.radius * DRAW_TILE - 22, { textColor: "#e0f2fe", bgColor: "rgba(8, 47, 73, 0.88)", borderColor: "rgba(56, 189, 248, 0.4)", }, ); }
+drawWorldLabel(
+  ctx,
+  world.labyrinthMode
+    ? `${getPlayerDisplayName(world).toUpperCase()} • RUNNER`
+    : `${getPlayerDisplayName(world).toUpperCase()} • ${getWeaponLabel(world, world.player.weapon)}`,
+  playerX,
+  playerY - world.player.radius * DRAW_TILE - 22,
+  {
+    textColor: "#e0f2fe",
+    bgColor: "rgba(8, 47, 73, 0.88)",
+    borderColor: "rgba(56, 189, 248, 0.4)",
+  },
+); }
 
 export function drawPickups(ctx, world, camera) {
   for (const pickup of world.pickups) {
@@ -1936,10 +2088,10 @@ export function drawPickups(ctx, world, camera) {
 
     ctx.save();
     ctx.globalAlpha = visibility > 0.12 ? 1 : 0.62;
-    ctx.shadowBlur = pickup.type === "powerup" ? 24 : 14;
+    ctx.shadowBlur = pickup.type === "powerup" || pickup.type === "labyrinthBreaker" ? 24 : 14;
     ctx.shadowColor = color;
 
-    if (pickup.type === "powerup") {
+    if (pickup.type === "powerup" || pickup.type === "labyrinthBreaker") {
       const radius = DRAW_TILE * 0.28;
       ctx.translate(x, y);
       ctx.rotate(world.time * 1.25 + pickup.x);
@@ -1955,6 +2107,16 @@ export function drawPickups(ctx, world, camera) {
       ctx.strokeStyle = "#ffffff";
       ctx.lineWidth = 1.5;
       ctx.stroke();
+
+      if (pickup.type === "labyrinthBreaker") {
+        ctx.rotate(-(world.time * 1.25 + pickup.x));
+        ctx.fillStyle = "#f3e8ff";
+        ctx.font = `900 ${Math.max(10, DRAW_TILE * 0.27)}px system-ui, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("10", 0, 0);
+        ctx.rotate(world.time * 1.25 + pickup.x);
+      }
 
       ctx.globalAlpha *= 0.58;
       ctx.strokeStyle = color;
@@ -2043,6 +2205,8 @@ for (let y = 0; y < world.height; y += 1) {
     const theme = getTheme(world);
     if (!discovered) {
       mapCtx.fillStyle = theme.backdrop;
+    } else if (world.grid[y][x] === STEEL_WALL) {
+      mapCtx.fillStyle = theme.steelA ?? "#7c8794";
     } else if (world.grid[y][x] === WALL) {
       mapCtx.fillStyle = theme.wallB;
     } else {
@@ -2213,7 +2377,7 @@ export function drawWorld2D(ctx, world) {
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
   }
 
-  drawVignette(ctx);
+  drawVignette(ctx, world);
 
   if (world.messageTtl > 0 && world.message) {
     const width = Math.min(560, Math.max(200, world.message.length * 9.5));
@@ -2243,7 +2407,13 @@ export function drawWorld2D(ctx, world) {
     ctx.font = "800 46px system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.fillText(
-      world.victory ? "MAZE ESCAPED" : "GAME OVER",
+      world.victory
+        ? world.labyrinthMode
+          ? "LABYRINTH ESCAPED"
+          : "MAZE ESCAPED"
+        : world.labyrinthMode
+          ? "TIME EXPIRED"
+          : "GAME OVER",
       CANVAS_WIDTH / 2,
       CANVAS_HEIGHT / 2 - 32,
     );
@@ -2253,8 +2423,12 @@ export function drawWorld2D(ctx, world) {
     ctx.font = "18px system-ui, sans-serif";
     ctx.fillText(
       world.victory
-        ? `Finished in ${formatTime(world.time)}`
-        : `${getPlayerDisplayName(world)} survived ${formatTime(world.time)}`,
+        ? world.labyrinthMode
+          ? `Escaped with ${formatTime(getLabyrinthTimeRemaining(world))} remaining`
+          : `Finished in ${formatTime(world.time)}`
+        : world.labyrinthMode
+          ? "The Labyrinth keeps you."
+          : `${getPlayerDisplayName(world)} survived ${formatTime(world.time)}`,
       CANVAS_WIDTH / 2,
       CANVAS_HEIGHT / 2 + 10,
     );
@@ -2308,7 +2482,8 @@ export function cast3DRay(world, angle) {
       break;
     }
 
-    if (world.grid[mapY][mapX] === WALL) {
+    const wallType = world.grid[mapY][mapX];
+    if (wallType !== FLOOR) {
       const hitX = world.player.x + dirX * distance;
       const hitY = world.player.y + dirY * distance;
       const wallOffset =
@@ -2320,6 +2495,7 @@ export function cast3DRay(world, angle) {
         mapY,
         side,
         wallOffset,
+        wallType,
       };
     }
   }
@@ -2330,6 +2506,7 @@ export function cast3DRay(world, angle) {
     mapY,
     side,
     wallOffset: 0,
+    wallType: null,
   };
 }
 
@@ -2395,17 +2572,30 @@ export function draw3DEnvironment(ctx, world, zBuffer) {
     );
     const wallTop = horizon - wallHeight / 2;
     const wallBottom = horizon + wallHeight / 2;
+    const darknessDistance = world.labyrinthMode
+      ? Math.max(6, world.labyrinth.sightRadius * 2.15)
+      : VIEW_3D_MAX_DISTANCE;
     const distanceFade = clamp(
-      1 - perpendicularDistance / VIEW_3D_MAX_DISTANCE,
-      0.12,
+      1 - perpendicularDistance / darknessDistance,
+      world.labyrinthMode ? 0.025 : 0.12,
       1,
     );
     const sideShade = hit.side === 1 ? 0.76 : 1;
     const cellNoise =
       0.82 + hashNoise(hit.mapX, hit.mapY) * 0.18;
 
-    ctx.globalAlpha = distanceFade * sideShade * cellNoise;
-    ctx.fillStyle = hit.side === 1 ? theme.wallB : theme.wallA;
+    const steelWall = hit.wallType === STEEL_WALL;
+    ctx.globalAlpha =
+      distanceFade *
+      sideShade *
+      (steelWall ? 0.96 : cellNoise);
+    ctx.fillStyle = steelWall
+      ? hit.side === 1
+        ? theme.steelB ?? "#46515d"
+        : theme.steelA ?? "#7c8794"
+      : hit.side === 1
+        ? theme.wallB
+        : theme.wallA;
     ctx.fillRect(
       rayIndex * VIEW_3D_RAY_WIDTH,
       wallTop,
@@ -2413,7 +2603,22 @@ export function draw3DEnvironment(ctx, world, zBuffer) {
       wallBottom - wallTop,
     );
 
-    if (
+    if (steelWall) {
+      const brace =
+        hit.wallOffset < 0.055 ||
+        hit.wallOffset > 0.945 ||
+        (hit.wallOffset > 0.46 && hit.wallOffset < 0.54);
+      if (brace) {
+        ctx.globalAlpha = distanceFade * 0.72;
+        ctx.fillStyle = theme.steelEdge ?? "#d5dde7";
+        ctx.fillRect(
+          rayIndex * VIEW_3D_RAY_WIDTH,
+          wallTop,
+          VIEW_3D_RAY_WIDTH + 1,
+          wallBottom - wallTop,
+        );
+      }
+    } else if (
       perpendicularDistance < 10 &&
       hit.wallOffset < 0.055
     ) {
@@ -3124,7 +3329,13 @@ export function draw3DSprites(
     projectionPlane,
   );
 
-  if (exitProjection) {
+  if (
+    exitProjection &&
+    (
+      !world.labyrinthMode ||
+      exitProjection.distance <= world.labyrinth.sightRadius + 3.2
+    )
+  ) {
     sprites.push({
       type: "exit",
       projection: exitProjection,
@@ -3156,7 +3367,13 @@ export function draw3DSprites(
       projectionPlane,
     );
 
-    if (projection) {
+    if (
+      projection &&
+      (
+        !world.labyrinthMode ||
+        projection.distance <= world.labyrinth.sightRadius + 2.4
+      )
+    ) {
       sprites.push({
         type: "pickup",
         entity: pickup,
@@ -3347,6 +3564,10 @@ export function draw3DMedievalBow(ctx, world, recoil, theme) {
 }
 
 export function draw3DWeapon(ctx, world) {
+  if (world.labyrinthMode) {
+    return;
+  }
+
   const theme = getTheme(world);
   const weapon = WEAPONS[world.player.weapon];
   const recoil = clamp(
@@ -3496,101 +3717,107 @@ export function draw3DWeapon(ctx, world) {
 
 export function draw3DOverlay(ctx, world) {
   const theme = getTheme(world);
-  const weaponLabel = getWeaponLabel(
-    world,
-    world.player.weapon,
-  );
 
-  ctx.fillStyle = "rgba(2, 6, 23, 0.72)";
-  ctx.fillRect(14, 14, 286, 78);
-  ctx.strokeStyle =
-    "rgba(148, 163, 184, 0.24)";
-  ctx.strokeRect(14.5, 14.5, 285, 77);
+  if (world.labyrinthMode) {
+    const remaining = getLabyrinthTimeRemaining(world);
+    const breakerActive = labyrinthBreakerActive(world);
+    const breakerRemaining = breakerActive
+      ? Math.max(0, world.labyrinth.breakerEndsAt - world.time)
+      : 0;
 
-  ctx.fillStyle = "#f8fafc";
-  ctx.font = "800 17px system-ui, sans-serif";
-  ctx.fillText(
-    `${Math.round(world.player.hp)} HP`,
-    28,
-    39,
-  );
-  ctx.fillText(
-    `${Math.floor(world.player.ammo)} ${getAmmoLabel(world).toUpperCase()}`,
-    126,
-    39,
-  );
-  ctx.fillStyle = "#cbd5e1";
-  ctx.font = "700 13px system-ui, sans-serif";
-  ctx.fillText(weaponLabel, 28, 64);
-  ctx.fillText(formatTime(world.time), 216, 64);
+    ctx.fillStyle = "rgba(1, 3, 7, 0.78)";
+    ctx.fillRect(14, 14, 330, 82);
+    ctx.strokeStyle = "rgba(192, 132, 252, 0.3)";
+    ctx.strokeRect(14.5, 14.5, 329, 81);
 
-  ctx.fillStyle = "rgba(76, 29, 149, 0.72)";
-  ctx.fillRect(
-    CANVAS_WIDTH - 118,
-    14,
-    104,
-    30,
-  );
-  ctx.fillStyle = "#ede9fe";
-  ctx.font = "900 11px system-ui, sans-serif";
-  ctx.textAlign = "center";
-  ctx.fillText(
-    "3D BETA",
-    CANVAS_WIDTH - 66,
-    34,
-  );
+    ctx.fillStyle = "#f8fafc";
+    ctx.font = "900 18px system-ui, sans-serif";
+    ctx.fillText(`TIME ${formatTime(remaining)}`, 28, 42);
 
-  const crosshairSize = 8;
-  const crosshairGap = 5;
-  const crosshairY = CANVAS_HEIGHT * 0.46;
+    ctx.fillStyle = "#d8b4fe";
+    ctx.font = "800 13px system-ui, sans-serif";
+    ctx.fillText(
+      `BREAKERS ${world.labyrinth.breakerCharges}/10`,
+      190,
+      42,
+    );
 
-  ctx.strokeStyle = theme.playerAccent;
-  ctx.lineWidth = 2;
-  ctx.globalAlpha = 0.9;
-  ctx.beginPath();
-  ctx.moveTo(
-    CANVAS_WIDTH / 2 -
-      crosshairGap -
-      crosshairSize,
-    crosshairY,
-  );
-  ctx.lineTo(
-    CANVAS_WIDTH / 2 - crosshairGap,
-    crosshairY,
-  );
-  ctx.moveTo(
-    CANVAS_WIDTH / 2 + crosshairGap,
-    crosshairY,
-  );
-  ctx.lineTo(
-    CANVAS_WIDTH / 2 +
-      crosshairGap +
-      crosshairSize,
-    crosshairY,
-  );
-  ctx.moveTo(
-    CANVAS_WIDTH / 2,
-    crosshairY -
-      crosshairGap -
-      crosshairSize,
-  );
-  ctx.lineTo(
-    CANVAS_WIDTH / 2,
-    crosshairY - crosshairGap,
-  );
-  ctx.moveTo(
-    CANVAS_WIDTH / 2,
-    crosshairY + crosshairGap,
-  );
-  ctx.lineTo(
-    CANVAS_WIDTH / 2,
-    crosshairY +
-      crosshairGap +
-      crosshairSize,
-  );
-  ctx.stroke();
-  ctx.globalAlpha = 1;
-  ctx.textAlign = "left";
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = "700 12px system-ui, sans-serif";
+    ctx.fillText(
+      `${world.labyrinth.difficultyLabel.toUpperCase()} · ${world.logicalCols}×${world.logicalRows}`,
+      28,
+      68,
+    );
+
+    if (breakerActive) {
+      ctx.fillStyle = "#e9d5ff";
+      ctx.fillText(
+        `WALL BREAKER ${breakerRemaining.toFixed(1)}s`,
+        190,
+        68,
+      );
+    }
+  } else {
+    const weaponLabel = getWeaponLabel(
+      world,
+      world.player.weapon,
+    );
+
+    ctx.fillStyle = "rgba(2, 6, 23, 0.72)";
+    ctx.fillRect(14, 14, 286, 78);
+    ctx.strokeStyle = "rgba(148, 163, 184, 0.24)";
+    ctx.strokeRect(14.5, 14.5, 285, 77);
+
+    ctx.fillStyle = "#f8fafc";
+    ctx.font = "800 17px system-ui, sans-serif";
+    ctx.fillText(
+      `${Math.round(world.player.hp)} HP`,
+      28,
+      39,
+    );
+    ctx.fillText(
+      `${Math.floor(world.player.ammo)} ${getAmmoLabel(world).toUpperCase()}`,
+      126,
+      39,
+    );
+    ctx.fillStyle = "#cbd5e1";
+    ctx.font = "700 13px system-ui, sans-serif";
+    ctx.fillText(weaponLabel, 28, 64);
+    ctx.fillText(formatTime(world.time), 216, 64);
+
+    const crosshairSize = 8;
+    const crosshairGap = 5;
+    const crosshairY = CANVAS_HEIGHT * 0.46;
+
+    ctx.strokeStyle = theme.playerAccent;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.9;
+    ctx.beginPath();
+    ctx.moveTo(
+      CANVAS_WIDTH / 2 - crosshairGap - crosshairSize,
+      crosshairY,
+    );
+    ctx.lineTo(CANVAS_WIDTH / 2 - crosshairGap, crosshairY);
+    ctx.moveTo(CANVAS_WIDTH / 2 + crosshairGap, crosshairY);
+    ctx.lineTo(
+      CANVAS_WIDTH / 2 + crosshairGap + crosshairSize,
+      crosshairY,
+    );
+    ctx.moveTo(
+      CANVAS_WIDTH / 2,
+      crosshairY - crosshairGap - crosshairSize,
+    );
+    ctx.lineTo(CANVAS_WIDTH / 2, crosshairY - crosshairGap);
+    ctx.moveTo(CANVAS_WIDTH / 2, crosshairY + crosshairGap);
+    ctx.lineTo(
+      CANVAS_WIDTH / 2,
+      crosshairY + crosshairGap + crosshairSize,
+    );
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.textAlign = "left";
+  }
 
   if (world.messageTtl > 0 && world.message) {
     const width = Math.min(
@@ -3691,7 +3918,7 @@ export function draw3DOverlay(ctx, world) {
     ctx.restore();
   }
 
-  drawVignette(ctx);
+  drawVignette(ctx, world);
 
   if (world.gameOver || world.victory) {
     ctx.fillStyle = "rgba(2, 6, 23, 0.8)";
@@ -3713,8 +3940,12 @@ export function draw3DOverlay(ctx, world) {
     ctx.textAlign = "center";
     ctx.fillText(
       world.victory
-        ? "MAZE ESCAPED"
-        : "GAME OVER",
+        ? world.labyrinthMode
+          ? "LABYRINTH ESCAPED"
+          : "MAZE ESCAPED"
+        : world.labyrinthMode
+          ? "TIME EXPIRED"
+          : "GAME OVER",
       CANVAS_WIDTH / 2,
       CANVAS_HEIGHT / 2 - 32,
     );
@@ -3724,8 +3955,12 @@ export function draw3DOverlay(ctx, world) {
       "18px system-ui, sans-serif";
     ctx.fillText(
       world.victory
-        ? `Finished in ${formatTime(world.time)}`
-        : `${getPlayerDisplayName(world)} survived ${formatTime(world.time)}`,
+        ? world.labyrinthMode
+          ? `Escaped with ${formatTime(getLabyrinthTimeRemaining(world))} remaining`
+          : `Finished in ${formatTime(world.time)}`
+        : world.labyrinthMode
+          ? "The Labyrinth keeps you."
+          : `${getPlayerDisplayName(world)} survived ${formatTime(world.time)}`,
       CANVAS_WIDTH / 2,
       CANVAS_HEIGHT / 2 + 10,
     );

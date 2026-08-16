@@ -84,12 +84,16 @@ export function placeProgressionItems(world, distances, used) {
     }
   }
 
-  const extraAmmo = Math.max(
-    5,
-    Math.floor(world.floorTiles.length * 0.024),
-    Math.floor(world.exit.distance / AMMO_ROUTE_SPACING),
+  const extraAmmo = clamp(
+    Math.round(world.exit.distance / AMMO_ROUTE_SPACING),
+    4,
+    14,
   );
-  const medkits = Math.floor(world.floorTiles.length * 0.02);
+  const medkits = clamp(
+    Math.round(world.exit.distance / 42),
+    4,
+    11,
+  );
 
   for (let index = 0; index < extraAmmo; index += 1) {
     const progress = (index + 1) / (extraAmmo + 1);
@@ -587,7 +591,12 @@ if (distance <= 6.25 + vision.sightBonus && dot > 0.55) { return 0.34; }
 return 0;
 }
 
-export function revealAroundPlayer(world) { let discoveredCount = world.player.discoveredFloor; let minimapChanged = false; const sightBonus = world.vision?.sightBonus ?? 0; const revealRadius = Math.ceil(VISION_MARGIN + sightBonus); const minX = Math.max(0, Math.floor(world.player.x) - revealRadius); const maxX = Math.min(world.width - 1, Math.ceil(world.player.x) + revealRadius); const minY = Math.max(0, Math.floor(world.player.y) - revealRadius); const maxY = Math.min(world.height - 1, Math.ceil(world.player.y) + revealRadius);
+export function revealAroundPlayer(world) {
+if (isLabyrinthWorld(world)) {
+  return;
+}
+
+let discoveredCount = world.player.discoveredFloor; let minimapChanged = false; const sightBonus = world.vision?.sightBonus ?? 0; const revealRadius = Math.ceil(VISION_MARGIN + sightBonus); const minX = Math.max(0, Math.floor(world.player.x) - revealRadius); const maxX = Math.min(world.width - 1, Math.ceil(world.player.x) + revealRadius); const minY = Math.max(0, Math.floor(world.player.y) - revealRadius); const maxY = Math.min(world.height - 1, Math.ceil(world.player.y) + revealRadius);
 
 for (let y = minY; y <= maxY; y += 1) { for (let x = minX; x <= maxX; x += 1) { const strength = visibleStrengthAt(world, x, y); if (strength <= 0.24) { continue; }
 

@@ -22,6 +22,15 @@ export const GAME_STYLES = `
       background: #020617;
     }
 
+    .maze-game-shell.mode-3d {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .maze-game-shell.mode-3d .maze-frame {
+      width: min(100%, calc(100vh * ${CANVAS_WIDTH / CANVAS_HEIGHT}));
+      border-right: 0;
+    }
+
     .maze-stage {
       min-width: 0;
       min-height: 0;
@@ -797,6 +806,197 @@ export const GAME_STYLES = `
       max-width: min(70vw, 430px);
     }
 
+
+    .three-d-labyrinth-locator {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 18;
+      width: 160px;
+      pointer-events: none;
+      opacity: 0.9;
+    }
+
+    .three-d-labyrinth-locator .labyrinth-locator {
+      padding: 8px;
+      background: rgba(1, 2, 4, 0.76);
+      backdrop-filter: blur(3px);
+    }
+
+    .three-d-labyrinth-locator .labyrinth-locator-heading span,
+    .three-d-labyrinth-locator .labyrinth-locator-key {
+      display: none;
+    }
+
+    .three-d-minimal-settings {
+      position: absolute;
+      top: max(12px, env(safe-area-inset-top));
+      right: max(12px, env(safe-area-inset-right));
+      z-index: 24;
+      display: grid;
+      justify-items: end;
+      gap: 8px;
+      pointer-events: auto;
+    }
+
+    .three-d-gear-only {
+      width: 46px;
+      height: 46px;
+      padding: 0;
+      border: 1px solid rgba(103, 232, 249, 0.46);
+      border-radius: 12px;
+      background: rgba(2, 6, 23, 0.88);
+      color: #cffafe;
+      font: inherit;
+      font-size: 23px;
+      line-height: 1;
+      cursor: pointer;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.38);
+      backdrop-filter: blur(5px);
+    }
+
+    .three-d-settings-popover {
+      width: min(320px, calc(100vw - 24px));
+      max-height: calc(100dvh - 76px);
+      overflow-y: auto;
+      padding: 12px;
+      border: 1px solid rgba(103, 232, 249, 0.26);
+      border-radius: 14px;
+      background: rgba(2, 6, 23, 0.97);
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.52);
+    }
+
+    .three-d-settings-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 7px;
+      margin-top: 10px;
+    }
+
+    .three-d-settings-actions button {
+      min-height: 38px;
+      padding: 7px 8px;
+      border: 1px solid rgba(148, 163, 184, 0.24);
+      border-radius: 9px;
+      background: rgba(30, 41, 59, 0.84);
+      color: #e2e8f0;
+      font: inherit;
+      font-size: 9px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .three-d-settings-actions button:last-child {
+      grid-column: 1 / -1;
+    }
+
+    .three-d-look-note {
+      margin-top: 9px;
+      color: #94a3b8;
+      font-size: 10px;
+      line-height: 1.45;
+      text-align: center;
+    }
+
+    .labyrinth-locator {
+      display: grid;
+      gap: 9px;
+      padding: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      border-radius: 14px;
+      background: rgba(2, 6, 12, 0.94);
+    }
+
+    .labyrinth-locator-heading {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 10px;
+    }
+
+    .labyrinth-locator-heading h2 {
+      margin: 0;
+      color: #e2e8f0;
+      font-size: 14px;
+    }
+
+    .labyrinth-locator-heading span {
+      color: #64748b;
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .labyrinth-locator-canvas {
+      display: grid;
+      place-items: center;
+      min-height: 136px;
+      overflow: hidden;
+      border-radius: 10px;
+      background: #010204;
+    }
+
+    .labyrinth-locator-canvas canvas {
+      display: block;
+      width: min(100%, 176px);
+      height: auto;
+    }
+
+    .labyrinth-locator-key {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px 12px;
+      color: #94a3b8;
+      font-size: 10px;
+    }
+
+    .labyrinth-locator-key span {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .locator-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+    }
+
+    .locator-dot.player {
+      background: #38bdf8;
+      box-shadow: 0 0 8px rgba(56, 189, 248, 0.72);
+    }
+
+    .locator-dot.exit {
+      background: #22c55e;
+      box-shadow: 0 0 8px rgba(34, 197, 94, 0.72);
+    }
+
+    .mobile-labyrinth-locator {
+      position: absolute;
+      top: calc(max(8px, env(safe-area-inset-top)) + 54px);
+      right: max(8px, env(safe-area-inset-right));
+      width: 154px;
+      pointer-events: none;
+    }
+
+    .mobile-labyrinth-locator .labyrinth-locator {
+      padding: 7px;
+      gap: 5px;
+      background: rgba(2, 6, 12, 0.82);
+    }
+
+    .mobile-labyrinth-locator .labyrinth-locator-heading span,
+    .mobile-labyrinth-locator .labyrinth-locator-key {
+      display: none;
+    }
+
+    .mobile-labyrinth-locator .labyrinth-locator-canvas {
+      min-height: 108px;
+    }
+
     .mobile-3d-sidebar {
       display: none;
     }
@@ -1022,52 +1222,17 @@ export const GAME_STYLES = `
 
 
     .touch-mobile.mode-3d .maze-game-shell {
-      grid-template-columns: minmax(0, 1fr) clamp(164px, 27vw, 220px);
+      grid-template-columns: minmax(0, 1fr);
     }
 
-    .touch-mobile.mode-3d .maze-stage {
-      width: 100%;
-      height: 100dvh;
-    }
-
+    .touch-mobile.mode-3d .maze-stage,
     .touch-mobile.mode-3d .maze-frame {
-      width: 100%;
+      width: 100vw;
       height: 100dvh;
     }
 
     .touch-mobile.mode-3d .mobile-hud-overlay {
-      display: none;
-    }
-
-    .touch-mobile.mode-3d .mobile-3d-sidebar {
       display: block;
-      height: 100dvh;
-      padding:
-        max(7px, env(safe-area-inset-top))
-        max(7px, env(safe-area-inset-right))
-        max(7px, env(safe-area-inset-bottom))
-        7px;
-      overflow-y: auto;
-      background: rgba(2, 6, 23, 0.98);
-      border-left: 1px solid rgba(103, 232, 249, 0.22);
-      scrollbar-width: thin;
-    }
-
-    .touch-mobile.mode-3d .mobile-3d-sidebar .three-d-status-sidebar-content {
-      gap: 6px;
-    }
-
-    .touch-mobile.mode-3d .mobile-3d-sidebar section {
-      padding: 7px !important;
-      border-radius: 10px !important;
-    }
-
-    .touch-mobile.mode-3d .mobile-3d-sidebar h2 {
-      font-size: 11px !important;
-    }
-
-    .touch-mobile.mode-3d .mobile-3d-sidebar canvas {
-      max-height: 25vh !important;
     }
 
     .touch-mobile.mode-3d .touch-aim-control {

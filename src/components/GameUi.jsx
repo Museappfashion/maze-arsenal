@@ -10,161 +10,235 @@ import { getLabyrinthTimeRemaining, labyrinthBreakerActive } from "../game/labyr
 import { getDiscoveredPercent } from "../game/maze.js";
 import { formatTime, indexOfTile } from "../utils/math.js";
 import { getPlayerDisplayName } from "../utils/player.js";
+import { recordDonationAttempt } from "../services/developerAnalytics.js";
 
 export function MinimapPanel({ world, compact = false }) {
-const canvasRef = useRef(null);
+  const canvasRef = useRef(null);
 
-useEffect(() => {
-  const canvas = canvasRef.current;
-  const shouldShowMinimap = world.viewMode === "3d" || world.minimapOn;
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const shouldShowMinimap =
+      world.labyrinthMode || world.viewMode === "3d" || world.minimapOn;
 
-  if (!canvas || !shouldShowMinimap) {
-    return;
-  }
-
-  const maxSize = compact ? 220 : world.mobileView ? 440 : 320;
-  const scale = Math.max(1, Math.floor(maxSize / Math.max(world.width, world.height)));
-  const mapWidth = world.width * scale;
-  const mapHeight = world.height * scale;
-  const ctx = canvas.getContext("2d");
-
-  canvas.width = mapWidth;
-  canvas.height = mapHeight;
-  ctx.clearRect(0, 0, mapWidth, mapHeight);
-
-  for (let y = 0; y < world.height; y += 1) {
-    for (let x = 0; x < world.width; x += 1) {
-      const discovered = world.discovered[indexOfTile(world.width, x, y)] === 1;
-
-      const theme = getTheme(world);
-      if (!discovered) {
-        ctx.fillStyle = theme.backdrop;
-      } else if (world.grid[y][x] === STEEL_WALL) {
-        ctx.fillStyle = theme.steelA ?? "#7c8794";
-      } else if (world.grid[y][x] === WALL) {
-        ctx.fillStyle = theme.wallB;
-      } else {
-        ctx.fillStyle = theme.floorB;
-      }
-
-      ctx.fillRect(x * scale, y * scale, scale, scale);
+    if (!canvas || !shouldShowMinimap) {
+      return;
     }
-  }
 
-  ctx.fillStyle = "#22c55e";
-  ctx.fillRect(
-    world.exit.x * scale,
-    world.exit.y * scale,
-    Math.max(3, scale + 1),
-    Math.max(3, scale + 1),
-  );
+    const ctx = canvas.getContext("2d");
 
-  if (hasPowerUp(world, "sonar")) {
-    for (const enemy of world.enemies) {
-      ctx.fillStyle =
-        enemy.kind === "warden"
-          ? "#f472b6"
-          : enemy.kind === "turret"
-            ? "#facc15"
-            : "#ef4444";
-      ctx.fillRect(
-        Math.floor(enemy.x) * scale,
-        Math.floor(enemy.y) * scale,
-        Math.max(2, scale),
-        Math.max(2, scale),
+    if (world.labyrinthMode) {
+      const size = compact ? 136 : world.mobileView ? 176 : 160;
+      const padding = 12;
+      const usable = size - padding * 2;
+
+      canvas.width = size;
+      canvas.height = size;
+
+      ctx.fillStyle = "#010204";
+      ctx.fillRect(0, 0, size, size);
+
+      ctx.strokeStyle = "rgba(148, 163, 184, 0.16)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(0.5, 0.5, size - 1, size - 1);
+
+      const pointFor = (x, y) => ({
+        x: padding + (x / Math.max(1, world.width - 1)) * usable,
+        y: padding + (y / Math.max(1, world.height - 1)) * usable,
+      });
+
+      const exitPoint = pointFor(
+        world.exit.x + 0.5,
+        world.exit.y + 0.5,
       );
+      const playerPoint = pointFor(world.player.x, world.player.y);
+
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = "#22c55e";
+      ctx.fillStyle = "#22c55e";
+      ctx.beginPath();
+      ctx.arc(exitPoint.x, exitPoint.y, compact ? 4 : 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.shadowColor = "#38bdf8";
+      ctx.fillStyle = "#38bdf8";
+      ctx.beginPath();
+      ctx.arc(
+        playerPoint.x,
+        playerPoint.y,
+        compact ? 4 : 5,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      return;
     }
+
+    const maxSize = compact ? 220 : world.mobileView ? 440 : 320;
+    const scale = Math.max(
+      1,
+      Math.floor(maxSize / Math.max(world.width, world.height)),
+    );
+    const mapWidth = world.width * scale;
+    const mapHeight = world.height * scale;
+
+    canvas.width = mapWidth;
+    canvas.height = mapHeight;
+    ctx.clearRect(0, 0, mapWidth, mapHeight);
+
+    for (let y = 0; y < world.height; y += 1) {
+      for (let x = 0; x < world.width; x += 1) {
+        const discovered =
+          world.discovered[indexOfTile(world.width, x, y)] === 1;
+        const theme = getTheme(world);
+
+        if (!discovered) {
+          ctx.fillStyle = theme.backdrop;
+        } else if (world.grid[y][x] === STEEL_WALL) {
+          ctx.fillStyle = theme.steelA ?? "#7c8794";
+        } else if (world.grid[y][x] === WALL) {
+          ctx.fillStyle = theme.wallB;
+        } else {
+          ctx.fillStyle = theme.floorB;
+        }
+
+        ctx.fillRect(x * scale, y * scale, scale, scale);
+      }
+    }
+
+    ctx.fillStyle = "#22c55e";
+    ctx.fillRect(
+      world.exit.x * scale,
+      world.exit.y * scale,
+      Math.max(3, scale + 1),
+      Math.max(3, scale + 1),
+    );
+
+    if (hasPowerUp(world, "sonar")) {
+      for (const enemy of world.enemies) {
+        ctx.fillStyle =
+          enemy.kind === "warden"
+            ? "#f472b6"
+            : enemy.kind === "turret"
+              ? "#facc15"
+              : "#ef4444";
+        ctx.fillRect(
+          Math.floor(enemy.x) * scale,
+          Math.floor(enemy.y) * scale,
+          Math.max(2, scale),
+          Math.max(2, scale),
+        );
+      }
+    }
+
+    ctx.fillStyle = "#38bdf8";
+    ctx.fillRect(
+      Math.floor(world.player.x) * scale,
+      Math.floor(world.player.y) * scale,
+      Math.max(2, scale + 1),
+      Math.max(2, scale + 1),
+    );
+  });
+
+  const shouldShowMinimap =
+    world.labyrinthMode || world.viewMode === "3d" || world.minimapOn;
+
+  if (!shouldShowMinimap) {
+    return (
+      <div
+        style={{
+          padding: 16,
+          borderRadius: 16,
+          background: "rgba(15, 23, 42, 0.9)",
+          border: "1px solid rgba(148, 163, 184, 0.14)",
+          color: "#94a3b8",
+          fontSize: 13,
+        }}
+      >
+        Minimap hidden. Press M to show it.
+      </div>
+    );
   }
 
-  ctx.fillStyle = "#38bdf8";
-  ctx.fillRect(
-    Math.floor(world.player.x) * scale,
-    Math.floor(world.player.y) * scale,
-    Math.max(2, scale + 1),
-    Math.max(2, scale + 1),
-  );
-});
+  if (world.labyrinthMode) {
+    return (
+      <section className="labyrinth-locator" aria-label="Labyrinth locator">
+        <div className="labyrinth-locator-heading">
+          <h2>Locator</h2>
+          <span>No maze revealed</span>
+        </div>
+        <div className="labyrinth-locator-canvas">
+          <canvas ref={canvasRef} />
+        </div>
+        <div className="labyrinth-locator-key">
+          <span><i className="locator-dot player" />Blue = You</span>
+          <span><i className="locator-dot exit" />Green = Exit</span>
+        </div>
+      </section>
+    );
+  }
 
-const shouldShowMinimap = world.viewMode === "3d" || world.minimapOn;
-
-if (!shouldShowMinimap) {
   return (
-    <div
+    <section
       style={{
-        padding: 16,
+        padding: 14,
         borderRadius: 16,
-        background: "rgba(15, 23, 42, 0.9)",
+        background: "rgba(15, 23, 42, 0.92)",
         border: "1px solid rgba(148, 163, 184, 0.14)",
-        color: "#94a3b8",
-        fontSize: 13,
       }}
     >
-      Minimap hidden. Press M to show it.
-    </div>
-  );
-}
-
-return (
-  <section
-    style={{
-      padding: 14,
-      borderRadius: 16,
-      background: "rgba(15, 23, 42, 0.92)",
-      border: "1px solid rgba(148, 163, 184, 0.14)",
-    }}
-  >
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        gap: 12,
-        alignItems: "baseline",
-        marginBottom: 10,
-      }}
-    >
-      <h2 style={{ margin: 0, fontSize: 16 }}>Minimap</h2>
-      <span style={{ color: "#94a3b8", fontSize: 12 }}>
-        {getDiscoveredPercent(world)}% discovered
-      </span>
-    </div>
-    <div
-      style={{
-        display: "grid",
-        placeItems: "center",
-        width: "100%",
-        overflow: "hidden",
-        borderRadius: 12,
-        background: "#020617",
-        border: "1px solid rgba(148, 163, 184, 0.12)",
-      }}
-    >
-      <canvas
-        ref={canvasRef}
+      <div
         style={{
-          display: "block",
-          width: "100%",
-          height: "auto",
-          maxHeight: compact ? 190 : world.mobileView ? 420 : 320,
-          objectFit: "contain",
-          imageRendering: "pixelated",
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 12,
+          alignItems: "baseline",
+          marginBottom: 10,
         }}
-      />
-    </div>
-    <div
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        gap: "6px 12px",
-        marginTop: 10,
-        color: "#cbd5e1",
-        fontSize: 12,
-      }}
-    >
-      <span>Blue = {getPlayerDisplayName(world)}</span>
-      <span>Green = Exit</span>
-    </div>
-  </section>
-);
+      >
+        <h2 style={{ margin: 0, fontSize: 16 }}>Minimap</h2>
+        <span style={{ color: "#94a3b8", fontSize: 12 }}>
+          {getDiscoveredPercent(world)}% discovered
+        </span>
+      </div>
+      <div
+        style={{
+          display: "grid",
+          placeItems: "center",
+          width: "100%",
+          overflow: "hidden",
+          borderRadius: 12,
+          background: "#020617",
+          border: "1px solid rgba(148, 163, 184, 0.12)",
+        }}
+      >
+        <canvas
+          ref={canvasRef}
+          style={{
+            display: "block",
+            width: "100%",
+            height: "auto",
+            maxHeight: compact ? 190 : world.mobileView ? 420 : 320,
+            objectFit: "contain",
+            imageRendering: "pixelated",
+          }}
+        />
+      </div>
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "6px 12px",
+          marginTop: 10,
+          color: "#cbd5e1",
+          fontSize: 12,
+        }}
+      >
+        <span>Blue = {getPlayerDisplayName(world)}</span>
+        <span>Green = Exit</span>
+      </div>
+    </section>
+  );
 }
 
 export function openSupportLink(url) {
@@ -204,7 +278,10 @@ export function SupportButtons({ compact = false }) {
                 ? `Support Mist Maze with ${item.label}`
                 : "Payment link not configured yet"
             }
-            onClick={() => openSupportLink(item.url)}
+            onClick={() => {
+              void recordDonationAttempt(item.key);
+              openSupportLink(item.url);
+            }}
           >
             {item.label}
           </button>
@@ -500,17 +577,8 @@ export function MobileHudOverlay({
           </button>
         </div>
 
-        <div
-          className={`mobile-minimap-wrap${mapExpanded ? " expanded" : ""}`}
-          role="button"
-          tabIndex={0}
-          aria-label={mapExpanded ? "Shrink minimap" : "Expand minimap"}
-          onClick={onMapToggle}
-        >
-          <MinimapPanel world={world} />
-          <div className="mobile-minimap-hint">
-            {mapExpanded ? "Tap map to shrink" : "Tap map to enlarge"}
-          </div>
+        <div className="mobile-labyrinth-locator">
+          <MinimapPanel world={world} compact />
         </div>
       </div>
     );

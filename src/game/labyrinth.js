@@ -21,8 +21,6 @@ import {
   tileCenter,
 } from "../utils/math.js";
 
-const MUTATION_SAFE_RADIUS = 6;
-
 export function isLabyrinthWorld(world) {
   return Boolean(world?.labyrinthMode);
 }
@@ -44,6 +42,7 @@ export function createLabyrinthState(options = {}) {
     breakerEndsAt: -Infinity,
     nextMutationAt: config.mutationInterval,
     mutationNumber: 0,
+    lastShiftAt: -Infinity,
   };
 }
 
@@ -75,26 +74,17 @@ function chooseExitByTargetDistance(world, distances) {
 }
 
 function isProtectedWall(world, x, y) {
-  const playerDistance = Math.hypot(
-    x + 0.5 - world.player.x,
-    y + 0.5 - world.player.y,
-  );
-  const exitDistance = Math.hypot(
-    x - world.exit.x,
-    y - world.exit.y,
-  );
+  const playerTileX = Math.floor(world.player.x);
+  const playerTileY = Math.floor(world.player.y);
 
-  if (
-    playerDistance < MUTATION_SAFE_RADIUS ||
-    exitDistance < MUTATION_SAFE_RADIUS
-  ) {
+  if (x === playerTileX && y === playerTileY) {
     return true;
   }
 
   return world.pickups.some(
     (pickup) =>
-      Math.abs(pickup.x - (x + 0.5)) < 1.2 &&
-      Math.abs(pickup.y - (y + 0.5)) < 1.2,
+      Math.floor(pickup.x) === x &&
+      Math.floor(pickup.y) === y,
   );
 }
 
@@ -176,12 +166,50 @@ function getMutationCandidates(world, open) {
   return candidates;
 }
 
-function randomCandidate(candidates) {
+function candidateDistanceToPlayer(world, candidate) {
+  const tiles = getConnectionTiles(
+    candidate.x,
+    candidate.y,
+    candidate.direction,
+  );
+
+  const center = tiles.reduce(
+    (point, tile) => ({
+      x: point.x + tile.x + 0.5,
+      y: point.y + tile.y + 0.5,
+    }),
+    { x: 0, y: 0 },
+  );
+
+  center.x /= tiles.length;
+  center.y /= tiles.length;
+
+  return Math.hypot(
+    center.x - world.player.x,
+    center.y - world.player.y,
+  );
+}
+
+function randomCandidate(world, candidates, preferPlayerLight = false) {
   if (!candidates.length) {
     return null;
   }
 
-  return candidates[Math.floor(Math.random() * candidates.length)];
+  let pool = candidates;
+
+  if (preferPlayerLight) {
+    const visibleRange = world.labyrinth.sightRadius + 2.5;
+    const nearby = candidates.filter(
+      (candidate) =>
+        candidateDistanceToPlayer(world, candidate) <= visibleRange,
+    );
+
+    if (nearby.length && Math.random() < 0.72) {
+      pool = nearby;
+    }
+  }
+
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 function canStillReachExit(world) {
@@ -196,7 +224,11 @@ function canStillReachExit(world) {
 }
 
 function mutateOnce(world) {
-  const closed = randomCandidate(getMutationCandidates(world, false));
+  const closed = randomCandidate(
+    world,
+    getMutationCandidates(world, false),
+    true,
+  );
   if (closed) {
     setConnectionState(
       world,
@@ -210,7 +242,11 @@ function mutateOnce(world) {
   const opens = getMutationCandidates(world, true);
 
   for (let attempt = 0; attempt < Math.min(24, opens.length); attempt += 1) {
-    const candidate = opens[Math.floor(Math.random() * opens.length)];
+    const candidate = randomCandidate(world, opens, true);
+
+    if (!candidate) {
+      break;
+    }
 
     if (
       closed &&
@@ -267,8 +303,10 @@ export function mutateLabyrinth(world) {
   if (changed) {
     refreshTopologyCaches(world);
     world.labyrinth.mutationNumber += 1;
-    world.message = "The Labyrinth shifts...";
-    world.messageTtl = 1.35;
+    world.labyrinth.lastShiftAt = world.time;
+    world.message =
+      `The Labyrinth shifts — change ${world.labyrinth.mutationNumber}`;
+    world.messageTtl = 1.6;
   }
 
   return changed;
@@ -277,21 +315,30 @@ export function mutateLabyrinth(world) {
 export function markSteelWalls(world) {
   const chance = world.labyrinth.steelChance;
 
-  for (let y = 1; y < world.height - 1; y += 1) {
-    for (let x = 1; x < world.width - 1; x += 1) {
-      if (world.grid[y][x] !== WALL) {
-        continue;
+  for (let y = 0; y < world.logicalRows; y += 1) {
+    for (let x = 0; x < world.logicalCols; x += 1) {
+      if (
+        x + 1 < world.logicalCols &&
+        !world.connections[y][x].e &&
+        Math.random() < chance
+      ) {
+        for (const tile of getConnectionTiles(x, y, "e")) {
+          if (world.grid[tile.y][tile.x] === WALL) {
+            world.grid[tile.y][tile.x] = STEEL_WALL;
+          }
+        }
       }
 
-      const clusteredNoise =
-        (
-          Math.sin(x * 0.37 + y * 0.19) +
-          Math.cos(x * 0.17 - y * 0.31) +
-          2
-        ) / 4;
-
-      if (clusteredNoise < chance * 1.7 && Math.random() < chance) {
-        world.grid[y][x] = STEEL_WALL;
+      if (
+        y + 1 < world.logicalRows &&
+        !world.connections[y][x].s &&
+        Math.random() < chance
+      ) {
+        for (const tile of getConnectionTiles(x, y, "s")) {
+          if (world.grid[tile.y][tile.x] === WALL) {
+            world.grid[tile.y][tile.x] = STEEL_WALL;
+          }
+        }
       }
     }
   }

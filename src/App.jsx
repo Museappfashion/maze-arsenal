@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { GAME_STYLES } from "./styles/gameStyles.js";
 import { MazeAudioEngine, queueSfx } from "./audio/MazeAudioEngine.js";
-import { LabyrinthStatusPanel, MinimapPanel, MobileHudOverlay, SidebarSettings, ThreeDStatusSidebar, TouchControls, mergeInputKeys, selectNextOwnedWeapon } from "./components/GameUi.jsx";
+import { LabyrinthStatusPanel, MinimapPanel, MobileHudOverlay, SettingsControls, SidebarSettings, TouchControls, mergeInputKeys, selectNextOwnedWeapon } from "./components/GameUi.jsx";
 import { LevelSelectScreen } from "./components/LevelSelectScreen.jsx";
 import { StatCard } from "./components/StatCard.jsx";
 import { MAX_AMMO } from "./config/ammo.js";
@@ -16,6 +16,7 @@ import { getDiscoveredPercent } from "./game/maze.js";
 import { drawWorld } from "./game/rendering.js";
 import { createWorld, setWorldViewMode } from "./game/world.js";
 import { GLOBAL_LEADERBOARD_ENABLED, addLeaderboardTime, createEmptyUserRanks, detectCountryCode, fetchGlobalLeaderboards, loadLeaderboards, saveLeaderboards, submitGlobalLeaderboardTime } from "./services/leaderboard.js";
+import { recordGameFinished, recordGameStarted, recordPlaySeconds } from "./services/developerAnalytics.js";
 import { clamp, formatTime } from "./utils/math.js";
 import { sanitizePlayerName } from "./utils/player.js";
 
@@ -28,6 +29,8 @@ const frameRef = useRef(0);
 const lastTimeRef = useRef(0);
 const hudAccumulatorRef = useRef(0);
 const recordedVictoryRef = useRef(false);
+const analyticsLastRecordedTimeRef = useRef(0);
+const analyticsRunEndedRef = useRef(false);
 const audioRef = useRef(null);
 const [audioEnabled, setAudioEnabled] = useState(true);
 const [musicVolume, setMusicVolume] = useState(0.75);
@@ -49,6 +52,23 @@ const [audioStatus, setAudioStatus] = useState("Tap TEST SOUND to verify audio")
 const [, setRevision] = useState(0);
 
 const forceRefresh = useCallback(() => { setRevision((value) => value + 1); }, []);
+
+const flushPlayAnalytics = useCallback((world = worldRef.current) => {
+  if (!selectedLevel || !world) {
+    return;
+  }
+
+  const currentTime = Math.max(0, Number(world.time) || 0);
+  const previousTime = analyticsLastRecordedTimeRef.current;
+  const deltaSeconds = Math.floor(currentTime - previousTime);
+
+  if (deltaSeconds <= 0) {
+    return;
+  }
+
+  analyticsLastRecordedTimeRef.current = currentTime;
+  void recordPlaySeconds(world, deltaSeconds);
+}, [selectedLevel]);
 
 
 useEffect(() => {
@@ -444,11 +464,12 @@ const returnToLevelSelect = useCallback(() => {
     document.exitPointerLock?.();
   }
 
+  flushPlayAnalytics(worldRef.current);
   audioRef.current?.stopMusic();
   keysRef.current = {};
   clearTouchInput();
   setSelectedLevel(null);
-}, [clearTouchInput]);
+}, [clearTouchInput, flushPlayAnalytics]);
 
 useEffect(() => {
   return () => {
@@ -497,6 +518,9 @@ const startLevel = useCallback((
   lastTimeRef.current = 0;
   hudAccumulatorRef.current = 0;
   recordedVictoryRef.current = false;
+  analyticsLastRecordedTimeRef.current = 0;
+  analyticsRunEndedRef.current = false;
+  void recordGameStarted(nextWorld);
   setGameMode(nextViewMode);
   setSelectionMode(nextViewMode);
   setPlayerName(nextPlayerName);
@@ -510,6 +534,7 @@ const resetWorld = useCallback(() => {
   }
 
   const currentWorld = worldRef.current;
+  flushPlayAnalytics(currentWorld);
   const runOptions = currentWorld.labyrinthMode
     ? {
         difficulty: currentWorld.labyrinth.difficulty,
@@ -529,8 +554,19 @@ const resetWorld = useCallback(() => {
   lastTimeRef.current = 0;
   hudAccumulatorRef.current = 0;
   recordedVictoryRef.current = false;
+  analyticsLastRecordedTimeRef.current = 0;
+  analyticsRunEndedRef.current = false;
+  void recordGameStarted(nextWorld);
   forceRefresh();
-}, [clearTouchInput, forceRefresh, gameMode, playerName, selectedLevel, startLevelAudio]);
+}, [
+  clearTouchInput,
+  flushPlayAnalytics,
+  forceRefresh,
+  gameMode,
+  playerName,
+  selectedLevel,
+  startLevelAudio,
+]);
 
 const switchGameMode = useCallback(() => {
   const nextViewMode = gameMode === "3d" ? "2d" : "3d";
@@ -802,6 +838,12 @@ const loop = (timestamp) => {
     world.time += dt;
     world.fogPulse += dt;
 
+    if (
+      world.time - analyticsLastRecordedTimeRef.current >= 30
+    ) {
+      flushPlayAnalytics(world);
+    }
+
     if (world.labyrinthMode) {
       updateLabyrinth(world);
     } else {
@@ -856,6 +898,15 @@ const loop = (timestamp) => {
     }
   }
 
+  if (
+    (world.victory || world.gameOver) &&
+    !analyticsRunEndedRef.current
+  ) {
+    analyticsRunEndedRef.current = true;
+    flushPlayAnalytics(world);
+    void recordGameFinished(world);
+  }
+
   if (world.audioEvents?.length) {
     const audioEvents = world.audioEvents.splice(0, world.audioEvents.length);
     audioRef.current?.playEvents(audioEvents, world.level.themeKey);
@@ -887,7 +938,12 @@ return () => {
   cancelAnimationFrame(frameRef.current);
 };
 
-}, [forceRefresh, recordLeaderboardScore, selectedLevel]);
+}, [
+  flushPlayAnalytics,
+  forceRefresh,
+  recordLeaderboardScore,
+  selectedLevel,
+]);
 
 if (!selectedLevel) {
   return (
@@ -931,7 +987,9 @@ return (
 >
   <style>{GAME_STYLES}</style>
 
-  <div className="maze-game-shell">
+  <div
+    className={`maze-game-shell${gameMode === "3d" ? " mode-3d" : ""}`}
+  >
     <main className="maze-stage">
       <div className="maze-frame">
         <canvas
@@ -990,6 +1048,64 @@ return (
             <span>Landscape gives you a much larger maze view.</span>
           </div>
         )}
+
+        {gameMode === "3d" &&
+          world.labyrinthMode &&
+          !touchControlsEnabled && (
+            <div className="three-d-labyrinth-locator">
+              <MinimapPanel world={world} compact />
+            </div>
+          )}
+
+        {gameMode === "3d" && (
+          <div className="three-d-minimal-settings">
+            <button
+              type="button"
+              className="three-d-gear-only"
+              aria-label="Settings"
+              title="Settings"
+              aria-expanded={settingsOpen}
+              onClick={() => setSettingsOpen((open) => !open)}
+            >
+              ⚙
+            </button>
+
+            {settingsOpen && (
+              <div className="three-d-settings-popover">
+                <SettingsControls
+                  viewMode={gameMode}
+                  onToggleViewMode={switchGameMode}
+                  audioEnabled={audioEnabled}
+                  musicVolume={musicVolume}
+                  sfxVolume={sfxVolume}
+                  onToggleAudio={toggleAudio}
+                  onTestSound={handleTestSound}
+                  onMusicVolumeChange={handleMusicVolumeChange}
+                  onSfxVolumeChange={handleSfxVolumeChange}
+                  audioStatus={audioStatus}
+                />
+
+                <div className="three-d-settings-actions">
+                  <button type="button" onClick={resetWorld}>
+                    START NEW MAZE
+                  </button>
+                  <button type="button" onClick={handleMobileFullscreen}>
+                    FULLSCREEN
+                  </button>
+                  <button type="button" onClick={returnToLevelSelect}>
+                    LEVEL MENU
+                  </button>
+                </div>
+
+                {touchControlsEnabled && (
+                  <div className="three-d-look-note">
+                    Drag the right LOOK joystick to turn your view.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </main>
 
@@ -1014,77 +1130,25 @@ return (
       </aside>
     )}
 
-    {touchControlsEnabled && gameMode === "3d" && (
-      <aside className="mobile-3d-sidebar">
-        <ThreeDStatusSidebar
-          world={world}
-          storedPowerUps={storedPowerUps}
-          activePowerUps={activePowerUps}
-          onPowerUp={handleTouchPowerUp}
-          onBreaker={handleLabyrinthBreaker}
-          onStart={resetWorld}
-          onSwitchMode={switchGameMode}
-          onFullscreen={handleMobileFullscreen}
-          onExitLevel={returnToLevelSelect}
-          settingsOpen={settingsOpen}
-          onToggleSettings={() => setSettingsOpen((open) => !open)}
-          audioEnabled={audioEnabled}
-          musicVolume={musicVolume}
-          sfxVolume={sfxVolume}
-          onToggleAudio={toggleAudio}
-          onTestSound={handleTestSound}
-          onMusicVolumeChange={handleMusicVolumeChange}
-          onSfxVolumeChange={handleSfxVolumeChange}
-          audioStatus={audioStatus}
-        />
-      </aside>
-    )}
 
+    {gameMode === "2d" && (
     <aside className="maze-sidebar">
-      {gameMode === "3d" ? (
-        <div className="desktop-3d-sticky">
-          <ThreeDStatusSidebar
-            world={world}
-            storedPowerUps={storedPowerUps}
-            activePowerUps={activePowerUps}
-            onPowerUp={handleTouchPowerUp}
-            onBreaker={handleLabyrinthBreaker}
-            onStart={resetWorld}
-            onSwitchMode={switchGameMode}
-            onFullscreen={handleMobileFullscreen}
-            onExitLevel={returnToLevelSelect}
-            settingsOpen={settingsOpen}
-            onToggleSettings={() => setSettingsOpen((open) => !open)}
-            audioEnabled={audioEnabled}
-            musicVolume={musicVolume}
-            sfxVolume={sfxVolume}
-            onToggleAudio={toggleAudio}
-            onTestSound={handleTestSound}
-            onMusicVolumeChange={handleMusicVolumeChange}
-            onSfxVolumeChange={handleSfxVolumeChange}
-            audioStatus={audioStatus}
-          />
-        </div>
-      ) : (
-        <>
-          <MinimapPanel world={world} />
-          <SidebarSettings
-            open={settingsOpen}
-            onToggle={() => setSettingsOpen((open) => !open)}
-            viewMode={gameMode}
-            onToggleViewMode={switchGameMode}
-            audioEnabled={audioEnabled}
-            musicVolume={musicVolume}
-            sfxVolume={sfxVolume}
-            onToggleAudio={toggleAudio}
-            onTestSound={handleTestSound}
-            onMusicVolumeChange={handleMusicVolumeChange}
-            onSfxVolumeChange={handleSfxVolumeChange}
-            audioStatus={audioStatus}
-            onStart={resetWorld}
-          />
-        </>
-      )}
+      <MinimapPanel world={world} />
+      <SidebarSettings
+        open={settingsOpen}
+        onToggle={() => setSettingsOpen((open) => !open)}
+        viewMode={gameMode}
+        onToggleViewMode={switchGameMode}
+        audioEnabled={audioEnabled}
+        musicVolume={musicVolume}
+        sfxVolume={sfxVolume}
+        onToggleAudio={toggleAudio}
+        onTestSound={handleTestSound}
+        onMusicVolumeChange={handleMusicVolumeChange}
+        onSfxVolumeChange={handleSfxVolumeChange}
+        audioStatus={audioStatus}
+        onStart={resetWorld}
+      />
       <section
         style={{
           padding: 18,
@@ -1582,6 +1646,7 @@ return (
 
 
     </aside>
+    )}
   </div>
 </div>
 ); }

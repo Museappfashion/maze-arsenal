@@ -5,12 +5,14 @@
 ```text
 mist-maze/
 ├── api/
-│   └── country.js
+│   ├── country.js
+│   └── developer-analytics.js
 ├── src/
 │   ├── App.jsx
 │   └── main.jsx
 ├── supabase/
-│   └── setup.sql
+│   ├── setup.sql
+│   └── developer-analytics.sql
 ├── .env.example
 ├── .gitignore
 ├── index.html
@@ -65,6 +67,12 @@ git push -u origin main
 3. Add these environment variables in Vercel Project Settings:
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_PUBLISHABLE_KEY`
+   - `SUPABASE_URL`
+   - `SUPABASE_SECRET_KEY`
+   - `DEVELOPER_DASHBOARD_KEY`
+
+`SUPABASE_SECRET_KEY` and `DEVELOPER_DASHBOARD_KEY` are server-only. Never
+prefix either one with `VITE_`.
 4. Deploy.
 5. Test the generated `.vercel.app` address.
 6. Add your custom domain under Vercel Project -> Settings -> Domains.
@@ -106,10 +114,12 @@ Before a run, choose:
 Labyrinth rules:
 
 - No enemies, weapons, ammo, medkits, or standard power-ups.
-- The maze changes while the run is in progress while preserving a route to the exit.
+- The maze changes repeatedly during the run while preserving a route to the exit.
+- Shifts are deliberately biased toward the player's current area so walls can visibly change inside the circle of light.
 - Purple Wall Breaker pickups can be stored up to 10 at a time.
 - Activating one gives 10 seconds of wall smashing.
-- Silver braced steel walls are permanent and cannot be smashed.
+- Silver braced steel walls are generated as complete wall segments, are more common, and cannot be smashed.
+- There is no revealing minimap. The locator shows only a blue player dot and green exit dot.
 - Labyrinth has its own dark lighting, reduced sight distance, and procedural music theme.
 - Reach the exit before the countdown reaches zero.
 - Labyrinth runs are not submitted to the combat leaderboards.
@@ -126,9 +136,35 @@ The current build includes:
 - Full-viewport mobile gameplay.
 - Landscape-first layout with a rotate-phone prompt in portrait.
 - Compact mobile health/ammo/weapon/time HUD.
-- Tap-to-expand mobile minimap.
-- Sonar enemy markers on the minimap.
+- Combat levels retain the mobile minimap and Sonar enemy markers.
+- Labyrinth uses only the blue/green-dot locator and never stores discovered-map tiles.
 - Higher canvas contrast on mobile.
 - Fullscreen/landscape button where the browser supports it.
 - Desktop keyboard and mouse controls remain unchanged.
+
+
+## Developer analytics
+
+Run `supabase/developer-analytics.sql` if the original database setup was
+already completed before this feature was added. Fresh installs can simply run
+the current `supabase/setup.sql`.
+
+The private dashboard is available at:
+
+```text
+/?developer=1
+```
+
+Enter the value configured as `DEVELOPER_DASHBOARD_KEY`.
+
+The dashboard shows per anonymous Supabase user:
+
+- games started and finished,
+- total active play minutes,
+- `$1`, `$2`, `$5`, and custom support-button click attempts,
+- latest in-game player name and last-seen time.
+
+Support counts are click attempts, not confirmed payments. The client has no
+SELECT permission on the analytics table; dashboard reads go through the
+server-only Vercel function.
 

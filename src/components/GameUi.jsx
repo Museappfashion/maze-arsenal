@@ -733,23 +733,6 @@ export function TouchControls({
   onNextWeapon,
   onPowerUp,
 }) {
-  const handleAttackPointerDown = useCallback(
-    (event) => {
-      event.preventDefault();
-      event.currentTarget.setPointerCapture?.(event.pointerId);
-      onAttackStart();
-    },
-    [onAttackStart],
-  );
-
-  const handleAttackPointerEnd = useCallback(
-    (event) => {
-      event.preventDefault();
-      onAttackEnd();
-    },
-    [onAttackEnd],
-  );
-
   return (
     <div className="touch-controls" aria-label="Touch game controls">
       <div className="touch-move-control">
@@ -768,18 +751,6 @@ export function TouchControls({
       </div>
 
       <div className="touch-action-controls">
-        <button
-          type="button"
-          className="touch-action-button touch-attack-button"
-          aria-label="Attack"
-          onPointerDown={handleAttackPointerDown}
-          onPointerUp={handleAttackPointerEnd}
-          onPointerCancel={handleAttackPointerEnd}
-          onContextMenu={(event) => event.preventDefault()}
-        >
-          ATTACK
-        </button>
-
         <button
           type="button"
           className="touch-action-button"

@@ -2,7 +2,15 @@
 import { queueSfx } from "../audio/MazeAudioEngine.js";
 import { AMMO_DROP_MIN_TILE_SPACING, AMMO_EXTRA_MAX_AMOUNT, AMMO_EXTRA_MIN_AMOUNT, AMMO_ROUTE_SPACING, AMMO_SUPPORT_MAX_AMOUNT, AMMO_SUPPORT_MELEE_CHANCE, AMMO_SUPPORT_MIN_AMOUNT, AMMO_SUPPORT_RANGED_CHANCE, MAX_AMMO } from "../config/ammo.js";
 import { CANVAS_HEIGHT, CANVAS_WIDTH, DRAW_TILE, FLOOR, MAX_EFFECTS, MOBILE_2D_ZOOM, VIEW_3D_TURN_SPEED, WALL } from "../config/constants.js";
-import { ENEMY_COSTS, ENEMY_DIFFICULTY_STAGES, ENEMY_TYPES, GUARANTEED_TURRETS } from "../config/enemies.js";
+import {
+  ENEMY_COSTS,
+  ENEMY_DIFFICULTY_STAGES,
+  ENEMY_PURSUIT_DECAY_SECONDS,
+  ENEMY_PURSUIT_MAX_SPEED_MULTIPLIER,
+  ENEMY_PURSUIT_RAMP_SECONDS,
+  ENEMY_TYPES,
+  GUARANTEED_TURRETS,
+} from "../config/enemies.js";
 import { POWER_UPS, POWER_UP_PICKUP_COUNT, POWER_UP_SPAWN_ORDER, POWER_UP_WALL_BREAK_CHARGES, getPowerUpDuration } from "../config/powerUps.js";
 import { getAmmoLabel, getAmmoMessageLabel, getAmmoPickupLabel, getPowerUpPresentation, getWeaponLabel, isMedievalTheme } from "../config/presentations.js";
 import { VISION_MARGIN } from "../config/runtime.js";
@@ -76,8 +84,8 @@ export function placeProgressionItems(world, distances, used) {
   }
 
   const extraAmmo = Math.max(
-    6,
-    Math.floor(world.floorTiles.length * 0.028),
+    5,
+    Math.floor(world.floorTiles.length * 0.024),
     Math.floor(world.exit.distance / AMMO_ROUTE_SPACING),
   );
   const medkits = Math.floor(world.floorTiles.length * 0.02);
@@ -173,7 +181,7 @@ const cooldownScale = rand(0.9, 1.08);
 
 const maxHp = Math.max(1, Math.round(config.hp * hpScale));
 
-world.enemies.push({ id: `enemy-${world.nextId++}`, kind, label: config.label, x: position.x, y: position.y, radius: config.radius * rand(0.96, 1.08), hp: maxHp, maxHp, speed: config.speed * speedScale, contactDamage: config.contactDamage ? Math.max(1, Math.round(config.contactDamage * damageScale)) : 0, projectileDamage: config.projectileDamage ? Math.max(1, Math.round(config.projectileDamage * damageScale)) : 0, attackCooldown: config.attackCooldown ? config.attackCooldown * cooldownScale : 0, awake: false, nextAttackAt: 0, nextContactAt: 0, lastAttackAt: -Infinity, attackStyle: null, lastHitAt: -Infinity, color: pickEnemyColor(config), orbitDir: chance(0.5) ? 1 : -1, }); }
+world.enemies.push({ id: `enemy-${world.nextId++}`, kind, label: config.label, x: position.x, y: position.y, radius: config.radius * rand(0.96, 1.08), hp: maxHp, maxHp, speed: config.speed * speedScale, pursuitHeat: 0, contactDamage: config.contactDamage ? Math.max(1, Math.round(config.contactDamage * damageScale)) : 0, projectileDamage: config.projectileDamage ? Math.max(1, Math.round(config.projectileDamage * damageScale)) : 0, attackCooldown: config.attackCooldown ? config.attackCooldown * cooldownScale : 0, awake: false, nextAttackAt: 0, nextContactAt: 0, lastAttackAt: -Infinity, attackStyle: null, lastHitAt: -Infinity, color: pickEnemyColor(config), orbitDir: chance(0.5) ? 1 : -1, }); }
 
 export function spawnEncounterPack(world, distances, used, stage, anchorPercent, budget) { const anchorTile = findTileNearPercent( world, distances, anchorPercent, stage.spread, used, );
 
@@ -675,6 +683,10 @@ if (enemy.kind === "turret") {
 
 hitCount += 1;
 
+if (hitCount >= 3) {
+  break;
+}
+
 }
 
 if (hitCount > 0) { setMessage(world, hitCount === 1 ? "Hit!" : `${hitCount} hits!`, 0.7); } }
@@ -1138,6 +1150,29 @@ if (
   enemy.awake = true;
 }
 
+const enemyTileX = Math.floor(enemy.x);
+const enemyTileY = Math.floor(enemy.y);
+const playerCanSeeEnemy =
+  enemy.awake &&
+  visibleStrengthAt(world, enemyTileX, enemyTileY) > 0.24 &&
+  hasLineOfSight(
+    world,
+    player.x,
+    player.y,
+    enemy.x,
+    enemy.y,
+  );
+
+const pursuitDelta = playerCanSeeEnemy
+  ? dt / ENEMY_PURSUIT_RAMP_SECONDS
+  : -dt / ENEMY_PURSUIT_DECAY_SECONDS;
+
+enemy.pursuitHeat = clamp(
+  (enemy.pursuitHeat ?? 0) + pursuitDelta,
+  0,
+  1,
+);
+
 if (enemy.awake) {
   const frostMultiplier = hasPowerUp(world, "frost") ? 0.5 : 1;
   const chargeMultiplier =
@@ -1145,8 +1180,17 @@ if (enemy.awake) {
     distanceToPlayer <= (config.chargeRange ?? 0)
       ? config.chargeSpeedMultiplier ?? 1
       : 1;
+  const pursuitMultiplier = lerp(
+    1,
+    ENEMY_PURSUIT_MAX_SPEED_MULTIPLIER,
+    enemy.pursuitHeat,
+  );
 
-  const moveSpeed = enemy.speed * frostMultiplier * chargeMultiplier;
+  const moveSpeed =
+    enemy.speed *
+    frostMultiplier *
+    chargeMultiplier *
+    pursuitMultiplier;
   const isRanged =
     Number.isFinite(config.attackRange) &&
     Number.isFinite(config.projectileSpeed) &&

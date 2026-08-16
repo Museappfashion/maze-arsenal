@@ -174,13 +174,6 @@ export const GAME_STYLES = `
       background: rgba(30, 41, 59, 0.94);
     }
 
-    .touch-attack-button {
-      min-width: 72px;
-      min-height: 58px;
-      border-color: rgba(251, 113, 133, 0.7);
-      background: rgba(159, 18, 57, 0.72);
-      color: #fff1f2;
-    }
 
     .touch-power-buttons {
       display: flex;
@@ -257,10 +250,6 @@ export const GAME_STYLES = `
         min-height: 40px;
       }
 
-      .touch-attack-button {
-        min-width: 66px;
-        min-height: 52px;
-      }
 
       .maze-sidebar {
         height: auto;
@@ -1246,9 +1235,6 @@ export const GAME_STYLES = `
         min-height: 36px;
       }
 
-      .touch-mobile .touch-attack-button {
-        min-height: 44px;
-      }
     }
 
   `;

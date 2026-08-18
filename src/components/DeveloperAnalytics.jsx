@@ -98,12 +98,6 @@ export function DeveloperAnalytics() {
           font-size: clamp(25px, 4vw, 38px);
         }
 
-        .developer-dashboard-subtitle {
-          margin: 7px 0 0;
-          color: #94a3b8;
-          font-size: 13px;
-        }
-
         .developer-dashboard a {
           color: #67e8f9;
         }
@@ -241,9 +235,6 @@ export function DeveloperAnalytics() {
         <header className="developer-dashboard-header">
           <div>
             <h1>Mist Maze Developer Analytics</h1>
-            <p className="developer-dashboard-subtitle">
-              Private aggregate activity dashboard.
-            </p>
           </div>
           <a href="/">← Back to Mist Maze</a>
         </header>

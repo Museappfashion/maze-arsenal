@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MAX_AMMO } from "../config/ammo.js";
 import { STEEL_WALL, WALL } from "../config/constants.js";
+import { LABYRINTH_LIGHT_ORDER, LABYRINTH_LIGHTS, getLabyrinthLight } from "../config/labyrinthLights.js";
 import { getAmmoLabel, getTheme, getWeaponLabel } from "../config/presentations.js";
 import { SUPPORT_LINKS } from "../config/support.js";
 import { WEAPON_ORDER } from "../config/weapons.js";
@@ -476,6 +477,7 @@ export function SidebarSettings({
 export function LabyrinthStatusPanel({
   world,
   onActivateBreaker,
+  onSelectLight,
   compact = false,
 }) {
   const remaining = getLabyrinthTimeRemaining(world);
@@ -483,6 +485,7 @@ export function LabyrinthStatusPanel({
   const activeRemaining = active
     ? Math.max(0, world.labyrinth.breakerEndsAt - world.time)
     : 0;
+  const equippedLight = getLabyrinthLight(world);
 
   return (
     <section
@@ -504,11 +507,32 @@ export function LabyrinthStatusPanel({
           <span>{world.labyrinth.breakerCharges}/10</span>
         </div>
         <div>
-          <strong>MAZE</strong>
-          <span>
-            {world.logicalCols}×{world.logicalRows}
-          </span>
+          <strong>LIGHT</strong>
+          <span>{equippedLight?.label ?? "Base Light"}</span>
         </div>
+      </div>
+
+      <div className="labyrinth-light-grid" aria-label="Collected light tools">
+        {LABYRINTH_LIGHT_ORDER.map((lightKey, index) => {
+          const light = LABYRINTH_LIGHTS[lightKey];
+          const owned = Boolean(world.labyrinth.ownedLights?.[lightKey]);
+          const selected = world.labyrinth.equippedLight === lightKey;
+          const hotkey = index === 9 ? "0" : String(index + 1);
+
+          return (
+            <button
+              key={lightKey}
+              type="button"
+              className={`labyrinth-light-button${selected ? " selected" : ""}`}
+              disabled={!owned}
+              title={owned ? light.description : `${light.label} not found`}
+              onClick={() => onSelectLight?.(lightKey)}
+            >
+              <strong>{hotkey}</strong>
+              <span>{light.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       <button
@@ -523,8 +547,8 @@ export function LabyrinthStatusPanel({
       </button>
 
       <div className="labyrinth-status-note">
-        Purple pickups give one 10-second Wall Breaker. Carry up to 10.
-        Silver steel walls cannot be smashed.
+        Light tools expand the base light you always have. Purple pickups give
+        one 10-second Wall Breaker. Silver steel walls cannot be smashed.
       </div>
     </section>
   );
@@ -539,6 +563,10 @@ export function MobileHudOverlay({
   onFullscreen,
   onActivateBreaker,
 }) {
+  const labyrinthLight = world.labyrinthMode
+    ? getLabyrinthLight(world)
+    : null;
+
   if (world.labyrinthMode) {
     return (
       <div className="mobile-hud-overlay labyrinth-mobile-hud">
@@ -552,6 +580,10 @@ export function MobileHudOverlay({
             <span>{world.labyrinth.breakerCharges}/10</span>
           </div>
           <div className="mobile-hud-chip mobile-hud-weapon">
+            <strong>LIGHT</strong>
+            <span>{labyrinthLight?.label ?? "Base Light"}</span>
+          </div>
+          <div className="mobile-hud-chip">
             <strong>DIFFICULTY</strong>
             <span>{world.labyrinth.difficultyLabel}</span>
           </div>
@@ -821,6 +853,39 @@ export function TouchJoystick({
   const lastPointRef = useRef(null);
   const [knob, setKnob] = useState({ x: 0, y: 0 });
 
+  const resetJoystick = useCallback(() => {
+    const hadPointer = pointerIdRef.current !== null;
+    pointerIdRef.current = null;
+    lastPointRef.current = null;
+    setKnob({ x: 0, y: 0 });
+
+    if (mode !== "look") {
+      onVector?.(0, 0);
+    }
+
+    if (hadPointer) {
+      onPointerEnd?.();
+    }
+  }, [mode, onPointerEnd, onVector]);
+
+  useEffect(() => {
+    const handleBlur = () => resetJoystick();
+    const handleVisibility = () => {
+      if (document.visibilityState !== "visible") {
+        resetJoystick();
+      }
+    };
+
+    window.addEventListener("blur", handleBlur);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      window.removeEventListener("blur", handleBlur);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      resetJoystick();
+    };
+  }, [resetJoystick]);
+
   const updateJoystick = useCallback(
     (event) => {
       const pad = padRef.current;
@@ -903,23 +968,16 @@ export function TouchJoystick({
     (event) => {
       if (
         pointerIdRef.current !== null &&
+        Number.isFinite(event?.pointerId) &&
         event.pointerId !== pointerIdRef.current
       ) {
         return;
       }
 
-      event.preventDefault();
-      pointerIdRef.current = null;
-      lastPointRef.current = null;
-      setKnob({ x: 0, y: 0 });
-
-      if (mode !== "look") {
-        onVector?.(0, 0);
-      }
-
-      onPointerEnd?.();
+      event?.preventDefault?.();
+      resetJoystick();
     },
-    [mode, onPointerEnd, onVector],
+    [resetJoystick],
   );
 
   return (
@@ -932,6 +990,7 @@ export function TouchJoystick({
       onPointerMove={handlePointerMove}
       onPointerUp={releasePointer}
       onPointerCancel={releasePointer}
+      onLostPointerCapture={releasePointer}
       onContextMenu={(event) => event.preventDefault()}
     >
       <span className="touch-joystick-label">{label}</span>
@@ -951,9 +1010,11 @@ export function TouchControls({
   onMove,
   onAim,
   onLookDelta,
-  onAttackStart,
-  onAttackEnd,
+  onAimStart,
+  onAimEnd,
   onNextWeapon,
+  onNextLight,
+  labyrinthLightLabel = "Base Light",
   onPowerUp,
   labyrinthMode = false,
   labyrinthBreakers = 0,
@@ -968,29 +1029,44 @@ export function TouchControls({
         <TouchJoystick label="MOVE" onVector={onMove} />
       </div>
 
-      {(!labyrinthMode || gameMode === "3d") && (
-        <div className="touch-aim-control">
-          <TouchJoystick
-            label={gameMode === "3d" ? "LOOK" : "AIM"}
-            mode={gameMode === "3d" ? "look" : "vector"}
-            onVector={onAim}
-            onLookDelta={onLookDelta}
-            onPointerStart={labyrinthMode ? undefined : onAttackStart}
-            onPointerEnd={labyrinthMode ? undefined : onAttackEnd}
-          />
-        </div>
-      )}
+      <div className="touch-aim-control">
+        <TouchJoystick
+          label={
+            labyrinthMode
+              ? "LOOK"
+              : gameMode === "3d"
+                ? "LOOK"
+                : "AIM"
+          }
+          mode={gameMode === "3d" ? "look" : "vector"}
+          onVector={onAim}
+          onLookDelta={onLookDelta}
+          onPointerStart={onAimStart}
+          onPointerEnd={onAimEnd}
+        />
+      </div>
 
       <div className="touch-action-controls">
         {labyrinthMode ? (
-          <button
-            type="button"
-            className="touch-action-button labyrinth-touch-breaker"
-            disabled={labyrinthBreakers <= 0}
-            onClick={onBreaker}
-          >
-            BREAKER {labyrinthBreakers}/10
-          </button>
+          <>
+            <button
+              type="button"
+              className="touch-action-button labyrinth-touch-light"
+              aria-label="Switch to next collected light"
+              onClick={onNextLight}
+            >
+              LIGHT
+              <span className="touch-light-label">{labyrinthLightLabel}</span>
+            </button>
+            <button
+              type="button"
+              className="touch-action-button labyrinth-touch-breaker"
+              disabled={labyrinthBreakers <= 0}
+              onClick={onBreaker}
+            >
+              BREAKER {labyrinthBreakers}/10
+            </button>
+          </>
         ) : (
           <>
             <button

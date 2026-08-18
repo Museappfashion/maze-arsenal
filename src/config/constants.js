@@ -90,7 +90,7 @@ export const LEVELS = {
     subtitle: "The Shifting Dark",
     themeKey: "labyrinth",
     themeLabel: "Shifting Dark",
-    description: "A massive timed maze that changes around you. No enemies. No weapons. Only the exit.",
+    description: "A massive timed maze that completely rebuilds around you. No enemies. Find light tools, break ordinary walls, and reach the exit.",
     labyrinthMode: true,
     leaderboard: false,
     logicalCols: 33,

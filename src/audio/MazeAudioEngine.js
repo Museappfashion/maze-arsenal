@@ -886,6 +886,20 @@ export class MazeAudioEngine {
         this.tone(620 * pitch, now, 0.06, 0.045, "sine", this.sfxGain);
         this.tone(930 * pitch, now + 0.045, 0.08, 0.045, "sine", this.sfxGain);
         break;
+      case "pickupLight":
+        this.tone(392, now, 0.12, 0.045, "sine", this.sfxGain);
+        this.tone(587.33, now + 0.08, 0.16, 0.05, "triangle", this.sfxGain);
+        this.tone(783.99, now + 0.16, 0.2, 0.04, "sine", this.sfxGain);
+        break;
+      case "lightSelect":
+        this.tone(523.25, now, 0.06, 0.035, "triangle", this.sfxGain);
+        this.tone(659.25, now + 0.04, 0.08, 0.03, "sine", this.sfxGain);
+        break;
+      case "labyrinthShift":
+        this.noise(now, 0.34, 0.11, this.sfxGain, 420);
+        this.tone(82.41, now, 0.46, 0.1, "sawtooth", this.sfxGain);
+        this.tone(58.27, now + 0.08, 0.52, 0.08, "triangle", this.sfxGain);
+        break;
       case "powerUpUse":
         [0, 4, 7, 12].forEach((semitone, index) => {
           this.tone(

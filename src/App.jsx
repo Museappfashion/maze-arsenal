@@ -6,12 +6,13 @@ import { LabyrinthStatusPanel, MinimapPanel, MobileHudOverlay, SettingsControls,
 import { LevelSelectScreen } from "./components/LevelSelectScreen.jsx";
 import { StatCard } from "./components/StatCard.jsx";
 import { MAX_AMMO } from "./config/ammo.js";
+import { getLabyrinthLight } from "./config/labyrinthLights.js";
 import { CANVAS_HEIGHT, CANVAS_WIDTH, DEFAULT_LEVEL_KEY, PASSAGE_WIDTH, VIEW_3D_MOUSE_SENSITIVITY, VIEW_3D_TOUCH_SENSITIVITY } from "./config/constants.js";
 import { getAmmoLabel, getWeaponLabel, getWeaponPresentation } from "./config/presentations.js";
 import { DISTANCE_FIELD_INTERVAL, HUD_REFRESH_INTERVAL } from "./config/runtime.js";
 import { WEAPONS, WEAPON_HOTKEY_MAP, WEAPON_ORDER } from "./config/weapons.js";
 import { activateStoredPowerUp, attack, computeDistanceField, getActivePowerUps, getStoredPowerUps, revealAroundPlayer, selectWeapon, setMessage, toggleLabels, updateEffects, updateEnemies, updatePickups, updatePlayer, updatePowerUps, updateProjectiles, updateVisionCache } from "./game/gameplay.js";
-import { activateLabyrinthBreaker, updateLabyrinth } from "./game/labyrinth.js";
+import { activateLabyrinthBreaker, selectLabyrinthLight, selectLabyrinthLightByHotkey, selectNextLabyrinthLight, updateLabyrinth } from "./game/labyrinth.js";
 import { getDiscoveredPercent } from "./game/maze.js";
 import { drawWorld } from "./game/rendering.js";
 import { createWorld, setWorldViewMode } from "./game/world.js";
@@ -25,6 +26,7 @@ const canvasRef = useRef(null);
 const worldRef = useRef(createWorld(DEFAULT_LEVEL_KEY));
 const keysRef = useRef({});
 const touchKeysRef = useRef({});
+const touchAimActiveRef = useRef(false);
 const frameRef = useRef(0);
 const lastTimeRef = useRef(0);
 const hudAccumulatorRef = useRef(0);
@@ -113,9 +115,29 @@ useEffect(() => {
 
 const clearTouchInput = useCallback(() => {
   touchKeysRef.current = {};
+  touchAimActiveRef.current = false;
   const world = worldRef.current;
   world.pointer.down = false;
+  world.pointer.inside = false;
+  world.touchAimActive = false;
 }, []);
+
+useEffect(() => {
+  const resetTouchState = () => clearTouchInput();
+  const handleVisibilityChange = () => {
+    if (document.visibilityState !== "visible") {
+      clearTouchInput();
+    }
+  };
+
+  window.addEventListener("blur", resetTouchState);
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+
+  return () => {
+    window.removeEventListener("blur", resetTouchState);
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
+  };
+}, [clearTouchInput]);
 
 const handleTouchMove = useCallback((x, y) => {
   const deadZone = 0.28;
@@ -147,12 +169,22 @@ const handleTouchLook = useCallback((deltaX) => {
   world.pointer.inside = false;
 }, []);
 
-const handleTouchAttackStart = useCallback(() => {
-  touchKeysRef.current[" "] = true;
-  attack(worldRef.current);
+const handleTouchAimStart = useCallback(() => {
+  const world = worldRef.current;
+  touchAimActiveRef.current = true;
+  world.touchAimActive = true;
+  world.pointer.inside = false;
+
+  if (!world.labyrinthMode) {
+    touchKeysRef.current[" "] = true;
+    attack(world);
+  }
 }, []);
 
-const handleTouchAttackEnd = useCallback(() => {
+const handleTouchAimEnd = useCallback(() => {
+  const world = worldRef.current;
+  touchAimActiveRef.current = false;
+  world.touchAimActive = false;
   touchKeysRef.current[" "] = false;
 }, []);
 
@@ -172,6 +204,21 @@ const handleTouchPowerUp = useCallback(
 
 const handleLabyrinthBreaker = useCallback(() => {
   if (activateLabyrinthBreaker(worldRef.current)) {
+    forceRefresh();
+  }
+}, [forceRefresh]);
+
+const handleLabyrinthLightSelect = useCallback(
+  (lightKey) => {
+    if (selectLabyrinthLight(worldRef.current, lightKey)) {
+      forceRefresh();
+    }
+  },
+  [forceRefresh],
+);
+
+const handleLabyrinthNextLight = useCallback(() => {
+  if (selectNextLabyrinthLight(worldRef.current)) {
     forceRefresh();
   }
 }, [forceRefresh]);
@@ -608,6 +655,10 @@ const handleKeyDown = (event) => { const world = worldRef.current; const key = e
       activateLabyrinthBreaker(world);
       forceRefresh();
     }
+
+    if (!event.repeat && selectLabyrinthLightByHotkey(world, key)) {
+      forceRefresh();
+    }
   } else {
     if (key === " " || key === "Enter") {
       attack(world);
@@ -1009,9 +1060,11 @@ return (
             onMove={handleTouchMove}
             onAim={handleTouchAim}
             onLookDelta={handleTouchLook}
-            onAttackStart={handleTouchAttackStart}
-            onAttackEnd={handleTouchAttackEnd}
+            onAimStart={handleTouchAimStart}
+            onAimEnd={handleTouchAimEnd}
             onNextWeapon={handleTouchNextWeapon}
+            onNextLight={handleLabyrinthNextLight}
+            labyrinthLightLabel={getLabyrinthLight(world)?.label ?? "Base Light"}
             onPowerUp={handleTouchPowerUp}
             labyrinthMode={world.labyrinthMode}
             labyrinthBreakers={world.labyrinth?.breakerCharges ?? 0}
@@ -1198,6 +1251,7 @@ return (
         <LabyrinthStatusPanel
           world={world}
           onActivateBreaker={handleLabyrinthBreaker}
+          onSelectLight={handleLabyrinthLightSelect}
         />
       )}
 

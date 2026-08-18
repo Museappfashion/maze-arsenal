@@ -42,9 +42,10 @@ function getLabyrinthControlsForViewMode(viewMode) {
     return [
       "Move: W / S · Strafe: A / D · Turn: mouse or arrows",
       "Wall Breaker: B, Space, Enter, or BREAKER button",
+      "Lights: 1-9 / 0 or LIGHT button",
       "Wall Breakers last 10 seconds · carry up to 10",
       "Steel walls cannot be smashed",
-      "Minimap: M",
+      "Locator: player and exit only",
       "New Labyrinth: START NEW MAZE in sidebar",
       "Esc: unlock mouse / choose level",
     ];
@@ -53,9 +54,10 @@ function getLabyrinthControlsForViewMode(viewMode) {
   return [
     "Move: WASD, arrow keys, or touch joystick",
     "Wall Breaker: B, Space, Enter, or BREAKER button",
+    "Lights: 1-9 / 0 or LIGHT button",
     "Wall Breakers last 10 seconds · carry up to 10",
     "Steel walls cannot be smashed",
-    "Minimap: M",
+    "Locator: player and exit only",
     "New Labyrinth: START NEW MAZE in sidebar",
   ];
 }
@@ -74,6 +76,7 @@ export function setWorldViewMode(world, viewMode) {
   }
   world.pointer.down = false;
   world.pointer.inside = false;
+  world.touchAimActive = false;
 
   setMessage(
     world,
@@ -140,6 +143,7 @@ export function createWorld(
       down: false,
       inside: false,
     },
+    touchAimActive: false,
     discovered: new Uint8Array(maze.width * maze.height),
     distanceField: new Int32Array(maze.width * maze.height),
     distanceTimer: 0,

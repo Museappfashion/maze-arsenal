@@ -798,6 +798,72 @@ export const GAME_STYLES = `
       line-height: 1.45;
     }
 
+    .labyrinth-light-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 5px;
+    }
+
+    .labyrinth-light-button {
+      min-width: 0;
+      min-height: 34px;
+      padding: 5px 7px;
+      display: grid;
+      grid-template-columns: 18px minmax(0, 1fr);
+      align-items: center;
+      gap: 5px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 8px;
+      background: rgba(15, 23, 42, 0.7);
+      color: #cbd5e1;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .labyrinth-light-button strong {
+      color: #94a3b8;
+      font-size: 9px;
+      text-align: center;
+    }
+
+    .labyrinth-light-button span {
+      overflow: hidden;
+      font-size: 9px;
+      font-weight: 800;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .labyrinth-light-button.selected {
+      border-color: rgba(253, 230, 138, 0.74);
+      background: rgba(120, 53, 15, 0.46);
+      color: #fef3c7;
+      box-shadow: 0 0 14px rgba(251, 191, 36, 0.12);
+    }
+
+    .labyrinth-light-button:disabled {
+      opacity: 0.28;
+      cursor: not-allowed;
+    }
+
+    .labyrinth-touch-light {
+      border-color: rgba(253, 230, 138, 0.52) !important;
+      background: rgba(120, 53, 15, 0.58) !important;
+      color: #fef3c7 !important;
+      display: grid;
+      gap: 2px;
+    }
+
+    .touch-light-label {
+      max-width: 105px;
+      overflow: hidden;
+      font-size: 8px;
+      font-weight: 700;
+      letter-spacing: 0;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
     .labyrinth-touch-controls .touch-action-controls {
       min-width: 112px;
     }

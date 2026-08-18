@@ -5,18 +5,18 @@ import { CANVAS_HEIGHT, CANVAS_WIDTH, DRAW_TILE, FLOOR, MAX_EFFECTS, MOBILE_2D_Z
 import {
   ENEMY_COSTS,
   ENEMY_DIFFICULTY_STAGES,
-  ENEMY_PURSUIT_DECAY_SECONDS,
   ENEMY_PURSUIT_MAX_SPEED_MULTIPLIER,
   ENEMY_PURSUIT_RAMP_SECONDS,
   ENEMY_TYPES,
   GUARANTEED_TURRETS,
 } from "../config/enemies.js";
+import { getLabyrinthLightStrength } from "../config/labyrinthLights.js";
 import { POWER_UPS, POWER_UP_PICKUP_COUNT, POWER_UP_SPAWN_ORDER, POWER_UP_WALL_BREAK_CHARGES, getPowerUpDuration } from "../config/powerUps.js";
 import { getAmmoLabel, getAmmoMessageLabel, getAmmoPickupLabel, getPowerUpPresentation, getWeaponLabel, isMedievalTheme } from "../config/presentations.js";
 import { VISION_MARGIN } from "../config/runtime.js";
 import { WEAPONS, WEAPON_ORDER, WEAPON_SPAWN_PLAN } from "../config/weapons.js";
 import { addPickup, bfsDistances, circleHitsWall, findNearbyOpenTiles, findSpacedSpawnTile, findSpawnTile, findTileNearPercent, hasLineOfSight, isWalkable, moveWithCollisions, spawnProjectile } from "./maze.js";
-import { collectLabyrinthBreaker, isLabyrinthWorld, labyrinthBreakerActive } from "./labyrinth.js";
+import { collectLabyrinthBreaker, collectLabyrinthLight, isLabyrinthWorld, labyrinthBreakerActive } from "./labyrinth.js";
 import { angleDelta, chance, clamp, indexOfTile, lerp, normalize, rand, randInt, shuffle, tileCenter, weightedChoice } from "../utils/math.js";
 import { getPlayerDisplayName } from "../utils/player.js";
 
@@ -186,7 +186,7 @@ const cooldownScale = rand(0.9, 1.08);
 
 const maxHp = Math.max(1, Math.round(config.hp * hpScale));
 
-world.enemies.push({ id: `enemy-${world.nextId++}`, kind, label: config.label, x: position.x, y: position.y, radius: config.radius * rand(0.96, 1.08), hp: maxHp, maxHp, speed: config.speed * speedScale, pursuitHeat: 0, contactDamage: config.contactDamage ? Math.max(1, Math.round(config.contactDamage * damageScale)) : 0, projectileDamage: config.projectileDamage ? Math.max(1, Math.round(config.projectileDamage * damageScale)) : 0, attackCooldown: config.attackCooldown ? config.attackCooldown * cooldownScale : 0, awake: false, nextAttackAt: 0, nextContactAt: 0, lastAttackAt: -Infinity, attackStyle: null, lastHitAt: -Infinity, color: pickEnemyColor(config), orbitDir: chance(0.5) ? 1 : -1, }); }
+world.enemies.push({ id: `enemy-${world.nextId++}`, kind, label: config.label, x: position.x, y: position.y, radius: config.radius * rand(0.96, 1.08), hp: maxHp, maxHp, speed: config.speed * speedScale, pursuitStartedAt: null, contactDamage: config.contactDamage ? Math.max(1, Math.round(config.contactDamage * damageScale)) : 0, projectileDamage: config.projectileDamage ? Math.max(1, Math.round(config.projectileDamage * damageScale)) : 0, attackCooldown: config.attackCooldown ? config.attackCooldown * cooldownScale : 0, awake: false, nextAttackAt: 0, nextContactAt: 0, lastAttackAt: -Infinity, attackStyle: null, lastHitAt: -Infinity, color: pickEnemyColor(config), orbitDir: chance(0.5) ? 1 : -1, }); }
 
 export function spawnEncounterPack(world, distances, used, stage, anchorPercent, budget) { const anchorTile = findTileNearPercent( world, distances, anchorPercent, stage.spread, used, );
 
@@ -334,6 +334,20 @@ export function getPlayerSpeed(world) {
   return world.player.speed * (hasPowerUp(world, "haste") ? 1.75 : 1);
 }
 
+export function getEnemyPursuitMultiplier(enemy, worldTime) {
+  if (!enemy.awake || !Number.isFinite(enemy.pursuitStartedAt)) {
+    return 1;
+  }
+
+  const progress = clamp(
+    (worldTime - enemy.pursuitStartedAt) / ENEMY_PURSUIT_RAMP_SECONDS,
+    0,
+    1,
+  );
+
+  return lerp(1, ENEMY_PURSUIT_MAX_SPEED_MULTIPLIER, progress);
+}
+
 export function getPlayerDamageMultiplier(world) {
   return hasPowerUp(world, "berserk") ? 2 : 1;
 }
@@ -390,6 +404,36 @@ export function getPlayerPickupBonus(world) {
   return hasPowerUp(world, "magnet") ? 0.5 : 0;
 }
 
+export function addCappedResource(currentValue, amount, maximum) {
+  const current = Math.max(0, Number(currentValue) || 0);
+  const gain = Math.max(0, Number(amount) || 0);
+  const cap = Math.max(0, Number(maximum) || 0);
+
+  if (current >= cap || gain <= 0) {
+    return current;
+  }
+
+  return Math.min(cap, current + gain);
+}
+
+export function healPlayer(world, amount) {
+  world.player.hp = addCappedResource(
+    world.player.hp,
+    amount,
+    world.player.maxHp,
+  );
+  return world.player.hp;
+}
+
+export function givePlayerAmmo(world, amount) {
+  world.player.ammo = addCappedResource(
+    world.player.ammo,
+    amount,
+    MAX_AMMO,
+  );
+  return world.player.ammo;
+}
+
 export function getDamageTakenMultiplier(world) {
   return hasPowerUp(world, "shield") ? 0.5 : 1;
 }
@@ -401,11 +445,7 @@ export function getProjectilePierce(world) {
 export function applyPlayerHitEffects(world, dealtDamage) {
   if (hasPowerUp(world, "vampirism")) {
     const lifesteal = Math.max(1, Math.round(dealtDamage * 0.22));
-    world.player.hp = clamp(
-      world.player.hp + lifesteal,
-      0,
-      world.player.maxHp,
-    );
+    healPlayer(world, lifesteal);
   }
 }
 
@@ -490,19 +530,19 @@ export function activatePowerUp(world, key) {
 
   if (key === "juggernaut" && !wasActive) {
     player.maxHp = Math.round(player.baseMaxHp * 2.2);
-    player.hp = clamp(
-      player.hp + Math.round(player.baseMaxHp),
-      0,
+    player.hp = addCappedResource(
+      player.hp,
+      Math.round(player.baseMaxHp),
       player.maxHp,
     );
   }
 
   if (key === "ammoSurge") {
-    player.ammo = clamp(player.ammo + 50, 0, MAX_AMMO);
+    givePlayerAmmo(world, 50);
   }
 
   if (key === "regen") {
-    player.hp = clamp(player.hp + 25, 0, player.maxHp);
+    healPlayer(world, 25);
   }
 
   const nextState = { endsAt: world.time + duration };
@@ -523,7 +563,6 @@ export function expirePowerUp(world, key) {
 
   if (key === "juggernaut") {
     player.maxHp = player.baseMaxHp;
-    player.hp = clamp(player.hp, 0, player.maxHp);
   }
 }
 
@@ -531,11 +570,11 @@ export function updatePowerUps(world, dt) {
   const player = world.player;
 
   if (hasPowerUp(world, "regen")) {
-    player.hp = clamp(player.hp + 7 * dt, 0, player.maxHp);
+    healPlayer(world, 7 * dt);
   }
 
   if (hasPowerUp(world, "ammoSurge")) {
-    player.ammo = clamp(player.ammo + 10 * dt, 0, MAX_AMMO);
+    givePlayerAmmo(world, 10 * dt);
   }
 
   for (const [key, state] of Object.entries(player.powerUps)) {
@@ -571,15 +610,7 @@ const dot =
     : 1;
 
 if (isLabyrinthWorld(world)) {
-  const radius = world.labyrinth.sightRadius;
-
-  if (distance <= radius) { return 1; }
-
-  if (distance <= radius + 2.6 && dot > 0.88) { return 0.62; }
-
-  if (distance <= radius + 1.2 && dot > 0.62) { return 0.28; }
-
-  return 0;
+  return getLabyrinthLightStrength(world, centerX, centerY);
 }
 
 if (distance <= 5 + vision.sightBonus) { return 1; }
@@ -897,7 +928,7 @@ if (keys.ArrowUp || keys.w) moveY -= 1; if (keys.ArrowDown || keys.s) moveY += 1
 
 if (moveX !== 0 || moveY !== 0) { const direction = normalize(moveX, moveY); const speed = getPlayerSpeed(world); trySmashWalls(world, player, direction.x, direction.y); moveWithCollisions( world, player, direction.x * speed * dt, direction.y * speed * dt, );
 
-if (!world.pointer.inside) {
+if (!world.pointer.inside && !world.touchAimActive) {
   player.facing = Math.atan2(direction.y, direction.x);
 }
 
@@ -947,6 +978,15 @@ if (distance > collectRadius) {
   continue;
 }
 
+if (pickup.type === "labyrinthLight") {
+  if (collectLabyrinthLight(world, pickup.lightKey)) {
+    continue;
+  }
+
+  remaining.push(pickup);
+  continue;
+}
+
 if (pickup.type === "labyrinthBreaker") {
   if (collectLabyrinthBreaker(world)) {
     queueSfx(world, "pickupPowerUp", { powerUpKey: "breaker" });
@@ -974,7 +1014,7 @@ if (pickup.type === "weapon") {
 
 if (pickup.type === "ammo") {
   const before = player.ammo;
-  player.ammo = clamp(player.ammo + pickup.amount, 0, MAX_AMMO);
+  givePlayerAmmo(world, pickup.amount);
   const gained = Math.max(0, Math.floor(player.ammo) - Math.floor(before));
 
   if (gained > 0) {
@@ -988,7 +1028,7 @@ if (pickup.type === "ammo") {
 
 if (pickup.type === "medkit") {
   const before = player.hp;
-  player.hp = clamp(player.hp + pickup.amount, 0, player.maxHp);
+  healPlayer(world, pickup.amount);
   const restored = Math.max(0, Math.round(player.hp - before));
 
   if (restored > 0) {
@@ -1125,7 +1165,7 @@ export function damagePlayer(world, amount, sourceX = null, sourceY = null) {
 
 const actualDamage = Math.max( 1, Math.round(amount * getDamageTakenMultiplier(world)), );
 
-world.player.hp = clamp(world.player.hp - actualDamage, 0, world.player.maxHp);
+world.player.hp = Math.max(0, world.player.hp - actualDamage);
 world.damageFlash = Math.min(0.92, (world.damageFlash ?? 0) + 0.46);
 world.damageKick = Math.min(1, (world.damageKick ?? 0) + 0.58);
 world.lastDamageAt = world.time;
@@ -1192,12 +1232,8 @@ for (const enemy of world.enemies) { if (enemy.hp <= 0) { world.kills += 1; queu
   }
 
   if (hasPowerUp(world, "bounty")) {
-    world.player.ammo = clamp(world.player.ammo + 10, 0, MAX_AMMO);
-    world.player.hp = clamp(
-      world.player.hp + 7,
-      0,
-      world.player.maxHp,
-    );
+    givePlayerAmmo(world, 10);
+    healPlayer(world, 7);
   }
 
   continue;
@@ -1218,30 +1254,12 @@ if (
     (fieldDistance !== -1 && fieldDistance <= config.alertRadius))
 ) {
   enemy.awake = true;
+  enemy.pursuitStartedAt = world.time;
 }
 
-const enemyTileX = Math.floor(enemy.x);
-const enemyTileY = Math.floor(enemy.y);
-const playerCanSeeEnemy =
-  enemy.awake &&
-  visibleStrengthAt(world, enemyTileX, enemyTileY) > 0.24 &&
-  hasLineOfSight(
-    world,
-    player.x,
-    player.y,
-    enemy.x,
-    enemy.y,
-  );
-
-const pursuitDelta = playerCanSeeEnemy
-  ? dt / ENEMY_PURSUIT_RAMP_SECONDS
-  : -dt / ENEMY_PURSUIT_DECAY_SECONDS;
-
-enemy.pursuitHeat = clamp(
-  (enemy.pursuitHeat ?? 0) + pursuitDelta,
-  0,
-  1,
-);
+if (enemy.awake && !Number.isFinite(enemy.pursuitStartedAt)) {
+  enemy.pursuitStartedAt = world.time;
+}
 
 if (enemy.awake) {
   const frostMultiplier = hasPowerUp(world, "frost") ? 0.5 : 1;
@@ -1250,11 +1268,7 @@ if (enemy.awake) {
     distanceToPlayer <= (config.chargeRange ?? 0)
       ? config.chargeSpeedMultiplier ?? 1
       : 1;
-  const pursuitMultiplier = lerp(
-    1,
-    ENEMY_PURSUIT_MAX_SPEED_MULTIPLIER,
-    enemy.pursuitHeat,
-  );
+  const pursuitMultiplier = getEnemyPursuitMultiplier(enemy, world.time);
 
   const moveSpeed =
     enemy.speed *

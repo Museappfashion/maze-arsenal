@@ -11,8 +11,15 @@ import {
   normalizeLabyrinthOptions,
 } from "../config/labyrinth.js";
 import {
+  LABYRINTH_LIGHT_HOTKEY_MAP,
+  LABYRINTH_LIGHT_ORDER,
+  LABYRINTH_LIGHTS,
+  createOwnedLabyrinthLights,
+} from "../config/labyrinthLights.js";
+import {
   bfsDistances,
   collectFloorTiles,
+  generateMaze,
   logicalCellOrigin,
 } from "./maze.js";
 import {
@@ -43,7 +50,19 @@ export function createLabyrinthState(options = {}) {
     nextMutationAt: config.mutationInterval,
     mutationNumber: 0,
     lastShiftAt: -Infinity,
+    equippedLight: null,
+    ownedLights: createOwnedLabyrinthLights(),
   };
+}
+
+function queueLabyrinthAudio(world, type, detail = {}) {
+  if (!Array.isArray(world.audioEvents)) {
+    world.audioEvents = [];
+  }
+
+  if (world.audioEvents.length < 48) {
+    world.audioEvents.push({ type, ...detail });
+  }
 }
 
 function chooseExitByTargetDistance(world, distances) {
@@ -73,21 +92,6 @@ function chooseExitByTargetDistance(world, distances) {
   return best;
 }
 
-function isProtectedWall(world, x, y) {
-  const playerTileX = Math.floor(world.player.x);
-  const playerTileY = Math.floor(world.player.y);
-
-  if (x === playerTileX && y === playerTileY) {
-    return true;
-  }
-
-  return world.pickups.some(
-    (pickup) =>
-      Math.floor(pickup.x) === x &&
-      Math.floor(pickup.y) === y,
-  );
-}
-
 function getConnectionTiles(cellX, cellY, direction) {
   const origin = logicalCellOrigin(cellX, cellY);
   const tiles = [];
@@ -107,180 +111,6 @@ function getConnectionTiles(cellX, cellY, direction) {
   return tiles;
 }
 
-function setConnectionState(world, cellX, cellY, direction, open) {
-  const neighbor =
-    direction === "e"
-      ? { x: cellX + 1, y: cellY, opposite: "w" }
-      : { x: cellX, y: cellY + 1, opposite: "n" };
-
-  world.connections[cellY][cellX][direction] = open;
-  world.connections[neighbor.y][neighbor.x][neighbor.opposite] = open;
-
-  const tileValue = open ? FLOOR : WALL;
-  for (const tile of getConnectionTiles(cellX, cellY, direction)) {
-    world.grid[tile.y][tile.x] = tileValue;
-  }
-}
-
-function connectionIsSteel(world, cellX, cellY, direction) {
-  return getConnectionTiles(cellX, cellY, direction).some(
-    ({ x, y }) => world.grid[y][x] === STEEL_WALL,
-  );
-}
-
-function connectionIsProtected(world, cellX, cellY, direction) {
-  return getConnectionTiles(cellX, cellY, direction).some(
-    ({ x, y }) => isProtectedWall(world, x, y),
-  );
-}
-
-function getMutationCandidates(world, open) {
-  const candidates = [];
-
-  for (let y = 0; y < world.logicalRows; y += 1) {
-    for (let x = 0; x < world.logicalCols; x += 1) {
-      if (x + 1 < world.logicalCols) {
-        const isOpen = world.connections[y][x].e;
-        if (
-          isOpen === open &&
-          !connectionIsProtected(world, x, y, "e") &&
-          (open || !connectionIsSteel(world, x, y, "e"))
-        ) {
-          candidates.push({ x, y, direction: "e" });
-        }
-      }
-
-      if (y + 1 < world.logicalRows) {
-        const isOpen = world.connections[y][x].s;
-        if (
-          isOpen === open &&
-          !connectionIsProtected(world, x, y, "s") &&
-          (open || !connectionIsSteel(world, x, y, "s"))
-        ) {
-          candidates.push({ x, y, direction: "s" });
-        }
-      }
-    }
-  }
-
-  return candidates;
-}
-
-function candidateDistanceToPlayer(world, candidate) {
-  const tiles = getConnectionTiles(
-    candidate.x,
-    candidate.y,
-    candidate.direction,
-  );
-
-  const center = tiles.reduce(
-    (point, tile) => ({
-      x: point.x + tile.x + 0.5,
-      y: point.y + tile.y + 0.5,
-    }),
-    { x: 0, y: 0 },
-  );
-
-  center.x /= tiles.length;
-  center.y /= tiles.length;
-
-  return Math.hypot(
-    center.x - world.player.x,
-    center.y - world.player.y,
-  );
-}
-
-function randomCandidate(world, candidates, preferPlayerLight = false) {
-  if (!candidates.length) {
-    return null;
-  }
-
-  let pool = candidates;
-
-  if (preferPlayerLight) {
-    const visibleRange = world.labyrinth.sightRadius + 2.5;
-    const nearby = candidates.filter(
-      (candidate) =>
-        candidateDistanceToPlayer(world, candidate) <= visibleRange,
-    );
-
-    if (nearby.length && Math.random() < 0.72) {
-      pool = nearby;
-    }
-  }
-
-  return pool[Math.floor(Math.random() * pool.length)];
-}
-
-function canStillReachExit(world) {
-  const playerTile = {
-    x: clamp(Math.floor(world.player.x), 0, world.width - 1),
-    y: clamp(Math.floor(world.player.y), 0, world.height - 1),
-  };
-  const distances = bfsDistances(world, playerTile);
-  return (
-    distances[indexOfTile(world.width, world.exit.x, world.exit.y)] >= 0
-  );
-}
-
-function mutateOnce(world) {
-  const closed = randomCandidate(
-    world,
-    getMutationCandidates(world, false),
-    true,
-  );
-  if (closed) {
-    setConnectionState(
-      world,
-      closed.x,
-      closed.y,
-      closed.direction,
-      true,
-    );
-  }
-
-  const opens = getMutationCandidates(world, true);
-
-  for (let attempt = 0; attempt < Math.min(24, opens.length); attempt += 1) {
-    const candidate = randomCandidate(world, opens, true);
-
-    if (!candidate) {
-      break;
-    }
-
-    if (
-      closed &&
-      candidate.x === closed.x &&
-      candidate.y === closed.y &&
-      candidate.direction === closed.direction
-    ) {
-      continue;
-    }
-
-    setConnectionState(
-      world,
-      candidate.x,
-      candidate.y,
-      candidate.direction,
-      false,
-    );
-
-    if (canStillReachExit(world)) {
-      return true;
-    }
-
-    setConnectionState(
-      world,
-      candidate.x,
-      candidate.y,
-      candidate.direction,
-      true,
-    );
-  }
-
-  return Boolean(closed);
-}
-
 function refreshTopologyCaches(world) {
   world.floorTiles = collectFloorTiles(world);
   world.floorCount = world.floorTiles.length;
@@ -289,72 +119,142 @@ function refreshTopologyCaches(world) {
   world.minimapDirty = true;
 }
 
-export function mutateLabyrinth(world) {
-  if (!isLabyrinthWorld(world) || world.gameOver || world.victory) {
-    return false;
+function findNearestFloorTile(world, startX, startY) {
+  const maxRadius = Math.max(world.width, world.height);
+
+  for (let radius = 0; radius <= maxRadius; radius += 1) {
+    for (let dx = -radius; dx <= radius; dx += 1) {
+      const dy = radius - Math.abs(dx);
+
+      for (const sign of dy === 0 ? [1] : [-1, 1]) {
+        const x = startX + dx;
+        const y = startY + dy * sign;
+
+        if (
+          x > 0 &&
+          y > 0 &&
+          x < world.width - 1 &&
+          y < world.height - 1 &&
+          world.grid[y][x] === FLOOR
+        ) {
+          return { x, y };
+        }
+      }
+    }
   }
 
-  let changed = false;
+  return null;
+}
 
-  for (let index = 0; index < world.labyrinth.mutationCount; index += 1) {
-    changed = mutateOnce(world) || changed;
+function carvePathToFloor(world, tileX, tileY) {
+  const target = findNearestFloorTile(world, tileX, tileY);
+  if (!target) {
+    return;
   }
 
-  if (changed) {
-    refreshTopologyCaches(world);
-    world.labyrinth.mutationNumber += 1;
-    world.labyrinth.lastShiftAt = world.time;
-    world.message =
-      `The Labyrinth shifts — change ${world.labyrinth.mutationNumber}`;
-    world.messageTtl = 1.6;
+  let x = tileX;
+  let y = tileY;
+  world.grid[y][x] = FLOOR;
+
+  while (x !== target.x) {
+    x += Math.sign(target.x - x);
+    if (x > 0 && x < world.width - 1) {
+      world.grid[y][x] = FLOOR;
+    }
   }
 
-  return changed;
+  while (y !== target.y) {
+    y += Math.sign(target.y - y);
+    if (y > 0 && y < world.height - 1) {
+      world.grid[y][x] = FLOOR;
+    }
+  }
+}
+
+function preservePlayerPosition(world) {
+  const player = world.player;
+  const centerTileX = clamp(Math.floor(player.x), 1, world.width - 2);
+  const centerTileY = clamp(Math.floor(player.y), 1, world.height - 2);
+  const clearance = player.radius + 0.08;
+  const minX = clamp(Math.floor(player.x - clearance), 1, world.width - 2);
+  const maxX = clamp(Math.floor(player.x + clearance), 1, world.width - 2);
+  const minY = clamp(Math.floor(player.y - clearance), 1, world.height - 2);
+  const maxY = clamp(Math.floor(player.y + clearance), 1, world.height - 2);
+
+  carvePathToFloor(world, centerTileX, centerTileY);
+
+  for (let y = minY; y <= maxY; y += 1) {
+    for (let x = minX; x <= maxX; x += 1) {
+      world.grid[y][x] = FLOOR;
+    }
+  }
+}
+
+function preserveExitPosition(world) {
+  const x = clamp(world.exit.x, 1, world.width - 2);
+  const y = clamp(world.exit.y, 1, world.height - 2);
+  carvePathToFloor(world, x, y);
+  world.grid[y][x] = FLOOR;
 }
 
 export function markSteelWalls(world) {
   const chance = world.labyrinth.steelChance;
+  world.labyrinth.steelSegments = [];
 
   for (let y = 0; y < world.logicalRows; y += 1) {
     for (let x = 0; x < world.logicalCols; x += 1) {
-      if (
-        x + 1 < world.logicalCols &&
-        !world.connections[y][x].e &&
-        Math.random() < chance
-      ) {
-        for (const tile of getConnectionTiles(x, y, "e")) {
-          if (world.grid[tile.y][tile.x] === WALL) {
+      if (x + 1 < world.logicalCols && !world.connections[y][x].e) {
+        const tiles = getConnectionTiles(x, y, "e");
+        if (
+          tiles.every((tile) => world.grid[tile.y][tile.x] === WALL) &&
+          Math.random() < chance
+        ) {
+          for (const tile of tiles) {
             world.grid[tile.y][tile.x] = STEEL_WALL;
           }
+          world.labyrinth.steelSegments.push({
+            x,
+            y,
+            direction: "e",
+          });
         }
       }
 
-      if (
-        y + 1 < world.logicalRows &&
-        !world.connections[y][x].s &&
-        Math.random() < chance
-      ) {
-        for (const tile of getConnectionTiles(x, y, "s")) {
-          if (world.grid[tile.y][tile.x] === WALL) {
+      if (y + 1 < world.logicalRows && !world.connections[y][x].s) {
+        const tiles = getConnectionTiles(x, y, "s");
+        if (
+          tiles.every((tile) => world.grid[tile.y][tile.x] === WALL) &&
+          Math.random() < chance
+        ) {
+          for (const tile of tiles) {
             world.grid[tile.y][tile.x] = STEEL_WALL;
           }
+          world.labyrinth.steelSegments.push({
+            x,
+            y,
+            direction: "s",
+          });
         }
       }
     }
   }
 }
 
-export function placeLabyrinthBreakers(world, distances, used) {
-  const count = world.labyrinth.breakerPickupCount;
+function buildPickupCandidates(world, distances, used) {
+  const exitDistance = Math.max(
+    1,
+    distances[indexOfTile(world.width, world.exit.x, world.exit.y)],
+  );
+
   const candidates = world.floorTiles
     .filter((tile) => {
       const key = indexOfTile(world.width, tile.x, tile.y);
       const distance = distances[key];
-
       return (
         !used.has(key) &&
-        distance > 18 &&
-        distance < world.exit.distance * 0.97
+        distance > 8 &&
+        distance >= 0 &&
+        distance < exitDistance * 0.98
       );
     })
     .sort(
@@ -363,30 +263,107 @@ export function placeLabyrinthBreakers(world, distances, used) {
         distances[indexOfTile(world.width, b.x, b.y)],
     );
 
-  if (!candidates.length) {
-    return;
+  if (candidates.length) {
+    return candidates;
   }
 
-  for (let index = 0; index < count; index += 1) {
-    const progress = (index + 1) / (count + 1);
-    const targetIndex = Math.min(
-      candidates.length - 1,
-      Math.floor(progress * candidates.length),
-    );
-    const jitter = Math.floor(
-      (Math.random() - 0.5) * Math.max(4, candidates.length / count),
-    );
-    const tile =
-      candidates[
-        clamp(targetIndex + jitter, 0, candidates.length - 1)
-      ];
+  return world.floorTiles.filter(
+    (tile) => !used.has(indexOfTile(world.width, tile.x, tile.y)),
+  );
+}
 
+function chooseProgressionTile(candidates, index, count, used, world) {
+  if (!candidates.length) {
+    return null;
+  }
+
+  const progress = (index + 1) / (count + 1);
+  const targetIndex = Math.min(
+    candidates.length - 1,
+    Math.floor(progress * candidates.length),
+  );
+  const spread = Math.max(3, Math.floor(candidates.length / Math.max(4, count)));
+  const jitter = Math.floor((Math.random() - 0.5) * spread * 2);
+
+  const startIndex = clamp(
+    targetIndex + jitter,
+    0,
+    candidates.length - 1,
+  );
+
+  for (let offset = 0; offset < candidates.length; offset += 1) {
+    const candidateIndex = (startIndex + offset) % candidates.length;
+    const tile = candidates[candidateIndex];
     const key = indexOfTile(world.width, tile.x, tile.y);
-    if (used.has(key)) {
-      continue;
+
+    if (!used.has(key)) {
+      used.add(key);
+      return tile;
+    }
+  }
+
+  return null;
+}
+
+export function placeLabyrinthLights(
+  world,
+  distances,
+  used,
+  lightKeys = LABYRINTH_LIGHT_ORDER,
+) {
+  const keys = lightKeys.filter((key) => LABYRINTH_LIGHTS[key]);
+  const candidates = buildPickupCandidates(world, distances, used);
+
+  keys.forEach((lightKey, index) => {
+    const tile = chooseProgressionTile(
+      candidates,
+      index,
+      keys.length,
+      used,
+      world,
+    );
+
+    if (!tile) {
+      return;
     }
 
-    used.add(key);
+    const light = LABYRINTH_LIGHTS[lightKey];
+    const center = tileCenter(tile);
+    world.pickups.push({
+      id: `labyrinth-light-${lightKey}-${world.nextId++}`,
+      type: "labyrinthLight",
+      lightKey,
+      label: light.label,
+      x: center.x,
+      y: center.y,
+      radius: 0.28,
+      color: light.color,
+    });
+  });
+}
+
+export function placeLabyrinthBreakers(
+  world,
+  distances,
+  used,
+  requestedCount = world.labyrinth.breakerPickupCount,
+) {
+  const count = Math.max(0, Math.round(requestedCount));
+  const candidates = buildPickupCandidates(world, distances, used);
+
+  for (let index = 0; index < count; index += 1) {
+    const tile = chooseProgressionTile(
+      candidates,
+      index,
+      count,
+      used,
+      world,
+    );
+
+    if (!tile) {
+      break;
+    }
+
     const center = tileCenter(tile);
     world.pickups.push({
       id: `labyrinth-breaker-${world.nextId++}`,
@@ -400,6 +377,100 @@ export function placeLabyrinthBreakers(world, distances, used) {
   }
 }
 
+function placeLabyrinthPickups(
+  world,
+  distances,
+  breakerCount,
+  lightKeys,
+) {
+  const playerTileX = clamp(Math.floor(world.player.x), 0, world.width - 1);
+  const playerTileY = clamp(Math.floor(world.player.y), 0, world.height - 1);
+  const used = new Set([
+    indexOfTile(world.width, playerTileX, playerTileY),
+    indexOfTile(world.width, world.exit.x, world.exit.y),
+  ]);
+
+  placeLabyrinthLights(world, distances, used, lightKeys);
+  placeLabyrinthBreakers(world, distances, used, breakerCount);
+}
+
+function getUncollectedLightKeys(world) {
+  return LABYRINTH_LIGHT_ORDER.filter(
+    (key) => !world.labyrinth.ownedLights[key],
+  );
+}
+
+function regenerateLabyrinth(world) {
+  const breakerCount = world.pickups.filter(
+    (pickup) => pickup.type === "labyrinthBreaker",
+  ).length;
+  const uncollectedLightKeys = getUncollectedLightKeys(world);
+  const nextMaze = generateMaze(
+    world.logicalCols,
+    world.logicalRows,
+    world.level,
+  );
+
+  world.grid = nextMaze.grid;
+  world.width = nextMaze.width;
+  world.height = nextMaze.height;
+  world.connections = nextMaze.connections;
+  world.logicalCols = nextMaze.logicalCols;
+  world.logicalRows = nextMaze.logicalRows;
+
+  preservePlayerPosition(world);
+  preserveExitPosition(world);
+  markSteelWalls(world);
+  refreshTopologyCaches(world);
+
+  const playerTile = {
+    x: clamp(Math.floor(world.player.x), 0, world.width - 1),
+    y: clamp(Math.floor(world.player.y), 0, world.height - 1),
+  };
+  const distances = bfsDistances(world, playerTile);
+  const exitIndex = indexOfTile(world.width, world.exit.x, world.exit.y);
+  const exitDistance = distances[exitIndex];
+
+  if (exitDistance < 0) {
+    preserveExitPosition(world);
+    refreshTopologyCaches(world);
+  }
+
+  const finalDistances = bfsDistances(world, playerTile);
+  world.exit = {
+    ...world.exit,
+    distance: Math.max(0, finalDistances[exitIndex]),
+  };
+  world.pickups = [];
+  placeLabyrinthPickups(
+    world,
+    finalDistances,
+    breakerCount,
+    uncollectedLightKeys,
+  );
+
+  world.distanceField = new Int32Array(world.width * world.height);
+  world.discovered = new Uint8Array(world.width * world.height);
+  world.player.discoveredFloor = 0;
+  world.lastPlayerTile = playerTile;
+  refreshTopologyCaches(world);
+}
+
+export function mutateLabyrinth(world) {
+  if (!isLabyrinthWorld(world) || world.gameOver || world.victory) {
+    return false;
+  }
+
+  regenerateLabyrinth(world);
+  world.labyrinth.mutationNumber += 1;
+  world.labyrinth.lastShiftAt = world.time;
+  world.message =
+    `The Labyrinth rebuilds — maze ${world.labyrinth.mutationNumber + 1}`;
+  world.messageTtl = 1.6;
+  queueLabyrinthAudio(world, "labyrinthShift");
+  return true;
+}
+
 export function initializeLabyrinth(world) {
   const distances = bfsDistances(world, world.start);
   const exit = chooseExitByTargetDistance(world, distances);
@@ -409,14 +480,82 @@ export function initializeLabyrinth(world) {
   }
 
   markSteelWalls(world);
-
-  const used = new Set([
-    indexOfTile(world.width, world.start.x, world.start.y),
-    indexOfTile(world.width, world.exit.x, world.exit.y),
-  ]);
-
-  placeLabyrinthBreakers(world, distances, used);
   refreshTopologyCaches(world);
+
+  const initialDistances = bfsDistances(world, world.start);
+  placeLabyrinthPickups(
+    world,
+    initialDistances,
+    world.labyrinth.breakerPickupCount,
+    LABYRINTH_LIGHT_ORDER,
+  );
+  refreshTopologyCaches(world);
+}
+
+export function collectLabyrinthLight(world, lightKey) {
+  if (!isLabyrinthWorld(world) || !LABYRINTH_LIGHTS[lightKey]) {
+    return false;
+  }
+
+  if (world.labyrinth.ownedLights[lightKey]) {
+    return false;
+  }
+
+  world.labyrinth.ownedLights[lightKey] = true;
+  if (!world.labyrinth.equippedLight) {
+    world.labyrinth.equippedLight = lightKey;
+  }
+
+  const light = LABYRINTH_LIGHTS[lightKey];
+  const index = LABYRINTH_LIGHT_ORDER.indexOf(lightKey);
+  const hotkey = index === 9 ? "0" : String(index + 1);
+
+  world.message =
+    `${light.label} found — ${hotkey} selects it`;
+  world.messageTtl = 1.4;
+  queueLabyrinthAudio(world, "pickupLight", { lightKey });
+  return true;
+}
+
+export function selectLabyrinthLight(world, lightKey) {
+  if (
+    !isLabyrinthWorld(world) ||
+    !LABYRINTH_LIGHTS[lightKey] ||
+    !world.labyrinth.ownedLights[lightKey]
+  ) {
+    return false;
+  }
+
+  world.labyrinth.equippedLight = lightKey;
+  world.message = `${LABYRINTH_LIGHTS[lightKey].label} equipped`;
+  world.messageTtl = 0.9;
+  queueLabyrinthAudio(world, "lightSelect", { lightKey });
+  return true;
+}
+
+export function selectLabyrinthLightByHotkey(world, key) {
+  const lightKey = LABYRINTH_LIGHT_HOTKEY_MAP[key];
+  return lightKey ? selectLabyrinthLight(world, lightKey) : false;
+}
+
+export function selectNextLabyrinthLight(world) {
+  if (!isLabyrinthWorld(world)) {
+    return false;
+  }
+
+  const owned = LABYRINTH_LIGHT_ORDER.filter(
+    (key) => world.labyrinth.ownedLights[key],
+  );
+
+  if (!owned.length) {
+    world.message = "No light tools collected";
+    world.messageTtl = 0.9;
+    return false;
+  }
+
+  const currentIndex = owned.indexOf(world.labyrinth.equippedLight);
+  const nextKey = owned[(currentIndex + 1 + owned.length) % owned.length];
+  return selectLabyrinthLight(world, nextKey);
 }
 
 export function collectLabyrinthBreaker(world) {

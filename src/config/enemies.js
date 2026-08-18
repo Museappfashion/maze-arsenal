@@ -1,9 +1,7 @@
 // src/config/enemies.js
-export const ENEMY_PURSUIT_RAMP_SECONDS = 6;
+export const ENEMY_PURSUIT_RAMP_SECONDS = 10;
 
-export const ENEMY_PURSUIT_DECAY_SECONDS = 24;
-
-export const ENEMY_PURSUIT_MAX_SPEED_MULTIPLIER = 1.75;
+export const ENEMY_PURSUIT_MAX_SPEED_MULTIPLIER = 3;
 
 export const ENEMY_TYPES = { skitter: { label: "Skitter", hp: 14, speed: 3.55, radius: 0.22, contactDamage: 5, contactCooldown: 0.52, color: "#facc15", palette: ["#facc15", "#fde047", "#f59e0b"], alertRadius: 13, }, scout: { label: "Scout", hp: 22, speed: 2.7, radius: 0.28, contactDamage: 8, contactCooldown: 0.72, color: "#fb923c", palette: ["#fb923c", "#f59e0b", "#fdba74"], alertRadius: 12, }, crawler: { label: "Crawler", hp: 40, speed: 1.9, radius: 0.34, contactDamage: 11, contactCooldown: 0.85, color: "#ef4444", palette: ["#ef4444", "#f87171", "#dc2626"], alertRadius: 12, }, charger: { label: "Charger", hp: 36, speed: 1.95, radius: 0.33, contactDamage: 14, contactCooldown: 0.9, chargeRange: 4.15, chargeSpeedMultiplier: 1.9, color: "#fb7185", palette: ["#fb7185", "#f43f5e", "#e11d48"], alertRadius: 13, }, brute: { label: "Brute", hp: 74, speed: 1.1, radius: 0.42, contactDamage: 17, contactCooldown: 1.08, color: "#a855f7", palette: ["#a855f7", "#9333ea", "#c084fc"], alertRadius: 12, }, warden: { label: "Warden", hp: 118, speed: 0.86, radius: 0.5, contactDamage: 22, contactCooldown: 1.22, color: "#8b5cf6", palette: ["#8b5cf6", "#7c3aed", "#6d28d9"], alertRadius: 13, }, spitter: { label: "Spitter", hp: 28, speed: 1.55, radius: 0.3, projectileDamage: 9, projectileSpeed: 8.8, attackCooldown: 1.5, attackRange: 8.4, preferredRange: 5.2, projectileSpread: 0.12, projectileCount: 1, projectileColor: "#86efac", color: "#34d399", palette: ["#34d399", "#10b981", "#6ee7b7"], alertRadius: 15, }, turret: { label: "Turret", hp: 32, speed: 0, radius: 0.32, projectileDamage: 12, projectileSpeed: 10.2, attackCooldown: 1.28, attackRange: 9.4, projectileSpread: 0.08, projectileCount: 1, projectileColor: "#34d399", color: "#10b981", palette: ["#10b981", "#22c55e", "#4ade80"], alertRadius: 999, }, };
 

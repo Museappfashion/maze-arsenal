@@ -98,7 +98,7 @@ Touchscreen devices automatically receive an in-game control overlay:
 - Right joystick: aim in 2D or look in 3D; on combat levels, touching it also attacks.
 - WEAPON: cycles to the next owned weapon.
 - P1 / P2: activate stored power-up slots.
-- Labyrinth replaces combat buttons with a BREAKER button.
+- Labyrinth replaces combat buttons with LIGHT and BREAKER controls.
 
 Keyboard and mouse controls remain enabled on desktop and touchscreen laptops.
 
@@ -114,13 +114,15 @@ Before a run, choose:
 Labyrinth rules:
 
 - No enemies, weapons, ammo, medkits, or standard power-ups.
-- The maze changes repeatedly during the run while preserving a route to the exit.
-- Shifts are deliberately biased toward the player's current area so walls can visibly change inside the circle of light.
+- Every shift generates an entirely new maze topology while preserving the player's exact position and the fixed exit position.
+- Collected lights, the equipped light, stored Wall Breakers, the active Breaker timer, and the run timer survive each full rebuild.
+- Ten collectible light tools replace weapons: Candle, Glowstick, Flashlight, Lantern, Headlamp, Floodlight, Searchlight, Twin Beam, Prism Lamp, and Watcher's Lantern.
+- The original Labyrinth base light is always present. Collected lights add circular or directional illumination on top of it.
 - Purple Wall Breaker pickups can be stored up to 10 at a time.
 - Activating one gives 10 seconds of wall smashing.
-- Silver braced steel walls are generated as complete wall segments, are more common, and cannot be smashed.
+- Silver braced steel walls are generated as complete logical wall segments and cannot be smashed.
 - There is no revealing minimap. The locator shows only a blue player dot and green exit dot.
-- Labyrinth has its own dark lighting, reduced sight distance, and procedural music theme.
+- Labyrinth has its own dark lighting and procedural music theme.
 - Reach the exit before the countdown reaches zero.
 - Labyrinth runs are not submitted to the combat leaderboards.
 
@@ -131,16 +133,26 @@ The current build includes:
 - Vercel Web Analytics.
 - Automatic touchscreen controls.
 - Left joystick for movement.
-- Right AIM/LOOK joystick attacks while touched.
+- Right AIM/LOOK joystick uses absolute aiming in 2D and finger-delta looking in 3D; releasing or canceling the touch immediately clears the control.
 - 1.7x player-following camera zoom in 2D on touch devices.
 - Full-viewport mobile gameplay.
 - Landscape-first layout with a rotate-phone prompt in portrait.
 - Compact mobile health/ammo/weapon/time HUD.
 - Combat levels retain the mobile minimap and Sonar enemy markers.
-- Labyrinth uses only the blue/green-dot locator and never stores discovered-map tiles.
+- Labyrinth uses LIGHT and BREAKER actions, keeps the original base light at all times, and uses only the blue/green-dot locator without storing discovered-map tiles.
 - Higher canvas contrast on mobile.
 - Fullscreen/landscape button where the browser supports it.
 - Desktop keyboard and mouse controls remain unchanged.
+
+
+## Combat behavior
+
+- Once an enemy begins pursuing the player, its pursuit speed multiplier ramps linearly from 1x to 3x over 10 seconds and remains at 3x for that pursuit.
+- Charger charge speed stacks multiplicatively with the pursuit multiplier.
+- Frost still halves the resulting enemy movement speed.
+- Temporary maximum-capacity effects never confiscate resources already earned when they expire. Juggernaut can therefore leave health above the normal maximum until damage reduces it naturally.
+- Healing and ammo-grant paths preserve existing overflow rather than clamping it downward.
+
 
 
 ## Developer analytics

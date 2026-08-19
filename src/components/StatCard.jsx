@@ -1,0 +1,2 @@
+// src/components/StatCard.jsx
+export function StatCard({ label, value }) { return ( <div style={{ padding: "12px 14px", borderRadius: 14, background: "rgba(15, 23, 42, 0.72)", border: "1px solid rgba(148, 163, 184, 0.12)", }} > <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8", marginBottom: 6, }} > {label} </div> <div style={{ fontSize: 16, fontWeight: 800, color: "#f8fafc", }} > {value}</div> </div> ); }

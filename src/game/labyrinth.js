@@ -464,8 +464,7 @@ export function mutateLabyrinth(world) {
   regenerateLabyrinth(world);
   world.labyrinth.mutationNumber += 1;
   world.labyrinth.lastShiftAt = world.time;
-  world.message =
-    `The Labyrinth rebuilds — maze ${world.labyrinth.mutationNumber + 1}`;
+  world.message = "the labyrinth shifts";
   world.messageTtl = 1.6;
   queueLabyrinthAudio(world, "labyrinthShift");
   return true;

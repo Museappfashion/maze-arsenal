@@ -1155,6 +1155,10 @@ spawnProjectile(world, {
 } }
 
 export function damagePlayer(world, amount, sourceX = null, sourceY = null) {
+  if (world.developerInvincible) {
+    return;
+  }
+
   if (world.gameOver || world.victory) {
     return;
   }

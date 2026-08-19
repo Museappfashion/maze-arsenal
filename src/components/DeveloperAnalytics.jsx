@@ -1,5 +1,6 @@
 // src/components/DeveloperAnalytics.jsx
 import { useCallback, useState } from "react";
+import { DeveloperMazeInspector } from "./DeveloperMazeInspector.jsx";
 
 function formatMinutes(seconds) {
   return (Number(seconds || 0) / 60).toFixed(1);
@@ -220,6 +221,155 @@ export function DeveloperAnalytics() {
           line-height: 1.5;
         }
 
+
+        .developer-maze-inspector {
+          margin-top: 28px;
+          padding: clamp(14px, 2.5vw, 24px);
+          border: 1px solid rgba(148, 163, 184, 0.16);
+          border-radius: 16px;
+          background: rgba(8, 15, 30, 0.9);
+        }
+
+        .developer-maze-heading {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 12px;
+          margin-bottom: 14px;
+        }
+
+        .developer-maze-heading h2 {
+          margin: 0;
+          font-size: clamp(20px, 3vw, 28px);
+        }
+
+        .developer-maze-heading p {
+          margin: 5px 0 0;
+          color: #94a3b8;
+          font-size: 12px;
+        }
+
+        .developer-badges {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 7px;
+        }
+
+        .developer-badges span {
+          padding: 5px 8px;
+          border: 1px solid rgba(34, 211, 238, 0.35);
+          border-radius: 999px;
+          color: #a5f3fc;
+          background: rgba(8, 145, 178, 0.12);
+          font-size: 9px;
+          font-weight: 900;
+          letter-spacing: 0.08em;
+        }
+
+        .developer-maze-options,
+        .developer-maze-toolbar {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          margin-bottom: 10px;
+        }
+
+        .developer-maze-options button,
+        .developer-maze-toolbar button,
+        .developer-maze-dpad button,
+        .developer-light-select select {
+          min-height: 38px;
+          border: 1px solid rgba(148, 163, 184, 0.28);
+          border-radius: 9px;
+          background: rgba(15, 23, 42, 0.92);
+          color: #e2e8f0;
+          font: inherit;
+          font-size: 11px;
+          font-weight: 800;
+          cursor: pointer;
+        }
+
+        .developer-maze-options button,
+        .developer-maze-toolbar button {
+          padding: 7px 11px;
+        }
+
+        .developer-maze-options button.is-active {
+          border-color: rgba(34, 211, 238, 0.68);
+          background: rgba(8, 145, 178, 0.25);
+          color: #ecfeff;
+        }
+
+        .developer-maze-toolbar button:disabled {
+          cursor: default;
+          opacity: 0.38;
+        }
+
+        .developer-light-select {
+          display: flex;
+          align-items: center;
+          gap: 7px;
+          padding-left: 3px;
+          color: #94a3b8;
+          font-size: 9px;
+          font-weight: 900;
+          letter-spacing: 0.08em;
+        }
+
+        .developer-light-select select {
+          padding: 6px 9px;
+        }
+
+        .developer-maze-meta {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px 16px;
+          margin: 4px 0 10px;
+          color: #94a3b8;
+          font-size: 11px;
+        }
+
+        .developer-maze-meta strong {
+          color: #e2e8f0;
+        }
+
+        .developer-maze-canvas-wrap {
+          width: min(820px, 100%);
+          margin: 0 auto;
+          overflow: hidden;
+          border: 1px solid rgba(148, 163, 184, 0.2);
+          border-radius: 12px;
+          background: #010204;
+        }
+
+        .developer-maze-canvas-wrap canvas {
+          display: block;
+          width: 100%;
+          height: auto;
+          aspect-ratio: 1;
+          image-rendering: pixelated;
+          touch-action: none;
+        }
+
+        .developer-maze-dpad {
+          display: grid;
+          justify-items: center;
+          gap: 6px;
+          margin-top: 12px;
+        }
+
+        .developer-maze-dpad > div {
+          display: flex;
+          gap: 6px;
+        }
+
+        .developer-maze-dpad button {
+          width: 44px;
+          min-height: 40px;
+          font-size: 17px;
+        }
+
         @media (max-width: 760px) {
           .developer-summary {
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -332,6 +482,8 @@ export function DeveloperAnalytics() {
               Donation figures are support-button click attempts, not confirmed
               payments. User identifiers are anonymous Supabase account IDs.
             </p>
+
+            <DeveloperMazeInspector />
           </>
         )}
       </div>

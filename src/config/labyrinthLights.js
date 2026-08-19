@@ -18,7 +18,7 @@ export const LABYRINTH_LIGHTS = {
     label: "Candle",
     mode: "circle",
     radius: 4.8,
-    strength: 0.72,
+    strength: 0.56,
     color: "#fbbf24",
     description: "A small warm halo that slightly expands your base light.",
   },
@@ -27,7 +27,7 @@ export const LABYRINTH_LIGHTS = {
     label: "Glowstick",
     mode: "circle",
     radius: 5.4,
-    strength: 0.76,
+    strength: 0.64,
     color: "#4ade80",
     description: "A dim but broader circular glow.",
   },
@@ -37,7 +37,7 @@ export const LABYRINTH_LIGHTS = {
     mode: "beam",
     range: 11,
     cone: 0.3,
-    strength: 1,
+    strength: 0.82,
     color: "#f8fafc",
     description: "A long, concentrated beam straight ahead.",
   },
@@ -46,7 +46,7 @@ export const LABYRINTH_LIGHTS = {
     label: "Lantern",
     mode: "circle",
     radius: 6.3,
-    strength: 0.9,
+    strength: 0.78,
     color: "#f59e0b",
     description: "A strong circle of light surrounding the player.",
   },
@@ -56,7 +56,7 @@ export const LABYRINTH_LIGHTS = {
     mode: "beam",
     range: 9.5,
     cone: 0.48,
-    strength: 0.94,
+    strength: 0.86,
     color: "#fde68a",
     description: "A medium-long beam with a wider forward view.",
   },
@@ -66,7 +66,7 @@ export const LABYRINTH_LIGHTS = {
     mode: "beam",
     range: 8,
     cone: 0.82,
-    strength: 0.88,
+    strength: 0.9,
     color: "#e0f2fe",
     description: "A short but very wide forward wash.",
   },
@@ -76,7 +76,7 @@ export const LABYRINTH_LIGHTS = {
     mode: "beam",
     range: 15,
     cone: 0.2,
-    strength: 1,
+    strength: 0.98,
     color: "#ffffff",
     description: "An extremely long, narrow scouting beam.",
   },
@@ -97,7 +97,7 @@ export const LABYRINTH_LIGHTS = {
     range: 9.5,
     cone: 0.3,
     spread: 0.58,
-    strength: 0.9,
+    strength: 0.95,
     color: "#c4b5fd",
     description: "Three medium beams cover forward, left, and right.",
   },
@@ -131,34 +131,15 @@ export function getLabyrinthLight(world) {
 }
 
 function beamStrength(distance, angleDelta, light) {
-  if (distance > light.range) {
+  if (distance > light.range || Math.abs(angleDelta) > light.cone) {
     return 0;
   }
 
-  const angular = Math.max(0, 1 - Math.abs(angleDelta) / light.cone);
-  if (angular <= 0) {
-    return 0;
-  }
-
-  const distanceFade = Math.max(0, 1 - distance / light.range);
-  return light.strength * Math.sqrt(distanceFade) * Math.sqrt(angular);
+  return light.strength;
 }
 
 function circleStrength(distance, light) {
-  if (distance > light.radius) {
-    return 0;
-  }
-
-  const fullStrengthRadius = light.radius * 0.5;
-  if (distance <= fullStrengthRadius) {
-    return light.strength;
-  }
-
-  const fade =
-    1 -
-    (distance - fullStrengthRadius) /
-      Math.max(0.001, light.radius - fullStrengthRadius);
-  return light.strength * Math.max(0, fade);
+  return distance <= light.radius ? light.strength : 0;
 }
 
 function normalizeAngle(angle) {

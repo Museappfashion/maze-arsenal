@@ -53,6 +53,13 @@ export function recordDonationAttempt(donationKey) {
   });
 }
 
+export function recordVisitorSeen() {
+  return recordUsage({
+    eventType: "playtime",
+    seconds: 0,
+  });
+}
+
 export function recordGameStarted(world) {
   return recordUsage({
     eventType: "game_start",

@@ -2069,6 +2069,154 @@ drawWorldLabel(
   },
 ); }
 
+export function drawPickupBody(
+  ctx,
+  world,
+  pickup,
+  x,
+  baseY,
+  visibility = 1,
+) {
+  const bob = Math.sin(world.time * 4 + pickup.x * 1.7 + pickup.y) * 2.2;
+  const y = baseY + bob;
+  const color =
+    pickup.type === "weapon"
+      ? "#fbbf24"
+      : pickup.type === "ammo"
+        ? "#60a5fa"
+        : pickup.type === "medkit"
+          ? "#f43f5e"
+          : pickup.color ?? "#a78bfa";
+
+  ctx.save();
+  ctx.globalAlpha = visibility > 0.12 ? 1 : 0.62;
+  ctx.shadowBlur =
+    pickup.type === "powerup" ||
+    pickup.type === "labyrinthBreaker" ||
+    pickup.type === "labyrinthLight"
+      ? 24
+      : 14;
+  ctx.shadowColor = color;
+
+  if (pickup.type === "powerup" || pickup.type === "labyrinthBreaker") {
+    const radius = DRAW_TILE * 0.28;
+    ctx.translate(x, y);
+    ctx.rotate(world.time * 1.25 + pickup.x);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(0, -radius);
+    ctx.lineTo(radius, 0);
+    ctx.lineTo(0, radius);
+    ctx.lineTo(-radius, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    if (pickup.type === "labyrinthBreaker") {
+      ctx.rotate(-(world.time * 1.25 + pickup.x));
+      ctx.fillStyle = "#f3e8ff";
+      ctx.font = `900 ${Math.max(10, DRAW_TILE * 0.27)}px system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("10", 0, 0);
+      ctx.rotate(world.time * 1.25 + pickup.x);
+    }
+
+    ctx.globalAlpha *= 0.58;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(
+      0,
+      0,
+      radius * (1.45 + 0.14 * Math.sin(world.time * 5)),
+      0,
+      Math.PI * 2,
+    );
+    ctx.stroke();
+  } else if (pickup.type === "labyrinthLight") {
+    const size = DRAW_TILE * 0.58;
+    ctx.translate(x, y);
+    ctx.fillStyle = "#111827";
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, size * 0.32, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = color;
+    ctx.globalAlpha *= 0.92;
+    ctx.beginPath();
+    ctx.arc(0, 0, size * 0.16, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.globalAlpha *= 0.62;
+    ctx.beginPath();
+    for (let ray = 0; ray < 8; ray += 1) {
+      const angle = (ray / 8) * Math.PI * 2;
+      ctx.moveTo(
+        Math.cos(angle) * size * 0.38,
+        Math.sin(angle) * size * 0.38,
+      );
+      ctx.lineTo(
+        Math.cos(angle) * size * 0.56,
+        Math.sin(angle) * size * 0.56,
+      );
+    }
+    ctx.stroke();
+  } else if (pickup.type === "medkit") {
+    const size = DRAW_TILE * 0.48;
+    ctx.fillStyle = "#fff1f2";
+    ctx.fillRect(x - size / 2, y - size / 2, size, size);
+    ctx.fillStyle = color;
+    ctx.fillRect(x - 2, y - size * 0.34, 4, size * 0.68);
+    ctx.fillRect(x - size * 0.34, y - 2, size * 0.68, 4);
+  } else if (pickup.type === "ammo") {
+    if (isMedievalTheme(world)) {
+      ctx.strokeStyle = "#d6a85f";
+      ctx.fillStyle = "#d1d5db";
+      ctx.lineWidth = 1.7;
+      for (let offset = -1; offset <= 1; offset += 1) {
+        const arrowX = x + offset * 4;
+        ctx.beginPath();
+        ctx.moveTo(arrowX, y + 7);
+        ctx.lineTo(arrowX, y - 6);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(arrowX, y - 9);
+        ctx.lineTo(arrowX - 2.5, y - 5);
+        ctx.lineTo(arrowX + 2.5, y - 5);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.strokeStyle = "#92400e";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x - 7, y + 1);
+      ctx.lineTo(x + 7, y + 1);
+      ctx.stroke();
+    } else {
+      for (let offset = -1; offset <= 1; offset += 1) {
+        ctx.fillStyle = offset === 0 ? "#dbeafe" : color;
+        ctx.fillRect(x + offset * 4 - 1.5, y - 6, 3, 12);
+      }
+    }
+  } else {
+    ctx.translate(x, y);
+    ctx.rotate(-0.45);
+    drawWeaponShape(ctx, world, pickup.weapon, DRAW_TILE * 0.62);
+  }
+
+  ctx.restore();
+
+  return { y, color };
+}
+
 export function drawPickups(ctx, world, camera) {
   for (const pickup of world.pickups) {
     if (
@@ -2092,130 +2240,14 @@ export function drawPickups(ctx, world, camera) {
 
     const x = (pickup.x - camera.x) * DRAW_TILE;
     const baseY = (pickup.y - camera.y) * DRAW_TILE;
-    const bob = Math.sin(world.time * 4 + pickup.x * 1.7 + pickup.y) * 2.2;
-    const y = baseY + bob;
-    const color =
-      pickup.type === "weapon"
-        ? "#fbbf24"
-        : pickup.type === "ammo"
-          ? "#60a5fa"
-          : pickup.type === "medkit"
-            ? "#f43f5e"
-            : pickup.color ?? "#a78bfa";
-
-    ctx.save();
-    ctx.globalAlpha = visibility > 0.12 ? 1 : 0.62;
-    ctx.shadowBlur = pickup.type === "powerup" || pickup.type === "labyrinthBreaker" || pickup.type === "labyrinthLight" ? 24 : 14;
-    ctx.shadowColor = color;
-
-    if (pickup.type === "powerup" || pickup.type === "labyrinthBreaker") {
-      const radius = DRAW_TILE * 0.28;
-      ctx.translate(x, y);
-      ctx.rotate(world.time * 1.25 + pickup.x);
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.moveTo(0, -radius);
-      ctx.lineTo(radius, 0);
-      ctx.lineTo(0, radius);
-      ctx.lineTo(-radius, 0);
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.strokeStyle = "#ffffff";
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-
-      if (pickup.type === "labyrinthBreaker") {
-        ctx.rotate(-(world.time * 1.25 + pickup.x));
-        ctx.fillStyle = "#f3e8ff";
-        ctx.font = `900 ${Math.max(10, DRAW_TILE * 0.27)}px system-ui, sans-serif`;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("10", 0, 0);
-        ctx.rotate(world.time * 1.25 + pickup.x);
-      }
-
-      ctx.globalAlpha *= 0.58;
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(0, 0, radius * (1.45 + 0.14 * Math.sin(world.time * 5)), 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.translate(-x, -y);
-      ctx.rotate(-(world.time * 1.25 + pickup.x));
-    } else if (pickup.type === "labyrinthLight") {
-      const size = DRAW_TILE * 0.58;
-      ctx.translate(x, y);
-      ctx.fillStyle = "#111827";
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(0, 0, size * 0.32, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-
-      ctx.fillStyle = color;
-      ctx.globalAlpha *= 0.92;
-      ctx.beginPath();
-      ctx.arc(0, 0, size * 0.16, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.globalAlpha *= 0.62;
-      ctx.beginPath();
-      for (let ray = 0; ray < 8; ray += 1) {
-        const angle = (ray / 8) * Math.PI * 2;
-        ctx.moveTo(Math.cos(angle) * size * 0.38, Math.sin(angle) * size * 0.38);
-        ctx.lineTo(Math.cos(angle) * size * 0.56, Math.sin(angle) * size * 0.56);
-      }
-      ctx.stroke();
-    } else if (pickup.type === "medkit") {
-      const size = DRAW_TILE * 0.48;
-      ctx.fillStyle = "#fff1f2";
-      ctx.fillRect(x - size / 2, y - size / 2, size, size);
-      ctx.fillStyle = color;
-      ctx.fillRect(x - 2, y - size * 0.34, 4, size * 0.68);
-      ctx.fillRect(x - size * 0.34, y - 2, size * 0.68, 4);
-    } else if (pickup.type === "ammo") {
-      if (isMedievalTheme(world)) {
-        ctx.strokeStyle = "#d6a85f";
-        ctx.fillStyle = "#d1d5db";
-        ctx.lineWidth = 1.7;
-        for (let offset = -1; offset <= 1; offset += 1) {
-          const arrowX = x + offset * 4;
-          ctx.beginPath();
-          ctx.moveTo(arrowX, y + 7);
-          ctx.lineTo(arrowX, y - 6);
-          ctx.stroke();
-
-          ctx.beginPath();
-          ctx.moveTo(arrowX, y - 9);
-          ctx.lineTo(arrowX - 2.5, y - 5);
-          ctx.lineTo(arrowX + 2.5, y - 5);
-          ctx.closePath();
-          ctx.fill();
-        }
-        ctx.strokeStyle = "#92400e";
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(x - 7, y + 1);
-        ctx.lineTo(x + 7, y + 1);
-        ctx.stroke();
-      } else {
-        ctx.fillStyle = color;
-        for (let offset = -1; offset <= 1; offset += 1) {
-          ctx.fillRect(x + offset * 4 - 1.5, y - 6, 3, 12);
-          ctx.fillStyle = offset === 0 ? "#dbeafe" : color;
-        }
-      }
-    } else {
-      ctx.translate(x, y);
-      ctx.rotate(-0.45);
-      drawWeaponShape(ctx, world, pickup.weapon, DRAW_TILE * 0.62);
-      ctx.rotate(0.45);
-      ctx.translate(-x, -y);
-    }
-
-    ctx.restore();
+    const { y, color } = drawPickupBody(
+      ctx,
+      world,
+      pickup,
+      x,
+      baseY,
+      visibility,
+    );
 
     if (world.labelsOn) {
       drawWorldLabel(ctx, getPickupLabel(pickup), x, y - DRAW_TILE * 0.66, {

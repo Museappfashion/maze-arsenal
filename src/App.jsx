@@ -17,7 +17,7 @@ import { getDiscoveredPercent } from "./game/maze.js";
 import { drawWorld } from "./game/rendering.js";
 import { createWorld, setWorldViewMode } from "./game/world.js";
 import { GLOBAL_LEADERBOARD_ENABLED, addLeaderboardTime, createEmptyUserRanks, detectCountryCode, fetchGlobalLeaderboards, loadLeaderboards, saveLeaderboards, submitGlobalLeaderboardTime } from "./services/leaderboard.js";
-import { recordGameFinished, recordGameStarted, recordPlaySeconds } from "./services/developerAnalytics.js";
+import { recordGameFinished, recordGameStarted, recordPlaySeconds, recordVisitorSeen } from "./services/developerAnalytics.js";
 import { clamp, formatTime } from "./utils/math.js";
 import { sanitizePlayerName } from "./utils/player.js";
 
@@ -54,6 +54,10 @@ const [audioStatus, setAudioStatus] = useState("Tap TEST SOUND to verify audio")
 const [, setRevision] = useState(0);
 
 const forceRefresh = useCallback(() => { setRevision((value) => value + 1); }, []);
+
+useEffect(() => {
+  void recordVisitorSeen();
+}, []);
 
 const flushPlayAnalytics = useCallback((world = worldRef.current) => {
   if (!selectedLevel || !world) {

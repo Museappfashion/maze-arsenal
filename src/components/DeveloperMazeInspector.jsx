@@ -1,28 +1,48 @@
 // src/components/DeveloperMazeInspector.jsx
 import { useEffect, useRef, useState } from "react";
-import {
-  FLOOR,
-  LEVELS,
-  STEEL_WALL,
-  WALL,
-} from "../config/constants.js";
+import { DRAW_TILE, LEVELS } from "../config/constants.js";
 import {
   LABYRINTH_LIGHT_ORDER,
   LABYRINTH_LIGHTS,
 } from "../config/labyrinthLights.js";
-import { ENEMY_TYPES } from "../config/enemies.js";
+import { WEAPON_HOTKEY_MAP } from "../config/weapons.js";
 import {
+  activateStoredPowerUp,
+  attack,
+  computeDistanceField,
+  getCamera as getGameCamera,
+  getStoredPowerUps,
   revealAroundPlayer,
+  selectWeapon,
+  updateEffects,
+  updateEnemies,
+  updatePickups,
+  updatePowerUps,
+  updateProjectiles,
   updateVisionCache,
   visibleStrengthAt,
 } from "../game/gameplay.js";
-import { mutateLabyrinth } from "../game/labyrinth.js";
+import {
+  activateLabyrinthBreaker,
+  mutateLabyrinth,
+} from "../game/labyrinth.js";
+import {
+  drawEffects,
+  drawEnemyBody,
+  drawEnemyHealth,
+  drawMazeTile,
+  drawPickupBody,
+  drawPlayerBody,
+  drawProjectile,
+} from "../game/rendering.js";
 import { createWorld } from "../game/world.js";
 import { clamp, indexOfTile } from "../utils/math.js";
 
 const CANVAS_SIZE = 820;
 const MAX_ZOOM_STEP = 12;
 const DEVELOPER_MOVE_SPEED = 8;
+const DISTANCE_REFRESH_SECONDS = 0.18;
+const UI_REFRESH_SECONDS = 0.15;
 
 const MAZE_OPTIONS = [
   { key: "level1", label: "Orbital Ruins" },
@@ -31,39 +51,9 @@ const MAZE_OPTIONS = [
   { key: "labyrinth", label: "The Shifting Dark" },
 ];
 
-const THEME_COLORS = {
-  space: {
-    floor: "#07111f",
-    wall: "#475569",
-    wallAlt: "#334155",
-    steel: "#94a3b8",
-    grid: "rgba(148, 163, 184, 0.08)",
-  },
-  jungle: {
-    floor: "#0b2115",
-    wall: "#356342",
-    wallAlt: "#294f35",
-    steel: "#94a3b8",
-    grid: "rgba(134, 239, 172, 0.06)",
-  },
-  medieval: {
-    floor: "#1d1915",
-    wall: "#685b4b",
-    wallAlt: "#55493c",
-    steel: "#9ca3af",
-    grid: "rgba(231, 229, 228, 0.06)",
-  },
-  labyrinth: {
-    floor: "#030508",
-    wall: "#1f2937",
-    wallAlt: "#111827",
-    steel: "#64748b",
-    grid: "rgba(148, 163, 184, 0.07)",
-  },
-};
-
 function getViewSpan(world, zoomStep) {
   const fullSpan = Math.max(world.width, world.height);
+
   if (zoomStep <= 0) {
     return fullSpan;
   }
@@ -76,7 +66,7 @@ function getViewSpan(world, zoomStep) {
   return fullSpan * Math.pow(4 / fullSpan, progress);
 }
 
-function getCamera(world, span, fitWholeMaze) {
+function getInspectorCamera(world, span, fitWholeMaze) {
   if (fitWholeMaze) {
     return {
       x: (world.width - span) / 2,
@@ -84,8 +74,6 @@ function getCamera(world, span, fitWholeMaze) {
     };
   }
 
-  const centerX = world.player.x;
-  const centerY = world.player.y;
   const maxX = Math.max(0, world.width - span);
   const maxY = Math.max(0, world.height - span);
 
@@ -93,11 +81,11 @@ function getCamera(world, span, fitWholeMaze) {
     x:
       span >= world.width
         ? (world.width - span) / 2
-        : clamp(centerX - span / 2, 0, maxX),
+        : clamp(world.player.x - span / 2, 0, maxX),
     y:
       span >= world.height
         ? (world.height - span) / 2
-        : clamp(centerY - span / 2, 0, maxY),
+        : clamp(world.player.y - span / 2, 0, maxY),
   };
 }
 
@@ -107,47 +95,79 @@ function getTileVisibility(world, x, y, mistEnabled) {
   }
 
   const visible = clamp(visibleStrengthAt(world, x, y), 0, 1);
+
   if (world.labyrinthMode || visible > 0) {
     return visible;
   }
 
   const discovered =
     world.discovered[indexOfTile(world.width, x, y)] === 1;
+
   return discovered ? 0.18 : 0;
 }
 
-function getPickupColor(pickup) {
-  if (pickup.type === "labyrinthLight") {
-    return LABYRINTH_LIGHTS[pickup.lightKey]?.color ?? "#f8fafc";
+function isEntityVisible(world, x, y, mistEnabled) {
+  if (!mistEnabled) {
+    return true;
   }
 
-  if (pickup.type === "labyrinthBreaker" || pickup.type === "powerup") {
-    return "#c084fc";
+  const tileX = clamp(Math.floor(x), 0, world.width - 1);
+  const tileY = clamp(Math.floor(y), 0, world.height - 1);
+
+  return getTileVisibility(world, tileX, tileY, true) > 0.15;
+}
+
+function isInsideView(entity, camera, span, margin = 1) {
+  return (
+    entity.x >= camera.x - margin &&
+    entity.x <= camera.x + span + margin &&
+    entity.y >= camera.y - margin &&
+    entity.y <= camera.y + span + margin
+  );
+}
+
+function drawInspectorMessage(ctx, world) {
+  if (!world.message || world.messageTtl <= 0) {
+    return;
   }
 
-  if (pickup.type === "weapon") {
-    return "#fbbf24";
-  }
+  const boxWidth = Math.min(
+    480,
+    Math.max(250, world.message.length * 9.5),
+  );
+  const boxHeight = 42;
+  const boxX = (CANVAS_SIZE - boxWidth) / 2;
+  const boxY = 18;
 
-  if (pickup.type === "ammo") {
-    return "#60a5fa";
-  }
-
-  if (pickup.type === "medkit") {
-    return "#fb7185";
-  }
-
-  return "#e2e8f0";
+  ctx.save();
+  ctx.fillStyle = "rgba(2, 6, 23, 0.9)";
+  ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
+  ctx.strokeStyle = "rgba(226, 232, 240, 0.35)";
+  ctx.strokeRect(
+    boxX + 0.5,
+    boxY + 0.5,
+    boxWidth - 1,
+    boxHeight - 1,
+  );
+  ctx.fillStyle = "#f8fafc";
+  ctx.font = "800 15px system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(
+    world.message,
+    CANVAS_SIZE / 2,
+    boxY + boxHeight / 2,
+  );
+  ctx.restore();
 }
 
 function drawInspector(ctx, world, settings) {
   const { mistEnabled, zoomStep } = settings;
   const span = getViewSpan(world, zoomStep);
   const fitWholeMaze = zoomStep === 0;
-  const camera = getCamera(world, span, fitWholeMaze);
+  const camera = getInspectorCamera(world, span, fitWholeMaze);
   const tileSize = CANVAS_SIZE / span;
-  const theme =
-    THEME_COLORS[world.level.themeKey] ?? THEME_COLORS.labyrinth;
+  const renderScale = tileSize / DRAW_TILE;
 
   ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
   ctx.fillStyle = "#010204";
@@ -164,184 +184,178 @@ function drawInspector(ctx, world, settings) {
     Math.ceil(camera.y + span) + 1,
   );
 
+  ctx.save();
+  ctx.scale(renderScale, renderScale);
+
   for (let y = startY; y <= endY; y += 1) {
     for (let x = startX; x <= endX; x += 1) {
-      const tile = world.grid[y][x];
-      const screenX = (x - camera.x) * tileSize;
-      const screenY = (y - camera.y) * tileSize;
-      const visibility = getTileVisibility(
-        world,
-        x,
-        y,
-        mistEnabled,
-      );
+      const screenX = (x - camera.x) * DRAW_TILE;
+      const screenY = (y - camera.y) * DRAW_TILE;
+      drawMazeTile(ctx, world, x, y, screenX, screenY);
+    }
+  }
 
-      if (tile === FLOOR) {
-        ctx.fillStyle = theme.floor;
-      } else if (tile === STEEL_WALL) {
-        ctx.fillStyle = theme.steel;
-      } else {
-        ctx.fillStyle =
-          (x + y) % 2 === 0 ? theme.wall : theme.wallAlt;
-      }
+  if (mistEnabled) {
+    for (let y = startY; y <= endY; y += 1) {
+      for (let x = startX; x <= endX; x += 1) {
+        const visibility = getTileVisibility(
+          world,
+          x,
+          y,
+          true,
+        );
+        const fogAlpha = world.labyrinthMode
+          ? 0.985 * (1 - visibility)
+          : 0.94 * (1 - visibility);
 
-      ctx.globalAlpha = 1;
-      ctx.fillRect(
-        screenX,
-        screenY,
-        Math.ceil(tileSize) + 0.5,
-        Math.ceil(tileSize) + 0.5,
-      );
-
-      if (tileSize >= 10) {
-        ctx.strokeStyle = theme.grid;
-        ctx.lineWidth = 1;
-        ctx.strokeRect(screenX, screenY, tileSize, tileSize);
-      }
-
-      if (mistEnabled) {
-        const fogAlpha =
-          world.labyrinthMode
-            ? 0.985 * (1 - visibility)
-            : 0.94 * (1 - visibility);
-
-        if (fogAlpha > 0.01) {
-          ctx.fillStyle = `rgba(1, 2, 5, ${fogAlpha})`;
-          ctx.fillRect(
-            screenX,
-            screenY,
-            Math.ceil(tileSize) + 0.5,
-            Math.ceil(tileSize) + 0.5,
-          );
+        if (fogAlpha <= 0.01) {
+          continue;
         }
+
+        ctx.fillStyle = `rgba(1, 2, 5, ${fogAlpha})`;
+        ctx.fillRect(
+          (x - camera.x) * DRAW_TILE,
+          (y - camera.y) * DRAW_TILE,
+          DRAW_TILE + 0.5,
+          DRAW_TILE + 0.5,
+        );
       }
     }
   }
 
-  const entityVisible = (x, y) =>
+  const exitVisible =
     !mistEnabled ||
-    getTileVisibility(
+    isEntityVisible(
       world,
-      clamp(Math.floor(x), 0, world.width - 1),
-      clamp(Math.floor(y), 0, world.height - 1),
+      world.exit.x + 0.5,
+      world.exit.y + 0.5,
       true,
-    ) > 0.15;
+    );
+
+  if (exitVisible) {
+    const exitX =
+      (world.exit.x + 0.5 - camera.x) * DRAW_TILE;
+    const exitY =
+      (world.exit.y + 0.5 - camera.y) * DRAW_TILE;
+
+    ctx.save();
+    ctx.shadowBlur = 18;
+    ctx.shadowColor = "#22c55e";
+    ctx.fillStyle = "#22c55e";
+    ctx.beginPath();
+    ctx.arc(exitX, exitY, DRAW_TILE * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
 
   for (const pickup of world.pickups) {
-    if (!entityVisible(pickup.x, pickup.y)) {
+    if (
+      !isInsideView(pickup, camera, span) ||
+      !isEntityVisible(world, pickup.x, pickup.y, mistEnabled)
+    ) {
       continue;
     }
 
-    const x = (pickup.x - camera.x) * tileSize;
-    const y = (pickup.y - camera.y) * tileSize;
-    const radius = clamp(tileSize * 0.22, 2.2, 8);
+    const visibility = mistEnabled
+      ? getTileVisibility(
+          world,
+          Math.floor(pickup.x),
+          Math.floor(pickup.y),
+          true,
+        )
+      : 1;
 
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = getPickupColor(pickup);
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fill();
+    drawPickupBody(
+      ctx,
+      world,
+      pickup,
+      (pickup.x - camera.x) * DRAW_TILE,
+      (pickup.y - camera.y) * DRAW_TILE,
+      visibility,
+    );
   }
 
   for (const enemy of world.enemies) {
-    if (!entityVisible(enemy.x, enemy.y)) {
+    if (
+      !isInsideView(enemy, camera, span) ||
+      !isEntityVisible(world, enemy.x, enemy.y, mistEnabled)
+    ) {
       continue;
     }
 
-    const x = (enemy.x - camera.x) * tileSize;
-    const y = (enemy.y - camera.y) * tileSize;
-    const radius = clamp(tileSize * 0.26, 2.4, 9);
+    const x = (enemy.x - camera.x) * DRAW_TILE;
+    const y = (enemy.y - camera.y) * DRAW_TILE;
 
-    ctx.globalAlpha = 1;
-    ctx.fillStyle =
-      ENEMY_TYPES[enemy.kind]?.color ?? "#f87171";
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fill();
+    drawEnemyBody(ctx, world, enemy, x, y);
+    drawEnemyHealth(ctx, enemy, x, y);
   }
 
-  if (
-    entityVisible(world.exit.x + 0.5, world.exit.y + 0.5) ||
-    !mistEnabled
-  ) {
-    const exitX =
-      (world.exit.x + 0.5 - camera.x) * tileSize;
-    const exitY =
-      (world.exit.y + 0.5 - camera.y) * tileSize;
+  for (const projectile of world.projectiles) {
+    if (
+      !isInsideView(projectile, camera, span) ||
+      !isEntityVisible(
+        world,
+        projectile.x,
+        projectile.y,
+        mistEnabled,
+      )
+    ) {
+      continue;
+    }
 
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = "#22c55e";
-    ctx.beginPath();
-    ctx.arc(
-      exitX,
-      exitY,
-      clamp(tileSize * 0.3, 3, 11),
-      0,
-      Math.PI * 2,
-    );
-    ctx.fill();
+    drawProjectile(ctx, projectile, camera);
   }
 
-  const playerX = (world.player.x - camera.x) * tileSize;
-  const playerY = (world.player.y - camera.y) * tileSize;
-  const playerRadius = clamp(tileSize * 0.32, 4, 12);
+  drawEffects(ctx, world, camera);
 
-  ctx.globalAlpha = 1;
-  ctx.shadowBlur = 14;
-  ctx.shadowColor = "#38bdf8";
-  ctx.fillStyle = "#38bdf8";
-  ctx.beginPath();
-  ctx.arc(playerX, playerY, playerRadius, 0, Math.PI * 2);
-  ctx.fill();
+  const playerX = (world.player.x - camera.x) * DRAW_TILE;
+  const playerY = (world.player.y - camera.y) * DRAW_TILE;
+  drawPlayerBody(ctx, world, playerX, playerY);
 
-  ctx.shadowBlur = 0;
-  ctx.strokeStyle = "#e0f2fe";
-  ctx.lineWidth = clamp(tileSize * 0.08, 1.5, 3);
-  ctx.beginPath();
-  ctx.moveTo(playerX, playerY);
-  ctx.lineTo(
-    playerX + Math.cos(world.player.facing) * playerRadius * 1.8,
-    playerY + Math.sin(world.player.facing) * playerRadius * 1.8,
+  ctx.restore();
+  drawInspectorMessage(ctx, world);
+}
+
+function setAimTarget(world, targetX, targetY) {
+  const dx = targetX - world.player.x;
+  const dy = targetY - world.player.y;
+
+  if (Math.hypot(dx, dy) > 0.01) {
+    world.player.facing = Math.atan2(dy, dx);
+  }
+
+  const gameCamera = getGameCamera(world);
+
+  world.pointer.x = (targetX - gameCamera.x) * DRAW_TILE;
+  world.pointer.y = (targetY - gameCamera.y) * DRAW_TILE;
+  world.pointer.inside = true;
+}
+
+function setForwardAimTarget(world) {
+  setAimTarget(
+    world,
+    world.player.x + Math.cos(world.player.facing) * 8,
+    world.player.y + Math.sin(world.player.facing) * 8,
   );
-  ctx.stroke();
-
-  if (world.message && world.messageTtl > 0) {
-    const boxWidth = 250;
-    const boxHeight = 42;
-    const boxX = (CANVAS_SIZE - boxWidth) / 2;
-    const boxY = 18;
-
-    ctx.fillStyle = "rgba(2, 6, 23, 0.88)";
-    ctx.fillRect(boxX, boxY, boxWidth, boxHeight);
-    ctx.strokeStyle = "rgba(226, 232, 240, 0.35)";
-    ctx.strokeRect(boxX + 0.5, boxY + 0.5, boxWidth - 1, boxHeight - 1);
-    ctx.fillStyle = "#f8fafc";
-    ctx.font = "800 15px system-ui, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(
-      world.message,
-      CANVAS_SIZE / 2,
-      boxY + boxHeight / 2,
-    );
-    ctx.textAlign = "left";
-    ctx.textBaseline = "alphabetic";
-  }
 }
 
 export function DeveloperMazeInspector() {
   const canvasRef = useRef(null);
   const worldRef = useRef(null);
   const keysRef = useRef({});
+  const distanceRefreshRef = useRef(0);
+  const uiRefreshRef = useRef(0);
   const settingsRef = useRef({
     mistEnabled: false,
     zoomStep: 0,
   });
+
   const [levelKey, setLevelKey] = useState("level1");
   const [mazeVersion, setMazeVersion] = useState(0);
   const [mistEnabled, setMistEnabled] = useState(false);
   const [zoomStep, setZoomStep] = useState(0);
   const [lightKey, setLightKey] = useState("base");
+  const [, setUiRevision] = useState(0);
 
   useEffect(() => {
     settingsRef.current = {
@@ -364,21 +378,32 @@ export function DeveloperMazeInspector() {
     world.developerNoclip = true;
     world.developerInvincible = true;
     world.player.hp = world.player.maxHp;
+    world.pointer.inside = false;
+    world.pointer.down = false;
 
     if (world.labyrinthMode) {
       for (const key of LABYRINTH_LIGHT_ORDER) {
         world.labyrinth.ownedLights[key] = true;
       }
+
       world.labyrinth.equippedLight =
         lightKey === "base" ? null : lightKey;
     }
 
+    computeDistanceField(world);
+    updateVisionCache(world);
+    revealAroundPlayer(world);
+
     worldRef.current = world;
+    distanceRefreshRef.current = 0;
+    uiRefreshRef.current = 0;
     setZoomStep(0);
+    setUiRevision((revision) => revision + 1);
   }, [levelKey, mazeVersion]);
 
   useEffect(() => {
     const world = worldRef.current;
+
     if (!world?.labyrinthMode) {
       return;
     }
@@ -390,15 +415,56 @@ export function DeveloperMazeInspector() {
 
   useEffect(() => {
     const onKeyDown = (event) => {
+      const world = worldRef.current;
+
+      if (!world) {
+        return;
+      }
+
       if (
-        ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(
-          event.key,
-        )
+        [
+          "ArrowUp",
+          "ArrowDown",
+          "ArrowLeft",
+          "ArrowRight",
+          " ",
+        ].includes(event.key)
       ) {
         event.preventDefault();
       }
+
       keysRef.current[event.key] = true;
       keysRef.current[event.key.toLowerCase()] = true;
+
+      if (world.labyrinthMode) {
+        if (
+          !event.repeat &&
+          ["b", "B", " ", "Enter"].includes(event.key)
+        ) {
+          activateLabyrinthBreaker(world);
+        }
+        return;
+      }
+
+      if (["z", "Z"].includes(event.key)) {
+        activateStoredPowerUp(world, 0);
+      } else if (["x", "X"].includes(event.key)) {
+        activateStoredPowerUp(world, 1);
+      }
+
+      const directWeapon = WEAPON_HOTKEY_MAP[event.key];
+
+      if (directWeapon) {
+        selectWeapon(world, directWeapon);
+      }
+
+      if (
+        !event.repeat &&
+        [" ", "Enter"].includes(event.key)
+      ) {
+        setForwardAimTarget(world);
+        attack(world);
+      }
     };
 
     const onKeyUp = (event) => {
@@ -408,6 +474,11 @@ export function DeveloperMazeInspector() {
 
     const clearKeys = () => {
       keysRef.current = {};
+      const world = worldRef.current;
+
+      if (world) {
+        world.pointer.down = false;
+      }
     };
 
     window.addEventListener("keydown", onKeyDown, { passive: false });
@@ -428,14 +499,21 @@ export function DeveloperMazeInspector() {
     const frame = (now) => {
       const world = worldRef.current;
       const canvas = canvasRef.current;
+      const dt = Math.min(
+        0.05,
+        Math.max(0, (now - previousTime) / 1000),
+      );
+      previousTime = now;
 
       if (world && canvas) {
-        const dt = Math.min(0.05, Math.max(0, (now - previousTime) / 1000));
-        previousTime = now;
         world.time += dt;
         world.fogPulse += dt;
-        world.player.hp = world.player.maxHp;
+        world.player.hp = Math.max(
+          world.player.hp,
+          world.player.maxHp,
+        );
         world.gameOver = false;
+        world.victory = false;
 
         const keys = keysRef.current;
         let moveX =
@@ -449,6 +527,7 @@ export function DeveloperMazeInspector() {
           const length = Math.hypot(moveX, moveY);
           moveX /= length;
           moveY /= length;
+
           world.player.x = clamp(
             world.player.x + moveX * DEVELOPER_MOVE_SPEED * dt,
             0.05,
@@ -459,34 +538,86 @@ export function DeveloperMazeInspector() {
             0.05,
             world.height - 0.05,
           );
-          world.player.facing = Math.atan2(moveY, moveX);
+
+          if (!world.pointer.inside) {
+            world.player.facing = Math.atan2(moveY, moveX);
+          }
+
+          world.distanceFieldDirty = true;
           updateVisionCache(world);
           revealAroundPlayer(world);
         }
 
-        if (
-          world.labyrinthMode &&
-          world.time >= world.labyrinth.nextMutationAt
-        ) {
-          mutateLabyrinth(world);
-          world.labyrinth.nextMutationAt =
-            world.time + world.labyrinth.mutationInterval;
+        updatePickups(world, dt);
+
+        if (world.labyrinthMode) {
+          if (world.time >= world.labyrinth.nextMutationAt) {
+            mutateLabyrinth(world);
+            world.labyrinth.nextMutationAt =
+              world.time + world.labyrinth.mutationInterval;
+            computeDistanceField(world);
+          }
+        } else {
+          updatePowerUps(world, dt);
+
+          distanceRefreshRef.current += dt;
+          if (
+            world.distanceFieldDirty ||
+            distanceRefreshRef.current >= DISTANCE_REFRESH_SECONDS
+          ) {
+            computeDistanceField(world);
+            distanceRefreshRef.current = 0;
+          }
+
+          if (
+            keys[" "] ||
+            keys.Enter ||
+            world.pointer.down
+          ) {
+            if (!world.pointer.inside) {
+              setForwardAimTarget(world);
+            }
+            attack(world);
+          }
+
+          updateEnemies(world, dt);
+          updateProjectiles(world, dt);
         }
 
+        updateEffects(world, dt);
+        updateVisionCache(world);
+        revealAroundPlayer(world);
+
         if (world.messageTtl > 0) {
-          world.messageTtl = Math.max(0, world.messageTtl - dt);
+          world.messageTtl = Math.max(
+            0,
+            world.messageTtl - dt,
+          );
+
+          if (world.messageTtl === 0) {
+            world.message = "";
+          }
+        }
+
+        if (world.audioEvents?.length) {
+          world.audioEvents.length = 0;
+        }
+
+        uiRefreshRef.current += dt;
+        if (uiRefreshRef.current >= UI_REFRESH_SECONDS) {
+          uiRefreshRef.current = 0;
+          setUiRevision((revision) => revision + 1);
         }
 
         const ctx = canvas.getContext("2d");
         drawInspector(ctx, world, settingsRef.current);
-      } else {
-        previousTime = now;
       }
 
       animationFrame = requestAnimationFrame(frame);
     };
 
     animationFrame = requestAnimationFrame(frame);
+
     return () => cancelAnimationFrame(animationFrame);
   }, []);
 
@@ -498,6 +629,7 @@ export function DeveloperMazeInspector() {
 
   const nudgePlayer = (dx, dy) => {
     const world = worldRef.current;
+
     if (!world) {
       return;
     }
@@ -517,12 +649,111 @@ export function DeveloperMazeInspector() {
       world.player.facing = Math.atan2(dy, dx);
     }
 
+    world.pointer.inside = false;
+    world.distanceFieldDirty = true;
     updateVisionCache(world);
     revealAroundPlayer(world);
   };
 
-  const selectedLevel = LEVELS[levelKey];
+  const aimFromPointerEvent = (event) => {
+    const world = worldRef.current;
+    const canvas = canvasRef.current;
+
+    if (!world || !canvas) {
+      return;
+    }
+
+    const rect = canvas.getBoundingClientRect();
+    const canvasX =
+      ((event.clientX - rect.left) / rect.width) * CANVAS_SIZE;
+    const canvasY =
+      ((event.clientY - rect.top) / rect.height) * CANVAS_SIZE;
+    const span = getViewSpan(
+      world,
+      settingsRef.current.zoomStep,
+    );
+    const camera = getInspectorCamera(
+      world,
+      span,
+      settingsRef.current.zoomStep === 0,
+    );
+
+    setAimTarget(
+      world,
+      camera.x + (canvasX / CANVAS_SIZE) * span,
+      camera.y + (canvasY / CANVAS_SIZE) * span,
+    );
+  };
+
+  const handleCanvasPointerMove = (event) => {
+    aimFromPointerEvent(event);
+  };
+
+  const handleCanvasPointerDown = (event) => {
+    const world = worldRef.current;
+
+    if (!world) {
+      return;
+    }
+
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    aimFromPointerEvent(event);
+    world.pointer.down = true;
+
+    if (!world.labyrinthMode) {
+      attack(world);
+    }
+  };
+
+  const handleCanvasPointerUp = (event) => {
+    const world = worldRef.current;
+
+    if (!world) {
+      return;
+    }
+
+    world.pointer.down = false;
+
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const handleCanvasPointerLeave = () => {
+    const world = worldRef.current;
+
+    if (!world) {
+      return;
+    }
+
+    world.pointer.down = false;
+    world.pointer.inside = false;
+  };
+
+  const attackForward = () => {
+    const world = worldRef.current;
+
+    if (!world || world.labyrinthMode) {
+      return;
+    }
+
+    setForwardAimTarget(world);
+    attack(world);
+  };
+
+  const usePowerUp = (slotIndex) => {
+    const world = worldRef.current;
+
+    if (!world || world.labyrinthMode) {
+      return;
+    }
+
+    activateStoredPowerUp(world, slotIndex);
+    setUiRevision((revision) => revision + 1);
+  };
+
   const currentWorld = worldRef.current;
+  const selectedLevel = LEVELS[levelKey];
   const currentSpan = currentWorld
     ? getViewSpan(currentWorld, zoomStep)
     : 0;
@@ -535,6 +766,10 @@ export function DeveloperMazeInspector() {
             4,
             Math.round(currentSpan),
           )} tiles`;
+  const storedPowerUps =
+    currentWorld && !currentWorld.labyrinthMode
+      ? getStoredPowerUps(currentWorld)
+      : [];
 
   return (
     <section className="developer-maze-inspector">
@@ -542,7 +777,8 @@ export function DeveloperMazeInspector() {
         <div>
           <h2>Maze Inspector</h2>
           <p>
-            Developer noclip and invincibility are active inside this viewer.
+            Noclip and invincibility are active. Enemies, combat, pickups,
+            and power-ups use normal-game behavior.
           </p>
         </div>
         <div className="developer-badges">
@@ -595,28 +831,66 @@ export function DeveloperMazeInspector() {
           FIT
         </button>
 
+        {!currentWorld?.labyrinthMode && (
+          <>
+            <button type="button" onClick={attackForward}>
+              ATTACK
+            </button>
+            <button type="button" onClick={() => usePowerUp(0)}>
+              {storedPowerUps[0]?.label ?? "POWER-UP 1"} (Z)
+            </button>
+            <button type="button" onClick={() => usePowerUp(1)}>
+              {storedPowerUps[1]?.label ?? "POWER-UP 2"} (X)
+            </button>
+          </>
+        )}
+
         {levelKey === "labyrinth" && (
-          <label className="developer-light-select">
-            LIGHT
-            <select
-              value={lightKey}
-              onChange={(event) => setLightKey(event.target.value)}
+          <>
+            <button
+              type="button"
+              onClick={() =>
+                activateLabyrinthBreaker(worldRef.current)
+              }
             >
-              <option value="base">Base light</option>
-              {LABYRINTH_LIGHT_ORDER.map((key) => (
-                <option key={key} value={key}>
-                  {LABYRINTH_LIGHTS[key].label}
-                </option>
-              ))}
-            </select>
-          </label>
+              BREAKER (B)
+            </button>
+            <label className="developer-light-select">
+              LIGHT
+              <select
+                value={lightKey}
+                onChange={(event) =>
+                  setLightKey(event.target.value)
+                }
+              >
+                <option value="base">Base light</option>
+                {LABYRINTH_LIGHT_ORDER.map((key) => (
+                  <option key={key} value={key}>
+                    {LABYRINTH_LIGHTS[key].label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </>
         )}
       </div>
 
       <div className="developer-maze-meta">
         <strong>{selectedLevel.subtitle}</strong>
         <span>{zoomLabel}</span>
-        <span>WASD / arrows move through every wall</span>
+        <span>WASD / arrows = noclip movement</span>
+        {!currentWorld?.labyrinthMode && (
+          <>
+            <span>Mouse / click = aim and attack</span>
+            <span>Space = attack</span>
+            <span>Z / X = stored power-ups</span>
+            <span>
+              HP {Math.round(currentWorld?.player.hp ?? 0)} /{" "}
+              {Math.round(currentWorld?.player.maxHp ?? 0)}
+            </span>
+            <span>Kills {currentWorld?.kills ?? 0}</span>
+          </>
+        )}
       </div>
 
       <div className="developer-maze-canvas-wrap">
@@ -625,10 +899,18 @@ export function DeveloperMazeInspector() {
           width={CANVAS_SIZE}
           height={CANVAS_SIZE}
           aria-label={`${selectedLevel.subtitle} developer maze inspector`}
+          onPointerMove={handleCanvasPointerMove}
+          onPointerDown={handleCanvasPointerDown}
+          onPointerUp={handleCanvasPointerUp}
+          onPointerCancel={handleCanvasPointerUp}
+          onPointerLeave={handleCanvasPointerLeave}
         />
       </div>
 
-      <div className="developer-maze-dpad" aria-label="Maze inspector movement">
+      <div
+        className="developer-maze-dpad"
+        aria-label="Maze inspector movement"
+      >
         <button type="button" onClick={() => nudgePlayer(0, -1)}>
           ↑
         </button>

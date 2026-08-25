@@ -1,12 +1,77 @@
 // src/game/world.js
-import { CANVAS_HEIGHT, CANVAS_WIDTH, DEFAULT_LEVEL_KEY, LEVELS } from "../config/constants.js";
+import {
+  CANVAS_HEIGHT,
+  CANVAS_WIDTH,
+  DEFAULT_LEVEL_KEY,
+  LEVELS,
+} from "../config/constants.js";
 import { normalizeLabyrinthOptions } from "../config/labyrinth.js";
 import { WEAPON_HOTKEY_LABEL } from "../config/weapons.js";
-import { computeDistanceField, placeEnemies, placePowerUps, placeProgressionItems, revealAroundPlayer, setMessage, updateVisionCache } from "./gameplay.js";
-import { bfsDistances, collectFloorTiles, farthestTile, generateMaze } from "./maze.js";
-import { createLabyrinthState, initializeLabyrinth } from "./labyrinth.js";
+import {
+  computeDistanceField,
+  placeEnemies,
+  placePowerUps,
+  placeProgressionItems,
+  revealAroundPlayer,
+  setMessage,
+  updateVisionCache,
+} from "./gameplay.js";
+import {
+  bfsDistances,
+  collectFloorTiles,
+  farthestTile,
+  generateMaze,
+} from "./maze.js";
+import {
+  createLabyrinthState,
+  initializeLabyrinth,
+} from "./labyrinth.js";
 import { createOwnedWeapons, indexOfTile } from "../utils/math.js";
 import { sanitizePlayerName } from "../utils/player.js";
+
+const MODE_SWITCH_WARNING_STORAGE_KEY =
+  "maze-arsenal-mode-switch-warning-seen-v1";
+
+function hasSeenModeSwitchWarning() {
+  if (typeof window === "undefined") {
+    return true;
+  }
+
+  try {
+    return (
+      window.localStorage.getItem(MODE_SWITCH_WARNING_STORAGE_KEY) === "1"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function markModeSwitchWarningSeen() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(MODE_SWITCH_WARNING_STORAGE_KEY, "1");
+  } catch {
+    // A failed persistence write should not block the mode switch.
+  }
+}
+
+function warnAboutModeSwitch() {
+  if (typeof window === "undefined" || hasSeenModeSwitchWarning()) {
+    return;
+  }
+
+  window.alert(
+    "Leaderboard warning\n\n" +
+      "Switching between 2D and 3D during a run makes this run " +
+      "ineligible for the leaderboard.\n\n" +
+      "Your existing personal best will not be deleted. " +
+      "This warning is shown only once.",
+  );
+  markModeSwitchWarningSeen();
+}
 
 export function getControlsForViewMode(viewMode) {
   if (viewMode === "3d") {
@@ -63,8 +128,30 @@ function getLabyrinthControlsForViewMode(viewMode) {
 }
 
 export function setWorldViewMode(world, viewMode) {
-  const normalizedViewMode =
-    viewMode === "3d" ? "3d" : "2d";
+  const normalizedViewMode = viewMode === "3d" ? "3d" : "2d";
+  const isActualSwitch = world.viewMode !== normalizedViewMode;
+  const isActiveLeaderboardRun =
+    isActualSwitch &&
+    !world.labyrinthMode &&
+    !world.victory &&
+    !world.gameOver &&
+    ["2d", "3d"].includes(world.runMode);
+
+  if (isActiveLeaderboardRun) {
+    warnAboutModeSwitch();
+
+    world.leaderboardEligible = false;
+
+    // App.jsx already submits world.runMode. An invalid value makes both
+    // local and global leaderboard functions reject this switched run.
+    world.runMode = "invalid";
+
+    setMessage(
+      world,
+      "Leaderboard disabled for this run after switching 2D / 3D.",
+      3.2,
+    );
+  }
 
   world.viewMode = normalizedViewMode;
   world.controls = world.labyrinthMode
@@ -74,17 +161,20 @@ export function setWorldViewMode(world, viewMode) {
   if (normalizedViewMode === "3d") {
     world.minimapOn = true;
   }
+
   world.pointer.down = false;
   world.pointer.inside = false;
   world.touchAimActive = false;
 
-  setMessage(
-    world,
-    normalizedViewMode === "3d"
-      ? "3D view enabled"
-      : "2D view enabled",
-    1.4,
-  );
+  if (!isActiveLeaderboardRun) {
+    setMessage(
+      world,
+      normalizedViewMode === "3d"
+        ? "3D view enabled"
+        : "2D view enabled",
+      1.4,
+    );
+  }
 }
 
 export function createWorld(
@@ -105,8 +195,13 @@ export function createWorld(
         logicalRows: labyrinthOptions.logicalRows,
       }
     : baseLevel;
-  const maze = generateMaze(level.logicalCols, level.logicalRows, level);
+  const maze = generateMaze(
+    level.logicalCols,
+    level.logicalRows,
+    level,
+  );
   const normalizedViewMode = viewMode === "3d" ? "3d" : "2d";
+
   const world = {
     ...maze,
     levelKey: level.key,
@@ -134,6 +229,7 @@ export function createWorld(
     labelsOn: !labyrinthMode,
     viewMode: normalizedViewMode,
     runMode: normalizedViewMode,
+    leaderboardEligible: !labyrinthMode,
     controls: labyrinthMode
       ? getLabyrinthControlsForViewMode(normalizedViewMode)
       : getControlsForViewMode(normalizedViewMode),
@@ -200,7 +296,9 @@ export function createWorld(
   } else {
     const distancesFromStart = bfsDistances(world, startTile);
     const used = new Set();
-    used.add(indexOfTile(world.width, startTile.x, startTile.y));
+    used.add(
+      indexOfTile(world.width, startTile.x, startTile.y),
+    );
     used.add(indexOfTile(world.width, exit.x, exit.y));
 
     placeProgressionItems(world, distancesFromStart, used);

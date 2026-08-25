@@ -1,29 +1,29 @@
 // api/country.js
 const COUNTRY_CODE_PATTERN = /^[A-Z]{2}$/;
 
-function json(data, status = 200) {
-  return Response.json(data, {
-    status,
-    headers: {
-      "Cache-Control": "public, max-age=0, must-revalidate",
-    },
-  });
+function sendJson(response, status, body) {
+  response.status(status).json(body);
 }
 
-export default {
-  async fetch(request) {
-    if (request.method !== "GET") {
-      return json({ error: "Method not allowed." }, 405);
-    }
+export default function handler(request, response) {
+  if (request.method !== "GET") {
+    response.setHeader("Allow", "GET");
+    sendJson(response, 405, { error: "Method not allowed." });
+    return;
+  }
 
-    const country = String(
-      request.headers.get("x-vercel-ip-country") ?? "",
-    )
-      .trim()
-      .toUpperCase();
+  response.setHeader(
+    "Cache-Control",
+    "public, max-age=0, must-revalidate",
+  );
 
-    return json({
-      country: COUNTRY_CODE_PATTERN.test(country) ? country : "",
-    });
-  },
-};
+  const country = String(
+    request.headers["x-vercel-ip-country"] ?? "",
+  )
+    .trim()
+    .toUpperCase();
+
+  sendJson(response, 200, {
+    country: COUNTRY_CODE_PATTERN.test(country) ? country : "",
+  });
+}

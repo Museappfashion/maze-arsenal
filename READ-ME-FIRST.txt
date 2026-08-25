@@ -1,29 +1,55 @@
-MAZE ARSENAL — VERCEL HOTFIX V3
+MAZE ARSENAL — DIRECT SOURCE FIX
+================================
 
-This fixes the repeated Vite/Rolldown transform failure where the comment marker
-was stripped before the hardening plugin ran again.
+NO VITE HARDENING PLUGIN.
+NO .command FILE.
+NO BUILD-TIME REGEX PATCHING.
 
-The plugin now recognizes already-transformed source using semantic markers:
-- leaderboard.js: beginGlobalLeaderboardRun + finishGlobalLeaderboardRun
-- world.js: leaderboardEligible
-- App.jsx: ModeSwitchWarning + RunEndOverlay + beginLeaderboardRunForWorld
-- LevelSelectScreen.jsx: Personal best text
+Replace these actual files in your repo:
 
-INSTALL:
-1. Switch GitHub Desktop to the branch you are deploying (main or pv).
-2. Unzip this ZIP.
-3. In Finder, open your repo's tools/ folder.
-4. Replace:
-     tools/mazeHardeningPlugin.js
-   with the file from this ZIP.
-5. Commit the one changed file.
-6. Push.
-7. Let Vercel build the new commit.
+1. repo/vite.config.js
+   <- vite.config.js
 
-LOCAL TEST FIRST:
+2. repo/src/services/leaderboard.js
+   <- src/services/leaderboard.js
+
+3. repo/src/game/world.js
+   <- src/game/world.js
+
+4. repo/api/country.js
+   <- api/country.js
+
+After replacing them, the old tools/mazeHardeningPlugin.js may stay in the
+repo, but it is unused because vite.config.js no longer imports it. You can
+delete it later.
+
+SUPABASE:
+1. Authentication -> Anonymous Sign-Ins = ON.
+2. Export leaderboard_scores first if you want old attempt history.
+3. Run:
+   supabase/leaderboard-personal-best.sql
+
+The SQL intentionally deletes slower duplicate historical attempts and keeps
+only the fastest row for each user + level + 2D/3D mode.
+
+BEHAVIOR:
+- Local storage keeps one PB per level + mode.
+- Supabase keeps one PB per user + level + mode.
+- Faster run replaces the PB.
+- Slower/equal run is discarded.
+- First in-game 2D <-> 3D switch displays a leaderboard warning.
+- Any switched run is rejected by the leaderboard.
+- Existing PBs are not deleted.
+- No cookies are required; Supabase anonymous auth uses its normal persisted
+  browser session.
+
+TEST:
   npm run build
 
-If it succeeds, you should see:
-  ✓ built in ...
+Then commit these normal source files and push.
 
-No Supabase SQL change is required for this build-only hotfix.
+NOTE:
+This direct-source bundle removes the failing build plugin and fixes the
+leaderboard + first-switch invalidation without modifying App.jsx.
+It does NOT add the custom Try Again end-screen overlay. That specific UI
+still requires a direct App.jsx replacement/integration.

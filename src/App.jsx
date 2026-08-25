@@ -1556,7 +1556,7 @@ return (
         </div>
 
         <div style={{ marginTop: 10, color: "#94a3b8", fontSize: 12, lineHeight: 1.45 }}>
-          When both slots are full, other power-ups remain on the maze until you use one.
+          When both slots are full, you may  not pick up other power ups.
         </div>
       </section>
 

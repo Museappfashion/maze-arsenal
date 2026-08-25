@@ -19,7 +19,7 @@ function getTargetPath(id) {
 }
 
 function transformMazeSource(source, activeFile) {
-  let output = source;
+  let output = source.replace(/\r\n?/g, "\n");
 
   function read() {
     return output;
@@ -40,28 +40,13 @@ function transformMazeSource(source, activeFile) {
     if (matches.length !== expected) {
       throw new Error(
         `[maze-hardening] ${filePath} expected ${expected} match(es), found ${matches.length}. ` +
-          "Your branch has moved; refresh this source-only fix before deploying.",
+          `Pattern: ${pattern}. Your branch has moved; refresh this source-only fix before deploying.`,
       );
     }
 
     write(filePath, current.replace(pattern, replacement));
   }
 
-  replaceRegex(
-    "src/services/leaderboard.js",
-    /^export const GLOBAL_LEADERBOARD_TABLE = "leaderboard_scores";\n/mg,
-    "",
-  );
-  replaceRegex(
-    "src/services/leaderboard.js",
-    /export const SUPABASE_URL = import\.meta\.env\.VITE_SUPABASE_URL\?\.trim\(\) \?\? "";\n\nexport const SUPABASE_PUBLISHABLE_KEY =\n  import\.meta\.env\.VITE_SUPABASE_PUBLISHABLE_KEY\?\.trim\(\) \?\? "";/g,
-    `const ENV = import.meta.env ?? {};
-
-  export const SUPABASE_URL = ENV.VITE_SUPABASE_URL?.trim() ?? "";
-
-  export const SUPABASE_PUBLISHABLE_KEY =
-    ENV.VITE_SUPABASE_PUBLISHABLE_KEY?.trim() ?? "";`,
-  );
   replaceRegex(
     "src/services/leaderboard.js",
     /export function normalizeLevelLeaderboards\(levelBoards\) \{[\s\S]*?\n\}\nexport function normalizeLeaderboards/g,

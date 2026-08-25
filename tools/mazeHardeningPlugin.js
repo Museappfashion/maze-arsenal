@@ -1,10 +1,7 @@
 // tools/mazeHardeningPlugin.js
-const HARDENING_MARKER = "/* maze-hardening-applied */";
-
 const TARGET_FILES = new Set([
   "src/App.jsx",
   "src/game/world.js",
-  "src/services/leaderboard.js",
   "src/components/LevelSelectScreen.jsx",
 ]);
 
@@ -48,47 +45,6 @@ function transformMazeSource(source, activeFile) {
 
     write(filePath, current.replace(pattern, replacement));
   }
-
-  replaceRegex(
-    "src/services/leaderboard.js",
-    /export function normalizeLevelLeaderboards\(levelBoards\) \{[\s\S]*?\n\}\nexport function normalizeLeaderboards/g,
-    `export function normalizeLevelLeaderboards(levelBoards) {
-    if (Array.isArray(levelBoards)) {
-      return {
-        "2d": normalizeLeaderboardEntries(levelBoards).slice(0, 1),
-        "3d": [],
-      };
-    }
-
-    return {
-      "2d": normalizeLeaderboardEntries(levelBoards?.["2d"]).slice(0, 1),
-      "3d": normalizeLeaderboardEntries(levelBoards?.["3d"]).slice(0, 1),
-    };
-  }
-  export function normalizeLeaderboards`,
-  );
-  replaceRegex(
-    "src/services/leaderboard.js",
-    /if \(currentRaw\) \{\n      return normalizeLeaderboards\(JSON\.parse\(currentRaw\)\);\n    \}/g,
-    `if (currentRaw) {
-        const normalized = normalizeLeaderboards(JSON.parse(currentRaw));
-        window.localStorage.setItem(
-          LEADERBOARD_STORAGE_KEY,
-          JSON.stringify(normalized),
-        );
-        return normalized;
-      }`,
-  );
-  replaceRegex(
-    "src/services/leaderboard.js",
-    /export function addLeaderboardTime\([\s\S]*?\n\}\nexport async function ensureGlobalLeaderboardSession/g,
-    "export function addLeaderboardTime(\n  leaderboards,\n  levelKey,\n  mode,\n  time,\n  playerName,\n) {\n  if (\n    !LEVELS[levelKey] ||\n    LEVELS[levelKey].leaderboard === false ||\n    !Number.isFinite(time) ||\n    time <= 0\n  ) {\n    return leaderboards;\n  }\n\n  const normalizedMode = mode === \"3d\" ? \"3d\" : \"2d\";\n  const levelBoards = normalizeLevelLeaderboards(leaderboards[levelKey]);\n  const currentBest = levelBoards[normalizedMode][0] ?? null;\n\n  if (currentBest && currentBest.time <= time) {\n    return leaderboards;\n  }\n\n  return {\n    ...leaderboards,\n    [levelKey]: {\n      ...levelBoards,\n      [normalizedMode]: [\n        {\n          time,\n          completedAt: new Date().toISOString(),\n          playerName: getPlayerDisplayName(playerName),\n          countryCode: \"\",\n          globalRank: null,\n          isCurrentUser: true,\n        },\n      ],\n    },\n  };\n}\n\nexport async function ensureGlobalLeaderboardSession",
-  );
-  replaceRegex(
-    "src/services/leaderboard.js",
-    /export async function submitGlobalLeaderboardTime\([\s\S]*$/g,
-    "export async function beginGlobalLeaderboardRun(levelKey, mode) {\n  if (\n    !supabase ||\n    !LEVELS[levelKey] ||\n    LEVELS[levelKey].leaderboard === false\n  ) {\n    return null;\n  }\n\n  await ensureGlobalLeaderboardSession();\n\n  const { data, error } = await supabase.rpc(\"start_leaderboard_run\", {\n    p_level_key: levelKey,\n    p_mode: mode === \"3d\" ? \"3d\" : \"2d\",\n  });\n\n  if (error) {\n    throw error;\n  }\n\n  return typeof data === \"string\" ? data : null;\n}\n\nexport async function finishGlobalLeaderboardRun(\n  runId,\n  playerName,\n  countryCode,\n) {\n  if (!supabase || !runId) {\n    return null;\n  }\n\n  await ensureGlobalLeaderboardSession();\n\n  const { data, error } = await supabase.rpc(\"finish_leaderboard_run\", {\n    p_run_id: runId,\n    p_player_name: getPlayerDisplayName(playerName),\n    p_country_code: normalizeCountryCode(countryCode) || null,\n  });\n\n  if (error) {\n    throw error;\n  }\n\n  return data ?? null;\n}\n",
-  );
 
   replaceRegex(
     "src/game/world.js",
@@ -369,7 +325,7 @@ export function mazeHardeningPlugin() {
     transform(code, id) {
       const targetPath = getTargetPath(id);
 
-      if (!targetPath || code.includes(HARDENING_MARKER)) {
+      if (!targetPath) {
         return null;
       }
 
@@ -380,7 +336,7 @@ export function mazeHardeningPlugin() {
       }
 
       return {
-        code: `${HARDENING_MARKER}\n${transformed}`,
+        code: transformed,
         map: null,
       };
     },

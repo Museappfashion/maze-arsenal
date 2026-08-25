@@ -1,4 +1,6 @@
 // tools/mazeHardeningPlugin.js
+const HARDENING_MARKER = "/* maze-hardening-applied */";
+
 const TARGET_FILES = new Set([
   "src/App.jsx",
   "src/game/world.js",
@@ -367,7 +369,7 @@ export function mazeHardeningPlugin() {
     transform(code, id) {
       const targetPath = getTargetPath(id);
 
-      if (!targetPath) {
+      if (!targetPath || code.includes(HARDENING_MARKER)) {
         return null;
       }
 
@@ -378,7 +380,7 @@ export function mazeHardeningPlugin() {
       }
 
       return {
-        code: transformed,
+        code: `${HARDENING_MARKER}\n${transformed}`,
         map: null,
       };
     },

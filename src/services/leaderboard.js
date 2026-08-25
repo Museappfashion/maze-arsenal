@@ -4,16 +4,20 @@ import { LEVELS } from "../config/constants.js";
 import { getPlayerDisplayName } from "../utils/player.js";
 
 export const LEADERBOARD_STORAGE_KEY = "maze-arsenal-fastest-escapes-v2";
-export const LEGACY_LEADERBOARD_STORAGE_KEY =
-  "maze-arsenal-fastest-escapes-v1";
+
+export const LEGACY_LEADERBOARD_STORAGE_KEY = "maze-arsenal-fastest-escapes-v1";
+
 export const LEADERBOARD_LIMIT = 10;
+
+export const GLOBAL_LEADERBOARD_TABLE = "leaderboard_scores";
+
 export const GLOBAL_LEADERBOARD_RPC = "get_global_leaderboard";
+
 export const COUNTRY_CODE_PATTERN = /^[A-Z]{2}$/;
 
 export let detectedCountryCodePromise = null;
 
-export const SUPABASE_URL =
-  import.meta.env.VITE_SUPABASE_URL?.trim() ?? "";
+export const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL?.trim() ?? "";
 
 export const SUPABASE_PUBLISHABLE_KEY =
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim() ?? "";
@@ -45,9 +49,7 @@ export function countryCodeToFlag(value) {
   }
 
   return String.fromCodePoint(
-    ...countryCode
-      .split("")
-      .map((character) => 127397 + character.charCodeAt(0)),
+    ...countryCode.split("").map((character) => 127397 + character.charCodeAt(0)),
   );
 }
 
@@ -109,7 +111,7 @@ export async function detectCountryCode() {
         }
       }
     } catch {
-      // Local Vite development has no Vercel geo endpoint.
+      // Local Vite development has no Vercel geo endpoint, so locale is the fallback.
     }
 
     return inferCountryCodeFromLocale();
@@ -167,14 +169,14 @@ export function normalizeLeaderboardEntries(entries) {
 export function normalizeLevelLeaderboards(levelBoards) {
   if (Array.isArray(levelBoards)) {
     return {
-      "2d": normalizeLeaderboardEntries(levelBoards).slice(0, 1),
+      "2d": normalizeLeaderboardEntries(levelBoards),
       "3d": [],
     };
   }
 
   return {
-    "2d": normalizeLeaderboardEntries(levelBoards?.["2d"]).slice(0, 1),
-    "3d": normalizeLeaderboardEntries(levelBoards?.["3d"]).slice(0, 1),
+    "2d": normalizeLeaderboardEntries(levelBoards?.["2d"]),
+    "3d": normalizeLeaderboardEntries(levelBoards?.["3d"]),
   };
 }
 
@@ -196,20 +198,13 @@ export function loadLeaderboards() {
 
   try {
     const currentRaw = window.localStorage.getItem(LEADERBOARD_STORAGE_KEY);
-
     if (currentRaw) {
-      const normalized = normalizeLeaderboards(JSON.parse(currentRaw));
-      window.localStorage.setItem(
-        LEADERBOARD_STORAGE_KEY,
-        JSON.stringify(normalized),
-      );
-      return normalized;
+      return normalizeLeaderboards(JSON.parse(currentRaw));
     }
 
     const legacyRaw = window.localStorage.getItem(
       LEGACY_LEADERBOARD_STORAGE_KEY,
     );
-
     if (!legacyRaw) {
       return empty;
     }
@@ -219,7 +214,6 @@ export function loadLeaderboards() {
       LEADERBOARD_STORAGE_KEY,
       JSON.stringify(migrated),
     );
-
     return migrated;
   } catch {
     return empty;
@@ -237,7 +231,7 @@ export function saveLeaderboards(leaderboards) {
       JSON.stringify(leaderboards),
     );
   } catch {
-    // Local storage can be unavailable in restricted browser contexts.
+    // Local storage can be unavailable in private or restricted browser contexts.
   }
 }
 
@@ -258,29 +252,21 @@ export function addLeaderboardTime(
   }
 
   const normalizedMode = mode === "3d" ? "3d" : "2d";
-  const levelBoards = normalizeLevelLeaderboards(
-    leaderboards?.[levelKey],
-  );
-  const currentBest = levelBoards[normalizedMode][0] ?? null;
-
-  if (currentBest && currentBest.time <= time) {
-    return leaderboards;
-  }
+  const levelBoards = normalizeLevelLeaderboards(leaderboards[levelKey]);
+  const nextEntries = normalizeLeaderboardEntries([
+    ...levelBoards[normalizedMode],
+    {
+      time,
+      completedAt: new Date().toISOString(),
+      playerName: getPlayerDisplayName(playerName),
+    },
+  ]);
 
   return {
     ...leaderboards,
     [levelKey]: {
       ...levelBoards,
-      [normalizedMode]: [
-        {
-          time,
-          completedAt: new Date().toISOString(),
-          playerName: getPlayerDisplayName(playerName),
-          countryCode: "",
-          globalRank: null,
-          isCurrentUser: true,
-        },
-      ],
+      [normalizedMode]: nextEntries,
     },
   };
 }
@@ -383,49 +369,39 @@ export async function fetchGlobalLeaderboards() {
   };
 }
 
-export async function beginGlobalLeaderboardRun(levelKey, mode) {
-  if (
-    !supabase ||
-    !LEVELS[levelKey] ||
-    LEVELS[levelKey].leaderboard === false
-  ) {
-    return null;
-  }
-
-  await ensureGlobalLeaderboardSession();
-
-  const { data, error } = await supabase.rpc("start_leaderboard_run", {
-    p_level_key: levelKey,
-    p_mode: mode === "3d" ? "3d" : "2d",
-  });
-
-  if (error) {
-    throw error;
-  }
-
-  return typeof data === "string" ? data : null;
-}
-
-export async function finishGlobalLeaderboardRun(
-  runId,
+export async function submitGlobalLeaderboardTime(
+  levelKey,
+  mode,
+  time,
   playerName,
   countryCode,
 ) {
-  if (!supabase || !runId) {
-    return null;
+  if (
+    !supabase ||
+    !LEVELS[levelKey] ||
+    LEVELS[levelKey].leaderboard === false ||
+    !Number.isFinite(time) ||
+    time <= 0
+  ) {
+    return false;
   }
 
-  await ensureGlobalLeaderboardSession();
+  const session = await ensureGlobalLeaderboardSession();
+  const normalizedMode = mode === "3d" ? "3d" : "2d";
+  const roundedTime = Math.round(time * 1000) / 1000;
 
-  const { data, error } = await supabase.rpc("finish_leaderboard_run", {
-    p_run_id: runId,
-    p_player_name: getPlayerDisplayName(playerName),
-    p_country_code: normalizeCountryCode(countryCode) || null,
+  const { error } = await supabase.from(GLOBAL_LEADERBOARD_TABLE).insert({
+    user_id: session.user.id,
+    player_name: getPlayerDisplayName(playerName),
+    level_key: levelKey,
+    mode: normalizedMode,
+    time_seconds: roundedTime,
+    country_code: normalizeCountryCode(countryCode) || null,
   });
 
   if (error) {
     throw error;
   }
 
-  return data ?? null;
+  return true;
 }

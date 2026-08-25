@@ -1,10 +1,8 @@
 // src/services/developerAnalytics.js
-import {
-  ensureGlobalLeaderboardSession,
-  supabase,
-} from "./leaderboard.js";
+import { ensureGlobalLeaderboardSession, supabase } from "./leaderboard.js";
 
 const PLAYTIME_HEARTBEAT_LIMIT_SECONDS = 120;
+const DEVELOPER_USAGE_ENDPOINT = "/api/developer-usage";
 
 async function recordUsage({
   eventType,
@@ -17,22 +15,29 @@ async function recordUsage({
   }
 
   try {
-    await ensureGlobalLeaderboardSession();
-
+    const session = await ensureGlobalLeaderboardSession();
     const normalizedSeconds = Math.min(
       PLAYTIME_HEARTBEAT_LIMIT_SECONDS,
       Math.max(0, Math.round(Number(seconds) || 0)),
     );
-
-    const { error } = await supabase.rpc("record_developer_usage", {
-      p_event: eventType,
-      p_donation_key: donationKey,
-      p_seconds: normalizedSeconds,
-      p_player_name: String(playerName ?? "").trim().slice(0, 20),
+    const response = await fetch(DEVELOPER_USAGE_ENDPOINT, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        eventType,
+        donationKey,
+        seconds: normalizedSeconds,
+        playerName: String(playerName ?? "").trim().slice(0, 20),
+      }),
     });
 
-    if (error) {
-      throw error;
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      throw new Error(data?.error ?? `Analytics request failed (${response.status}).`);
     }
 
     return true;
@@ -55,8 +60,7 @@ export function recordDonationAttempt(donationKey) {
 
 export function recordVisitorSeen() {
   return recordUsage({
-    eventType: "playtime",
-    seconds: 0,
+    eventType: "visitor",
   });
 }
 
@@ -70,6 +74,7 @@ export function recordGameStarted(world) {
 export function recordGameFinished(world) {
   return recordUsage({
     eventType: "game_finish",
+    seconds: PLAYTIME_HEARTBEAT_LIMIT_SECONDS,
     playerName: world?.playerName ?? "",
   });
 }

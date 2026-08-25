@@ -20,6 +20,31 @@ function getTargetPath(id) {
   return null;
 }
 
+function isAlreadyHardened(code, targetPath) {
+  const markers = {
+    "src/services/leaderboard.js": [
+      "beginGlobalLeaderboardRun",
+      "finishGlobalLeaderboardRun",
+    ],
+    "src/game/world.js": ["leaderboardEligible: !labyrinthMode"],
+    "src/App.jsx": [
+      "ModeSwitchWarning",
+      "RunEndOverlay",
+      "beginLeaderboardRunForWorld",
+    ],
+    "src/components/LevelSelectScreen.jsx": [
+      '"Personal best"',
+      "One personal best per level and view mode",
+    ],
+  };
+
+  const requiredMarkers = markers[targetPath] ?? [];
+  return (
+    requiredMarkers.length > 0 &&
+    requiredMarkers.every((marker) => code.includes(marker))
+  );
+}
+
 function transformMazeSource(source, activeFile) {
   let output = source.replace(/\r\n?/g, "\n");
 
@@ -369,7 +394,11 @@ export function mazeHardeningPlugin() {
     transform(code, id) {
       const targetPath = getTargetPath(id);
 
-      if (!targetPath || code.includes(HARDENING_MARKER)) {
+      if (
+        !targetPath ||
+        code.includes(HARDENING_MARKER) ||
+        isAlreadyHardened(code, targetPath)
+      ) {
         return null;
       }
 

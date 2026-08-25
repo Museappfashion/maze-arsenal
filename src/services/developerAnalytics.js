@@ -1,8 +1,41 @@
 // src/services/developerAnalytics.js
-import { ensureGlobalLeaderboardSession, supabase } from "./leaderboard.js";
+import {
+  ensureGlobalLeaderboardSession,
+  supabase,
+} from "./leaderboard.js";
 
 const PLAYTIME_HEARTBEAT_LIMIT_SECONDS = 120;
 const DEVELOPER_USAGE_ENDPOINT = "/api/developer-usage";
+
+let analyticsSessionPromise = null;
+
+async function getAnalyticsSession() {
+  if (!supabase) {
+    return null;
+  }
+
+  if (!analyticsSessionPromise) {
+    analyticsSessionPromise = ensureGlobalLeaderboardSession().finally(() => {
+      analyticsSessionPromise = null;
+    });
+  }
+
+  return analyticsSessionPromise;
+}
+
+async function postUsage(session, payload) {
+  return fetch(DEVELOPER_USAGE_ENDPOINT, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${session.access_token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+    cache: "no-store",
+    keepalive: true,
+  });
+}
 
 async function recordUsage({
   eventType,
@@ -14,30 +47,42 @@ async function recordUsage({
     return false;
   }
 
-  try {
-    const session = await ensureGlobalLeaderboardSession();
-    const normalizedSeconds = Math.min(
+  const payload = {
+    eventType,
+    donationKey,
+    seconds: Math.min(
       PLAYTIME_HEARTBEAT_LIMIT_SECONDS,
       Math.max(0, Math.round(Number(seconds) || 0)),
-    );
-    const response = await fetch(DEVELOPER_USAGE_ENDPOINT, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        eventType,
-        donationKey,
-        seconds: normalizedSeconds,
-        playerName: String(playerName ?? "").trim().slice(0, 20),
-      }),
-    });
+    ),
+    playerName: String(playerName ?? "").trim().slice(0, 20),
+  };
+
+  try {
+    let session = await getAnalyticsSession();
+
+    if (!session?.access_token) {
+      return false;
+    }
+
+    let response = await postUsage(session, payload);
+
+    if (response.status === 401) {
+      const { data, error } = await supabase.auth.refreshSession();
+
+      if (!error && data.session?.access_token) {
+        session = data.session;
+        response = await postUsage(session, payload);
+      }
+    }
 
     if (!response.ok) {
       const data = await response.json().catch(() => null);
-      throw new Error(data?.error ?? `Analytics request failed (${response.status}).`);
+      const message =
+        data?.error ??
+        data?.code ??
+        `Analytics request failed (${response.status}).`;
+
+      throw new Error(message);
     }
 
     return true;

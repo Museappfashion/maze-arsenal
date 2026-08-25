@@ -1,7 +1,11 @@
--- Mist Maze private developer analytics.
--- Run this once in Supabase Dashboard -> SQL Editor.
--- Players can write only their own aggregate counters through the RPC.
--- Players have no SELECT access to this table.
+-- supabase/developer-analytics.sql
+-- Canonical Mist Maze developer analytics migration.
+-- Safe to re-run.
+--
+-- This replaces the older browser-callable record_developer_usage RPC
+-- with a server-only RPC used by /api/developer-usage.
+
+begin;
 
 create table if not exists public.developer_usage_stats (
   user_id uuid primary key references auth.users(id) on delete cascade,
@@ -28,12 +32,41 @@ create table if not exists public.developer_usage_stats (
   last_seen_at timestamptz not null default now()
 );
 
-alter table public.developer_usage_stats enable row level security;
+alter table public.developer_usage_stats
+  add column if not exists active_run_started_at timestamptz;
 
-revoke all on table public.developer_usage_stats from anon;
-revoke all on table public.developer_usage_stats from authenticated;
+alter table public.developer_usage_stats
+  add column if not exists last_playtime_at timestamptz;
 
-create or replace function public.record_developer_usage(
+alter table public.developer_usage_stats
+  add column if not exists last_game_start_at timestamptz;
+
+alter table public.developer_usage_stats
+  add column if not exists last_donation_at timestamptz;
+
+create index if not exists developer_usage_stats_last_seen_idx
+  on public.developer_usage_stats (last_seen_at desc);
+
+alter table public.developer_usage_stats
+  enable row level security;
+
+revoke all
+  on table public.developer_usage_stats
+  from anon, authenticated;
+
+grant select
+  on table public.developer_usage_stats
+  to service_role;
+
+drop function if exists public.record_developer_usage(
+  text,
+  text,
+  integer,
+  text
+);
+
+create or replace function public.record_developer_usage_server(
+  p_user_id uuid,
   p_event text,
   p_donation_key text default null,
   p_seconds integer default 0,
@@ -45,29 +78,47 @@ security definer
 set search_path = public
 as $$
 declare
-  current_user_id uuid := auth.uid();
+  current_time timestamptz := clock_timestamp();
+
   clean_name text := nullif(
     left(trim(coalesce(p_player_name, '')), 20),
     ''
   );
+
   safe_seconds integer := greatest(
     0,
     least(coalesce(p_seconds, 0), 120)
   );
+
+  wall_seconds integer := 0;
+  credited_seconds integer := 0;
+
+  stats public.developer_usage_stats%rowtype;
 begin
-  if current_user_id is null then
-    raise exception 'Authentication required';
+  if p_user_id is null then
+    raise exception 'User id is required';
   end if;
 
   if p_event is null
-     or p_event not in ('game_start', 'game_finish', 'playtime', 'donation') then
+     or p_event not in (
+       'visitor',
+       'game_start',
+       'game_finish',
+       'playtime',
+       'donation'
+     ) then
     raise exception 'Invalid analytics event';
   end if;
 
   if p_event = 'donation'
      and (
        p_donation_key is null
-       or p_donation_key not in ('1', '2', '5', 'custom')
+       or p_donation_key not in (
+         '1',
+         '2',
+         '5',
+         'custom'
+       )
      ) then
     raise exception 'Invalid donation key';
   end if;
@@ -75,59 +126,203 @@ begin
   insert into public.developer_usage_stats (
     user_id,
     last_player_name,
-    games_started,
-    games_finished,
-    seconds_played,
-    donation_1_attempts,
-    donation_2_attempts,
-    donation_5_attempts,
-    donation_custom_attempts,
     last_seen_at
   )
   values (
-    current_user_id,
+    p_user_id,
     clean_name,
-    case when p_event = 'game_start' then 1 else 0 end,
-    case when p_event = 'game_finish' then 1 else 0 end,
-    case when p_event = 'playtime' then safe_seconds else 0 end,
-    case when p_event = 'donation' and p_donation_key = '1' then 1 else 0 end,
-    case when p_event = 'donation' and p_donation_key = '2' then 1 else 0 end,
-    case when p_event = 'donation' and p_donation_key = '5' then 1 else 0 end,
-    case when p_event = 'donation' and p_donation_key = 'custom' then 1 else 0 end,
-    now()
+    current_time
   )
-  on conflict (user_id)
-  do update set
-    last_player_name = coalesce(
-      excluded.last_player_name,
-      developer_usage_stats.last_player_name
-    ),
-    games_started =
-      developer_usage_stats.games_started + excluded.games_started,
-    games_finished =
-      developer_usage_stats.games_finished + excluded.games_finished,
-    seconds_played =
-      developer_usage_stats.seconds_played + excluded.seconds_played,
-    donation_1_attempts =
-      developer_usage_stats.donation_1_attempts
-      + excluded.donation_1_attempts,
-    donation_2_attempts =
-      developer_usage_stats.donation_2_attempts
-      + excluded.donation_2_attempts,
-    donation_5_attempts =
-      developer_usage_stats.donation_5_attempts
-      + excluded.donation_5_attempts,
-    donation_custom_attempts =
-      developer_usage_stats.donation_custom_attempts
-      + excluded.donation_custom_attempts,
-    last_seen_at = now();
+  on conflict (user_id) do nothing;
+
+  select *
+  into stats
+  from public.developer_usage_stats
+  where user_id = p_user_id
+  for update;
+
+  if stats.active_run_started_at is not null then
+    wall_seconds := greatest(
+      0,
+      floor(
+        extract(
+          epoch from (
+            current_time
+            - coalesce(
+              stats.last_playtime_at,
+              stats.active_run_started_at
+            )
+          )
+        )
+      )::integer
+    );
+  end if;
+
+  if p_event = 'visitor' then
+    update public.developer_usage_stats
+    set
+      last_player_name = coalesce(
+        clean_name,
+        last_player_name
+      ),
+      last_seen_at = current_time
+    where user_id = p_user_id;
+
+    return;
+  end if;
+
+  if p_event = 'game_start' then
+    if stats.last_game_start_at is null
+       or current_time - stats.last_game_start_at
+          >= interval '2 seconds' then
+
+      credited_seconds := least(
+        wall_seconds,
+        120
+      );
+
+      update public.developer_usage_stats
+      set
+        last_player_name = coalesce(
+          clean_name,
+          last_player_name
+        ),
+        games_started = games_started + 1,
+        seconds_played =
+          seconds_played + credited_seconds,
+        active_run_started_at = current_time,
+        last_playtime_at = current_time,
+        last_game_start_at = current_time,
+        last_seen_at = current_time
+      where user_id = p_user_id;
+    else
+      update public.developer_usage_stats
+      set
+        last_player_name = coalesce(
+          clean_name,
+          last_player_name
+        ),
+        last_seen_at = current_time
+      where user_id = p_user_id;
+    end if;
+
+    return;
+  end if;
+
+  if p_event = 'playtime' then
+    if stats.active_run_started_at is not null then
+      credited_seconds := least(
+        safe_seconds,
+        wall_seconds,
+        120
+      );
+
+      update public.developer_usage_stats
+      set
+        last_player_name = coalesce(
+          clean_name,
+          last_player_name
+        ),
+        seconds_played =
+          seconds_played + credited_seconds,
+        last_playtime_at = current_time,
+        last_seen_at = current_time
+      where user_id = p_user_id;
+    end if;
+
+    return;
+  end if;
+
+  if p_event = 'game_finish' then
+    if stats.active_run_started_at is not null
+       and current_time - stats.active_run_started_at
+          >= interval '1 second' then
+
+      credited_seconds := least(
+        safe_seconds,
+        wall_seconds,
+        120
+      );
+
+      update public.developer_usage_stats
+      set
+        last_player_name = coalesce(
+          clean_name,
+          last_player_name
+        ),
+        games_finished = games_finished + 1,
+        seconds_played =
+          seconds_played + credited_seconds,
+        active_run_started_at = null,
+        last_playtime_at = null,
+        last_seen_at = current_time
+      where user_id = p_user_id;
+    end if;
+
+    return;
+  end if;
+
+  if p_event = 'donation' then
+    if stats.last_donation_at is null
+       or current_time - stats.last_donation_at
+          >= interval '2 seconds' then
+
+      update public.developer_usage_stats
+      set
+        donation_1_attempts =
+          donation_1_attempts
+          + case
+              when p_donation_key = '1' then 1
+              else 0
+            end,
+        donation_2_attempts =
+          donation_2_attempts
+          + case
+              when p_donation_key = '2' then 1
+              else 0
+            end,
+        donation_5_attempts =
+          donation_5_attempts
+          + case
+              when p_donation_key = '5' then 1
+              else 0
+            end,
+        donation_custom_attempts =
+          donation_custom_attempts
+          + case
+              when p_donation_key = 'custom' then 1
+              else 0
+            end,
+        last_donation_at = current_time,
+        last_seen_at = current_time
+      where user_id = p_user_id;
+    else
+      update public.developer_usage_stats
+      set last_seen_at = current_time
+      where user_id = p_user_id;
+    end if;
+  end if;
 end;
 $$;
 
 revoke all
-  on function public.record_developer_usage(text, text, integer, text)
-  from public;
+  on function public.record_developer_usage_server(
+    uuid,
+    text,
+    text,
+    integer,
+    text
+  )
+  from public, anon, authenticated;
 
 grant execute
-  on function public.record_developer_usage(text, text, integer, text)
-  to authenticated;
+  on function public.record_developer_usage_server(
+    uuid,
+    text,
+    text,
+    integer,
+    text
+  )
+  to service_role;
+
+commit;

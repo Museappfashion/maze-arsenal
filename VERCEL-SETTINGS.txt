@@ -1,0 +1,49 @@
+MIST MAZE — REQUIRED VERCEL ENVIRONMENT VARIABLES
+================================================
+
+Vercel project -> Settings -> Environment Variables
+
+Required browser variables:
+  VITE_SUPABASE_URL
+    Example:
+    https://YOUR_PROJECT.supabase.co
+
+  VITE_SUPABASE_PUBLISHABLE_KEY
+    Use the Supabase Publishable key:
+    sb_publishable_...
+
+Required server variables:
+  SUPABASE_URL
+    Use the same Supabase project URL.
+
+  SUPABASE_SECRET_KEY
+    Recommended:
+    use the Supabase Secret key:
+    sb_secret_...
+
+    The code also accepts the legacy:
+    SUPABASE_SERVICE_ROLE_KEY
+
+  DEVELOPER_DASHBOARD_KEY
+    Create your own long random private password.
+    This is what you type into /?developer=1.
+
+IMPORTANT
+---------
+- Do NOT prefix SUPABASE_SECRET_KEY with VITE_.
+- Do NOT commit the secret key or dashboard key to GitHub.
+- Enable the variables for Production.
+- Also enable them for Preview if you test branch deployments.
+- After adding/changing Vercel environment variables, REDEPLOY.
+
+Supabase:
+  Authentication -> Anonymous Sign-Ins -> ON
+
+Dashboard URL:
+  https://mist-maze.com/?developer=1
+
+Health endpoint:
+  /api/developer-health
+
+The health endpoint requires the same developer key as a Bearer token,
+so the normal dashboard UI does not call it automatically.

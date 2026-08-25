@@ -29,50 +29,6 @@ import {
 import { createOwnedWeapons, indexOfTile } from "../utils/math.js";
 import { sanitizePlayerName } from "../utils/player.js";
 
-const MODE_SWITCH_WARNING_STORAGE_KEY =
-  "maze-arsenal-mode-switch-warning-seen-v1";
-
-function hasSeenModeSwitchWarning() {
-  if (typeof window === "undefined") {
-    return true;
-  }
-
-  try {
-    return (
-      window.localStorage.getItem(MODE_SWITCH_WARNING_STORAGE_KEY) === "1"
-    );
-  } catch {
-    return false;
-  }
-}
-
-function markModeSwitchWarningSeen() {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(MODE_SWITCH_WARNING_STORAGE_KEY, "1");
-  } catch {
-    // A failed persistence write should not block the mode switch.
-  }
-}
-
-function warnAboutModeSwitch() {
-  if (typeof window === "undefined" || hasSeenModeSwitchWarning()) {
-    return;
-  }
-
-  window.alert(
-    "Leaderboard warning\n\n" +
-      "Switching between 2D and 3D during a run makes this run " +
-      "ineligible for the leaderboard.\n\n" +
-      "Your existing personal best will not be deleted. " +
-      "This warning is shown only once.",
-  );
-  markModeSwitchWarningSeen();
-}
-
 export function getControlsForViewMode(viewMode) {
   if (viewMode === "3d") {
     return [
@@ -138,8 +94,6 @@ export function setWorldViewMode(world, viewMode) {
     ["2d", "3d"].includes(world.runMode);
 
   if (isActiveLeaderboardRun) {
-    warnAboutModeSwitch();
-
     world.leaderboardEligible = false;
 
     // App.jsx already submits world.runMode. An invalid value makes both

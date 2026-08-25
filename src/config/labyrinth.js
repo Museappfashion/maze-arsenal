@@ -5,7 +5,7 @@ export const LABYRINTH_DIFFICULTIES = {
     label: "Easy",
     sizeBonus: 0,
     mutationInterval: 9,
-    steelChance: 0.18,
+    steelChance: 0.24,
     sightRadius: 4.2,
     routePressure: 0.72,
   },
@@ -14,7 +14,7 @@ export const LABYRINTH_DIFFICULTIES = {
     label: "Normal",
     sizeBonus: 4,
     mutationInterval: 7,
-    steelChance: 0.24,
+    steelChance: 0.32,
     sightRadius: 3.8,
     routePressure: 0.86,
   },
@@ -23,7 +23,7 @@ export const LABYRINTH_DIFFICULTIES = {
     label: "Hard",
     sizeBonus: 8,
     mutationInterval: 5.5,
-    steelChance: 0.32,
+    steelChance: 0.42,
     sightRadius: 3.5,
     routePressure: 1,
   },
@@ -32,7 +32,7 @@ export const LABYRINTH_DIFFICULTIES = {
     label: "Nightmare",
     sizeBonus: 12,
     mutationInterval: 4,
-    steelChance: 0.4,
+    steelChance: 0.52,
     sightRadius: 3.15,
     routePressure: 1.14,
   },
@@ -57,17 +57,23 @@ export function normalizeLabyrinthOptions(options = {}) {
     LABYRINTH_MAX_MINUTES,
     Math.max(
       LABYRINTH_MIN_MINUTES,
-      Math.round(Number(options.timeMinutes) || LABYRINTH_DEFAULT_MINUTES),
+      Math.round(
+        Number(options.timeMinutes) ||
+          LABYRINTH_DEFAULT_MINUTES,
+      ),
     ),
   );
 
-  const difficulty = LABYRINTH_DIFFICULTIES[difficultyKey];
+  const difficulty =
+    LABYRINTH_DIFFICULTIES[difficultyKey];
   const baseSize = 13 + timeMinutes * 4;
   const logicalCols = baseSize + difficulty.sizeBonus;
   const logicalRows = baseSize + difficulty.sizeBonus;
   const breakerPickupCount = Math.min(
     30,
-    8 + timeMinutes * 2 + Math.round(difficulty.sizeBonus / 2),
+    8 +
+      timeMinutes * 2 +
+      Math.round(difficulty.sizeBonus / 2),
   );
 
   return {

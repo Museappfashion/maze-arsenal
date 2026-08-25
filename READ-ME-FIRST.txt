@@ -1,55 +1,95 @@
-MAZE ARSENAL — DIRECT SOURCE FIX
-================================
+MAZE ARSENAL — GAMEPLAY UPDATE
+===============================
 
-NO VITE HARDENING PLUGIN.
-NO .command FILE.
-NO BUILD-TIME REGEX PATCHING.
+These are normal source files. No build-time regex plugin.
 
-Replace these actual files in your repo:
+COPY / REPLACE
+--------------
 
-1. repo/vite.config.js
-   <- vite.config.js
+1. Replace:
+   repo/vite.config.js
+   with:
+   vite.config.js
 
-2. repo/src/services/leaderboard.js
-   <- src/services/leaderboard.js
+2. Add:
+   repo/src/components/GameUiEnhanced.jsx
 
-3. repo/src/game/world.js
-   <- src/game/world.js
+3. Add:
+   repo/src/game/gameplay-enhanced.js
 
-4. repo/api/country.js
-   <- api/country.js
+4. Add:
+   repo/src/game/labyrinth-enhanced.js
 
-After replacing them, the old tools/mazeHardeningPlugin.js may stay in the
-repo, but it is unused because vite.config.js no longer imports it. You can
-delete it later.
+5. Replace:
+   repo/src/game/world.js
+   with:
+   src/game/world.js
 
-SUPABASE:
-1. Authentication -> Anonymous Sign-Ins = ON.
-2. Export leaderboard_scores first if you want old attempt history.
-3. Run:
-   supabase/leaderboard-personal-best.sql
+6. Replace:
+   repo/src/config/labyrinth.js
+   with:
+   src/config/labyrinth.js
 
-The SQL intentionally deletes slower duplicate historical attempts and keeps
-only the fastest row for each user + level + 2D/3D mode.
+DO NOT replace your existing:
+- src/components/GameUi.jsx
+- src/game/gameplay.js
+- src/game/labyrinth.js
 
-BEHAVIOR:
-- Local storage keeps one PB per level + mode.
-- Supabase keeps one PB per user + level + mode.
-- Faster run replaces the PB.
-- Slower/equal run is discarded.
-- First in-game 2D <-> 3D switch displays a leaderboard warning.
-- Any switched run is rejected by the leaderboard.
-- Existing PBs are not deleted.
-- No cookies are required; Supabase anonymous auth uses its normal persisted
-  browser session.
+The new vite.config.js safely routes App.jsx through the enhanced wrappers while
+the original files remain the source of truth.
 
-TEST:
+CHANGES
+-------
+
+MODE SWITCH WARNING
+- The first 2D/3D switch attempt of each game shows a custom modal.
+- Buttons:
+    CONTINUE ANYWAY
+    GO BACK
+- Continue switches modes and the existing world.js leaderboard protection
+  invalidates only the current run.
+- Go Back stays in the current mode.
+- Existing personal bests are never deleted.
+- The warning resets when a new game starts or START NEW MAZE is used.
+- Labyrinth mode does not show the leaderboard warning because it has no
+  standard leaderboard score.
+
+ENEMY SPEED RAMP
+- Enemies can still wake/pursue normally.
+- Their pursuit speed ramp stays at base speed until they have actually entered
+  the player's visible field.
+- 2D uses the same > 0.12 visibility threshold used to draw monsters.
+- 3D requires the enemy to be inside the camera FOV and have line of sight.
+
+LABYRINTH STEEL
+Steel chance increased:
+- Easy:      18% -> 24%
+- Normal:    24% -> 32%
+- Hard:      32% -> 42%
+- Nightmare: 40% -> 52%
+
+LABYRINTH PICKUPS
+- Light pickups, Wall Breaker pickups, and any labyrinth power-up become
+  anchored the first time they enter the visible field.
+- Once anchored, maze shifts keep them at the same world position.
+- If a shifted maze would put an anchored pickup inside a wall, a short path is
+  opened so the pickup remains reachable.
+- Pickups never become permanently anchored merely because they existed offscreen.
+
+TEST
+----
+
+From the repo root:
+
   npm run build
 
-Then commit these normal source files and push.
-
-NOTE:
-This direct-source bundle removes the failing build plugin and fixes the
-leaderboard + first-switch invalidation without modifying App.jsx.
-It does NOT add the custom Try Again end-screen overlay. That specific UI
-still requires a direct App.jsx replacement/integration.
+Then test:
+1. Start a normal level.
+2. Attempt 2D -> 3D: warning should appear.
+3. GO BACK: mode should not switch.
+4. Attempt again in the same game: warning should not repeat.
+5. START NEW MAZE: first switch should warn again.
+6. Watch an enemy that wakes offscreen: speed ramp should begin only after it
+   becomes visible.
+7. In Labyrinth, look at a light/breaker before a shift: it should remain at
+   the same position after the maze shifts.

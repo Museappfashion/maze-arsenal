@@ -1,8 +1,7 @@
 // api/developer-analytics.js
 import { createClient } from "@supabase/supabase-js";
 
-const AUTH_USERS_PAGE_SIZE = 1000;
-const MAX_AUTH_USER_PAGES = 20;
+const PAGE_SIZE = 1000;
 
 function json(data, status = 200) {
   return Response.json(data, {
@@ -18,13 +17,32 @@ function getBearerToken(request) {
   return header.startsWith("Bearer ") ? header.slice(7).trim() : "";
 }
 
+function getServerSupabase() {
+  const supabaseUrl =
+    process.env.SUPABASE_URL?.trim() ??
+    process.env.VITE_SUPABASE_URL?.trim() ??
+    "";
+  const supabaseSecret = process.env.SUPABASE_SECRET_KEY?.trim() ?? "";
+
+  if (!supabaseUrl || !supabaseSecret) {
+    return null;
+  }
+
+  return createClient(supabaseUrl, supabaseSecret, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}
+
 async function listAuthUsers(supabase) {
   const users = [];
 
-  for (let page = 1; page <= MAX_AUTH_USER_PAGES; page += 1) {
+  for (let page = 1; ; page += 1) {
     const { data, error } = await supabase.auth.admin.listUsers({
       page,
-      perPage: AUTH_USERS_PAGE_SIZE,
+      perPage: PAGE_SIZE,
     });
 
     if (error) {
@@ -34,12 +52,46 @@ async function listAuthUsers(supabase) {
     const pageUsers = data?.users ?? [];
     users.push(...pageUsers);
 
-    if (pageUsers.length < AUTH_USERS_PAGE_SIZE) {
-      break;
+    if (pageUsers.length < PAGE_SIZE) {
+      return users;
     }
   }
+}
 
-  return users;
+async function listUsageRows(supabase) {
+  const rows = [];
+
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("developer_usage_stats")
+      .select(
+        [
+          "user_id",
+          "last_player_name",
+          "games_started",
+          "games_finished",
+          "seconds_played",
+          "donation_1_attempts",
+          "donation_2_attempts",
+          "donation_5_attempts",
+          "donation_custom_attempts",
+          "last_seen_at",
+        ].join(","),
+      )
+      .order("last_seen_at", { ascending: false })
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error) {
+      throw error;
+    }
+
+    const pageRows = data ?? [];
+    rows.push(...pageRows);
+
+    if (pageRows.length < PAGE_SIZE) {
+      return rows;
+    }
+  }
 }
 
 function normalizeUsageRow(row) {
@@ -101,76 +153,47 @@ export default {
       return json({ error: "Method not allowed." }, 405);
     }
 
-    const dashboardKey =
-      process.env.DEVELOPER_DASHBOARD_KEY?.trim() ?? "";
+    const dashboardKey = process.env.DEVELOPER_DASHBOARD_KEY?.trim() ?? "";
     const suppliedKey = getBearerToken(request);
 
     if (!dashboardKey || !suppliedKey || suppliedKey !== dashboardKey) {
       return json({ error: "Unauthorized." }, 401);
     }
 
-    const supabaseUrl =
-      process.env.SUPABASE_URL?.trim() ??
-      process.env.VITE_SUPABASE_URL?.trim() ??
-      "";
-    const supabaseSecret =
-      process.env.SUPABASE_SECRET_KEY?.trim() ?? "";
+    const supabase = getServerSupabase();
 
-    if (!supabaseUrl || !supabaseSecret) {
+    if (!supabase) {
       return json(
         { error: "Developer analytics server is not configured." },
         503,
       );
     }
 
-    const supabase = createClient(supabaseUrl, supabaseSecret, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
-
-    const { data, error } = await supabase
-      .from("developer_usage_stats")
-      .select(
-        [
-          "user_id",
-          "last_player_name",
-          "games_started",
-          "games_finished",
-          "seconds_played",
-          "donation_1_attempts",
-          "donation_2_attempts",
-          "donation_5_attempts",
-          "donation_custom_attempts",
-          "last_seen_at",
-        ].join(","),
-      )
-      .order("last_seen_at", { ascending: false })
-      .limit(5000);
-
-    if (error) {
-      console.error("Developer analytics query failed:", error.message);
+    let usageRows;
+    try {
+      usageRows = await listUsageRows(supabase);
+    } catch (error) {
+      console.error("Developer analytics query failed:", error?.message ?? error);
       return json({ error: "Analytics query failed." }, 500);
     }
 
-    const usageUsers = (data ?? []).map(normalizeUsageRow);
     const userMap = new Map(
-      usageUsers.map((user) => [user.userId, user]),
+      usageRows
+        .map(normalizeUsageRow)
+        .map((user) => [user.userId, user]),
     );
 
     try {
       const authUsers = await listAuthUsers(supabase);
-
       for (const authUser of authUsers) {
         if (!userMap.has(authUser.id)) {
           userMap.set(authUser.id, emptyUsageForAuthUser(authUser));
         }
       }
-    } catch (authError) {
+    } catch (error) {
       console.warn(
         "Developer analytics auth-user merge failed:",
-        authError?.message ?? authError,
+        error?.message ?? error,
       );
     }
 

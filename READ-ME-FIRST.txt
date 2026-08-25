@@ -1,0 +1,94 @@
+MAZE ARSENAL — SOURCE-ONLY FINDER FIX
+=======================================
+
+This bundle contains NO .command, app, shell script, or other macOS executable.
+
+It is based on the current GitHub `pv` branch structure.
+
+IMPORTANT:
+Do NOT replace your entire src/, api/, supabase/, or tools/ folder.
+Copy/replace only the individual files listed below.
+
+1) REPO ROOT
+   Copy:
+     vite.config.js
+   Replace the existing vite.config.js.
+
+2) tools/
+   Copy:
+     tools/mazeHardeningPlugin.js
+   This is a normal Vite source module, not a Finder executable.
+
+3) src/components/
+   Copy:
+     src/components/ModeSwitchWarning.jsx
+     src/components/RunEndOverlay.jsx
+
+4) src/services/
+   Copy:
+     src/services/developerAnalytics.js
+   Replace the existing file.
+
+5) api/
+   Copy:
+     api/country.js
+     api/developer-analytics.js
+     api/developer-usage.js
+   Replace matching files if Finder asks.
+
+6) supabase/
+   Copy:
+     supabase/setup.sql
+   Replace the existing setup.sql.
+
+7) SUPABASE
+   Authentication -> Anonymous Sign-Ins: ON
+
+   Then open SQL Editor and run the NEW supabase/setup.sql.
+
+   The SQL migration:
+   - keeps one personal best per user + level + 2D/3D mode,
+   - removes slower duplicate historical attempts,
+   - uses server-timed leaderboard runs,
+   - revokes direct leaderboard score inserts,
+   - hardens developer analytics writes.
+
+   Export leaderboard_scores first if you want a backup of old attempts.
+
+8) VERCEL ENVIRONMENT VARIABLES
+   Confirm these exist:
+     VITE_SUPABASE_URL
+     VITE_SUPABASE_PUBLISHABLE_KEY
+     SUPABASE_URL
+     SUPABASE_SECRET_KEY
+     DEVELOPER_DASHBOARD_KEY
+
+9) COMMIT/PUSH THE `pv` BRANCH
+   Vercel must deploy the preview for `pv` to see the changes.
+
+WHAT CHANGES IN THE GAME
+------------------------
+- anonymous-auth global leaderboard works with the updated Supabase SQL
+- one personal best is kept per player + level + mode
+- faster run replaces PB; slower/equal run is discarded
+- first in-game 2D <-> 3D switch shows a warning
+- canceling the warning keeps the score eligible
+- confirming the switch invalidates only that current run
+- existing PBs are never deleted by switching modes
+- Try Again appears after victory/game-over
+- Back to main menu is smaller and less visually prominent
+- finished runs stop continuously redrawing the canvas
+- country endpoint is restored
+- developer analytics writes go through the server endpoint
+
+WHY THERE IS A VITE PLUGIN
+--------------------------
+Your current pv branch still has the old large src/App.jsx. Instead of asking macOS
+to run an unsigned installer, this source-only bundle uses a normal Vite plugin
+to apply the exact App/world/leaderboard/level-select source changes during the
+Vite build. It does not execute when you double-click it in Finder, and Gatekeeper
+does not need to approve it.
+
+If the pv branch source changes enough that the exact edits no longer match,
+the Vite build deliberately fails with a clear [maze-hardening] message rather
+than silently deploying a partial fix.

@@ -2,7 +2,10 @@
 const TARGET_FILES = new Set([
   "src/App.jsx",
   "src/game/world.js",
+<<<<<<< HEAD
   "src/services/leaderboard.js",
+=======
+>>>>>>> pv
   "src/components/LevelSelectScreen.jsx",
 ]);
 
@@ -48,6 +51,7 @@ function transformMazeSource(source, activeFile) {
   }
 
   replaceRegex(
+<<<<<<< HEAD
     "src/services/leaderboard.js",
     /export function normalizeLevelLeaderboards\(levelBoards\) \{[\s\S]*?\n\}\nexport function normalizeLeaderboards/g,
     `export function normalizeLevelLeaderboards(levelBoards) {
@@ -89,6 +93,8 @@ function transformMazeSource(source, activeFile) {
   );
 
   replaceRegex(
+=======
+>>>>>>> pv
     "src/game/world.js",
     /    runMode: normalizedViewMode,\n/g,
     `    runMode: normalizedViewMode,

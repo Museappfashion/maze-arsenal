@@ -1,134 +1,93 @@
 // src/components/RunEndOverlay.jsx
-import { formatTime } from "../utils/math.js";
-
-export function RunEndOverlay({ world, onTryAgain, onMainMenu }) {
-  if (!world?.victory && !world?.gameOver) {
+export function RunEndOverlay({
+  world,
+  onRestart,
+  onMainMenu,
+}) {
+  if (!world.gameOver && !world.victory) {
     return null;
   }
 
-  const victory = Boolean(world.victory);
+  const primaryLabel = world.gameOver ? "START NEW GAME" : "TRY AGAIN";
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="run-end-title"
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 80,
-        display: "grid",
-        placeItems: "center",
-        padding: 20,
-        background: "rgba(2, 6, 23, 0.74)",
-        backdropFilter: "blur(8px)",
-      }}
-    >
-      <section
+    <>
+      <style>{`
+        @keyframes mist-maze-restart-pulse {
+          0%, 100% {
+            transform: translateX(-50%) scale(1);
+            box-shadow:
+              0 0 18px rgba(34, 211, 238, 0.66),
+              0 0 42px rgba(250, 204, 21, 0.28);
+          }
+          50% {
+            transform: translateX(-50%) scale(1.055);
+            box-shadow:
+              0 0 34px rgba(34, 211, 238, 0.95),
+              0 0 72px rgba(250, 204, 21, 0.5);
+          }
+        }
+      `}</style>
+
+      <div
         style={{
-          width: "min(92vw, 390px)",
-          padding: "28px 24px 22px",
-          borderRadius: 22,
-          border: "1px solid rgba(148, 163, 184, 0.2)",
-          background:
-            "linear-gradient(180deg, rgba(15, 23, 42, 0.97), rgba(2, 6, 23, 0.98))",
-          boxShadow: "0 28px 90px rgba(0, 0, 0, 0.46)",
-          textAlign: "center",
+          position: "absolute",
+          inset: 0,
+          zIndex: 42,
+          pointerEvents: "none",
         }}
       >
-        <div
-          style={{
-            color: victory ? "#67e8f9" : "#94a3b8",
-            fontSize: 12,
-            fontWeight: 900,
-            letterSpacing: "0.12em",
-            textTransform: "uppercase",
-          }}
-        >
-          {victory ? "Run complete" : "Run ended"}
-        </div>
-        <h2
-          id="run-end-title"
-          style={{
-            margin: "8px 0 0",
-            color: "#f8fafc",
-            fontSize: 32,
-            lineHeight: 1.08,
-          }}
-        >
-          {victory ? "You escaped!" : "Try the maze again"}
-        </h2>
-        <div
-          style={{
-            marginTop: 10,
-            color: "#cbd5e1",
-            fontSize: 15,
-          }}
-        >
-          {victory
-            ? `Escape time ${formatTime(world.time)}`
-            : `Run time ${formatTime(world.time)}`}
-        </div>
-        {victory &&
-          !world.labyrinthMode &&
-          world.leaderboardEligible === false && (
-            <div
-              style={{
-                marginTop: 12,
-                padding: "9px 11px",
-                borderRadius: 10,
-                background: "rgba(245, 158, 11, 0.08)",
-                border: "1px solid rgba(245, 158, 11, 0.2)",
-                color: "#fbbf24",
-                fontSize: 12,
-                lineHeight: 1.45,
-              }}
-            >
-              Leaderboard score not submitted because the view mode changed
-              during this run. Your existing personal best is unchanged.
-            </div>
-          )}
         <button
           type="button"
-          onClick={onTryAgain}
-          autoFocus
+          onClick={onRestart}
           style={{
-            width: "100%",
-            marginTop: 24,
-            padding: "13px 18px",
-            border: "1px solid rgba(103, 232, 249, 0.7)",
-            borderRadius: 14,
+            position: "absolute",
+            left: "50%",
+            top: "62%",
+            minWidth: 265,
+            padding: "17px 30px",
+            border: "2px solid rgba(255,255,255,0.9)",
+            borderRadius: 16,
             background:
-              "linear-gradient(135deg, rgba(14, 165, 233, 0.96), rgba(6, 182, 212, 0.94))",
-            color: "#f8fafc",
-            fontSize: 15,
-            fontWeight: 900,
-            letterSpacing: "0.04em",
+              "linear-gradient(135deg, #facc15 0%, #67e8f9 48%, #22d3ee 100%)",
+            color: "#04111d",
+            font: "inherit",
+            fontSize: 18,
+            fontWeight: 950,
+            letterSpacing: "0.075em",
             cursor: "pointer",
-            boxShadow: "0 12px 32px rgba(8, 145, 178, 0.24)",
+            pointerEvents: "auto",
+            animation: "mist-maze-restart-pulse 1.25s ease-in-out infinite",
           }}
         >
-          TRY AGAIN
+          {primaryLabel}
         </button>
+
         <button
           type="button"
           onClick={onMainMenu}
           style={{
-            marginTop: 9,
-            padding: "7px 10px",
-            border: "1px solid rgba(148, 163, 184, 0.14)",
-            borderRadius: 10,
-            background: "rgba(15, 23, 42, 0.34)",
+            position: "absolute",
+            left: "50%",
+            top: "73%",
+            transform: "translateX(-50%)",
+            minWidth: 165,
+            padding: "9px 14px",
+            border: "1px solid rgba(148,163,184,0.28)",
+            borderRadius: 11,
+            background: "rgba(15,23,42,0.72)",
             color: "#94a3b8",
-            fontSize: 12,
-            fontWeight: 700,
+            font: "inherit",
+            fontSize: 11,
+            fontWeight: 800,
             cursor: "pointer",
-            opacity: 0.82,
+            pointerEvents: "auto",
+            backdropFilter: "blur(5px)",
           }}
         >
           Back to main menu
         </button>
-      </section>
-    </div>
+      </div>
+    </>
   );
 }

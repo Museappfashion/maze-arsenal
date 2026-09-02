@@ -1,0 +1,26 @@
+MIST MAZE — ROBBIENATOR EASTER EGG
+
+Name trigger:
+  robbie
+Case-insensitive and ignores leading/trailing spaces.
+
+Effect on normal combat levels:
+- starts with DMR
+- 200 ammo
+- DMR is renamed Robbienator
+- banana cosmetic in 2D and 3D
+- two dark eye dots + curved smile
+- same DMR combat stats
+- retries keep it active
+- leaderboard submission disabled for Robbienator runs
+
+Labyrinth is unchanged because it does not use normal weapons/ammo.
+
+INSTALL
+1. Copy src/config/robbienator.js to the same path in your repo.
+2. Put robbienator.patch in the repo root.
+3. Run:
+   git apply robbienator.patch
+   npm run build
+4. Test Robbie / robbie / ROBBIE and a normal name.
+5. Commit and push.

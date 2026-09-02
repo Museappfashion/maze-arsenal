@@ -1,0 +1,26 @@
+diff --git a/src/App.jsx b/src/App.jsx
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@
+ import { GAME_STYLES } from "./styles/gameStyles.js";
+ import { MazeAudioEngine, queueSfx } from "./audio/MazeAudioEngine.js";
+ import { LabyrinthStatusPanel, MinimapPanel, MobileHudOverlay, SettingsControls, SidebarSettings, TouchControls, mergeInputKeys, selectNextOwnedWeapon } from "./components/GameUi.jsx";
++import { NormalThreeDPowerUpHud } from "./components/NormalThreeDPowerUpHud.jsx";
+ import { LevelSelectScreen } from "./components/LevelSelectScreen.jsx";
+@@
+         <canvas
+           ref={canvasRef}
+           width={CANVAS_WIDTH}
+           height={CANVAS_HEIGHT}
+           style={{
+             display: "block",
+             cursor: gameMode === "3d" ? "none" : "crosshair",
+             imageRendering: "auto",
+           }}
+         />
++        <NormalThreeDPowerUpHud
++          world={world}
++          storedPowerUps={storedPowerUps}
++          activePowerUps={activePowerUps}
++        />
+ {touchControlsEnabled && (

@@ -1,0 +1,226 @@
+diff --git a/src/game/world.js b/src/game/world.js
+--- a/src/game/world.js
++++ b/src/game/world.js
+@@
+ import { CANVAS_HEIGHT, CANVAS_WIDTH, DEFAULT_LEVEL_KEY, LEVELS } from "../config/constants.js";
+ import { normalizeLabyrinthOptions } from "../config/labyrinth.js";
++import { applyRobbienatorLoadout } from "../config/robbienator.js";
+ import { WEAPON_HOTKEY_LABEL } from "../config/weapons.js";
+@@
+   if (labyrinthMode) {
+     initializeLabyrinth(world);
+   } else {
+@@
+     placeProgressionItems(world, distancesFromStart, used);
+     placePowerUps(world, distancesFromStart, used);
+     placeEnemies(world, distancesFromStart, used);
+   }
++  applyRobbienatorLoadout(world);
+   updateVisionCache(world);
+
+diff --git a/src/config/presentations.js b/src/config/presentations.js
+--- a/src/config/presentations.js
++++ b/src/config/presentations.js
+@@
+ import { LEVEL_THEMES } from "./constants.js";
+ import { POWER_UPS } from "./powerUps.js";
++import {
++  hasRobbienatorLoadout,
++  isRobbienatorWeapon,
++  ROBBIENATOR_LABEL,
++} from "./robbienator.js";
+ import { WEAPONS } from "./weapons.js";
+@@
+ export function getWeaponPresentation(world, weaponKey) {
++  if (isRobbienatorWeapon(world, weaponKey)) {
++    return {
++      label: ROBBIENATOR_LABEL,
++      description: "A suspiciously powerful precision banana with excellent potassium.",
++    };
++  }
++
+   return (
+@@
+ export function getAmmoLabel(world) {
++  if (hasRobbienatorLoadout(world)) {
++    return "Ammo";
++  }
+   return isMedievalTheme(world) ? "Arrows" : "Ammo";
+ }
+@@
+ export function getAmmoPickupLabel(world) {
++  if (hasRobbienatorLoadout(world)) {
++    return "Ammo";
++  }
+   return isMedievalTheme(world) ? "Arrow Bundle" : "Ammo";
+ }
+@@
+ export function getAmmoMessageLabel(world) {
++  if (hasRobbienatorLoadout(world)) {
++    return "ammo";
++  }
+   return isMedievalTheme(world) ? "arrows" : "ammo";
+ }
+
+diff --git a/src/App.jsx b/src/App.jsx
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@
+ const recordLeaderboardScore = useCallback(
+   (world) => {
+-    if (world.labyrinthMode) {
++    if (world.labyrinthMode || world.leaderboardEligible === false) {
+       return;
+     }
+
+diff --git a/src/game/rendering.js b/src/game/rendering.js
+--- a/src/game/rendering.js
++++ b/src/game/rendering.js
+@@
+ import { POWER_UPS } from "../config/powerUps.js";
+ import { getAmmoLabel, getTheme, getWeaponLabel, isMedievalTheme } from "../config/presentations.js";
++import { isRobbienatorWeapon } from "../config/robbienator.js";
+ import { WORLD_LABEL_BG, WORLD_LABEL_BORDER, WORLD_LABEL_FONT, WORLD_LABEL_TEXT } from "../config/runtime.js";
+@@
+ export function drawMedievalBowShape(ctx, weaponKey, size, wood, metal, glow) {
+@@
+ }
++
++export function drawRobbienatorShape(ctx, size) {
++  ctx.save();
++  ctx.rotate(-0.12);
++
++  const banana = ctx.createLinearGradient(
++    -size * 0.5,
++    -size * 0.35,
++    size * 0.8,
++    size * 0.35,
++  );
++  banana.addColorStop(0, "#ca8a04");
++  banana.addColorStop(0.24, "#fde047");
++  banana.addColorStop(0.58, "#facc15");
++  banana.addColorStop(1, "#eab308");
++
++  ctx.fillStyle = banana;
++  ctx.strokeStyle = "#713f12";
++  ctx.lineWidth = Math.max(1.5, size * 0.055);
++  ctx.beginPath();
++  ctx.moveTo(-size * 0.48, -size * 0.18);
++  ctx.bezierCurveTo(
++    -size * 0.18,
++    size * 0.34,
++    size * 0.48,
++    size * 0.42,
++    size * 0.9,
++    -size * 0.08,
++  );
++  ctx.bezierCurveTo(
++    size * 0.46,
++    size * 0.14,
++    -size * 0.08,
++    size * 0.08,
++    -size * 0.34,
++    -size * 0.32,
++  );
++  ctx.closePath();
++  ctx.fill();
++  ctx.stroke();
++
++  ctx.fillStyle = "#713f12";
++  ctx.beginPath();
++  ctx.ellipse(-size * 0.43, -size * 0.26, size * 0.09, size * 0.06, -0.25, 0, Math.PI * 2);
++  ctx.fill();
++  ctx.beginPath();
++  ctx.ellipse(size * 0.91, -size * 0.1, size * 0.08, size * 0.055, 0.15, 0, Math.PI * 2);
++  ctx.fill();
++
++  const faceX = size * 0.22;
++  const faceY = size * 0.06;
++  ctx.fillStyle = "#422006";
++  for (const eyeX of [faceX - size * 0.1, faceX + size * 0.1]) {
++    ctx.beginPath();
++    ctx.arc(eyeX, faceY - size * 0.1, Math.max(1.5, size * 0.038), 0, Math.PI * 2);
++    ctx.fill();
++  }
++
++  ctx.strokeStyle = "#422006";
++  ctx.lineWidth = Math.max(1.5, size * 0.035);
++  ctx.lineCap = "round";
++  ctx.beginPath();
++  ctx.arc(faceX, faceY - size * 0.01, size * 0.14, 0.15, Math.PI - 0.15);
++  ctx.stroke();
++  ctx.restore();
++}
+
+ export function drawWeaponShape(ctx, world, weaponKey, size) {
+@@
+-  if (weaponKey === "fists") {
++  if (isRobbienatorWeapon(world, weaponKey)) {
++    drawRobbienatorShape(ctx, size);
++  } else if (weaponKey === "fists") {
+@@
+ export function draw3DLabyrinthLight(ctx, world) {
+@@
+ }
++
++export function draw3DRobbienator(ctx, recoil) {
++  ctx.save();
++  ctx.translate(0, -76 - recoil * 8);
++  ctx.rotate(-0.13 - recoil * 0.04);
++
++  const width = 270;
++  const height = 155;
++  const banana = ctx.createLinearGradient(-width * 0.55, -height, width * 0.55, 0);
++  banana.addColorStop(0, "#ca8a04");
++  banana.addColorStop(0.2, "#fde047");
++  banana.addColorStop(0.58, "#facc15");
++  banana.addColorStop(1, "#eab308");
++
++  ctx.shadowBlur = 24;
++  ctx.shadowColor = "rgba(250, 204, 21, 0.45)";
++  ctx.fillStyle = banana;
++  ctx.strokeStyle = "#713f12";
++  ctx.lineWidth = 6;
++  ctx.beginPath();
++  ctx.moveTo(-width * 0.52, -height * 0.62);
++  ctx.bezierCurveTo(-width * 0.18, height * 0.06, width * 0.35, height * 0.12, width * 0.56, -height * 0.58);
++  ctx.bezierCurveTo(width * 0.21, -height * 0.22, -width * 0.13, -height * 0.22, -width * 0.39, -height * 0.82);
++  ctx.closePath();
++  ctx.fill();
++  ctx.stroke();
++
++  ctx.shadowBlur = 0;
++  ctx.fillStyle = "#713f12";
++  ctx.beginPath();
++  ctx.ellipse(-width * 0.46, -height * 0.73, 20, 11, -0.2, 0, Math.PI * 2);
++  ctx.fill();
++  ctx.beginPath();
++  ctx.ellipse(width * 0.55, -height * 0.62, 18, 10, 0.18, 0, Math.PI * 2);
++  ctx.fill();
++
++  const faceX = width * 0.08;
++  const faceY = -height * 0.38;
++  ctx.fillStyle = "#422006";
++  for (const eyeX of [faceX - 22, faceX + 22]) {
++    ctx.beginPath();
++    ctx.arc(eyeX, faceY - 19, 7, 0, Math.PI * 2);
++    ctx.fill();
++  }
++
++  ctx.strokeStyle = "#422006";
++  ctx.lineWidth = 7;
++  ctx.lineCap = "round";
++  ctx.beginPath();
++  ctx.arc(faceX, faceY - 2, 33, 0.18, Math.PI - 0.18);
++  ctx.stroke();
++  ctx.restore();
++}
+
+ export function draw3DWeapon(ctx, world) {
+@@
+   ctx.save();
+   ctx.translate(centerX, baseY);
+-  if (weapon.type === "melee") {
++  if (isRobbienatorWeapon(world, world.player.weapon)) {
++    draw3DRobbienator(ctx, recoil);
++  } else if (weapon.type === "melee") {

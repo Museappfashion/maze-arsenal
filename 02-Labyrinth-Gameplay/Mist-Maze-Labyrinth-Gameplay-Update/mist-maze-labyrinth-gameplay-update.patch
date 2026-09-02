@@ -1,0 +1,231 @@
+diff --git a/src/App.jsx b/src/App.jsx
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@
+ import { GAME_STYLES } from "./styles/gameStyles.js";
+ import { MazeAudioEngine, queueSfx } from "./audio/MazeAudioEngine.js";
+ import { LabyrinthStatusPanel, MinimapPanel, MobileHudOverlay, SettingsControls, SidebarSettings, TouchControls, mergeInputKeys, selectNextOwnedWeapon } from "./components/GameUi.jsx";
++import { LabyrinthGameplayOverlay } from "./components/LabyrinthGameplayOverlay.jsx";
+ import { LevelSelectScreen } from "./components/LevelSelectScreen.jsx";
+@@
+         <canvas
+           ref={canvasRef}
+           width={CANVAS_WIDTH}
+           height={CANVAS_HEIGHT}
+           style={{
+             display: "block",
+             cursor: gameMode === "3d" ? "none" : "crosshair",
+             imageRendering: "auto",
+           }}
+         />
++        <LabyrinthGameplayOverlay
++          world={world}
++          gameMode={gameMode}
++          onRestart={resetWorld}
++        />
+ {touchControlsEnabled && (
+           <TouchControls
+
+diff --git a/src/audio/MazeAudioEngine.js b/src/audio/MazeAudioEngine.js
+--- a/src/audio/MazeAudioEngine.js
++++ b/src/audio/MazeAudioEngine.js
+@@
+       case "labyrinthShift":
+         this.noise(now, 0.34, 0.11, this.sfxGain, 420);
+         this.tone(82.41, now, 0.46, 0.1, "sawtooth", this.sfxGain);
+         this.tone(58.27, now + 0.08, 0.52, 0.08, "triangle", this.sfxGain);
+         break;
++      case "labyrinthTick": {
++        if (!this.canPlaySfx("labyrinthTick", 0.14)) {
++          break;
++        }
++
++        const critical = Boolean(event.critical);
++        const urgent = Boolean(event.urgent);
++        const frequency = critical ? 1180 : urgent ? 940 : 720;
++        const volume = critical ? 0.07 : urgent ? 0.052 : 0.036;
++
++        this.tone(
++          frequency,
++          now,
++          critical ? 0.055 : 0.04,
++          volume,
++          "square",
++          this.sfxGain,
++        );
++
++        if (critical) {
++          this.tone(
++            frequency * 0.62,
++            now + 0.048,
++            0.055,
++            0.038,
++            "triangle",
++            this.sfxGain,
++          );
++        }
++        break;
++      }
+       case "powerUpUse":
+         [0, 4, 7, 12].forEach((semitone, index) => {
+
+diff --git a/src/game/labyrinth.js b/src/game/labyrinth.js
+--- a/src/game/labyrinth.js
++++ b/src/game/labyrinth.js
+@@
+ function buildPickupCandidates(world, distances, used) {
+-  const exitDistance = Math.max(
+-    1,
+-    distances[indexOfTile(world.width, world.exit.x, world.exit.y)],
+-  );
++  let maxReachableDistance = 1;
++
++  for (const tile of world.floorTiles) {
++    const distance =
++      distances[indexOfTile(world.width, tile.x, tile.y)];
++
++    if (distance > maxReachableDistance) {
++      maxReachableDistance = distance;
++    }
++  }
++
+   const candidates = world.floorTiles
+     .filter((tile) => {
+       const key = indexOfTile(world.width, tile.x, tile.y);
+       const distance = distances[key];
+       return (
+         !used.has(key) &&
+-        distance > 8 &&
++        distance > 3 &&
+         distance >= 0 &&
+-        distance < exitDistance * 0.98
++        distance <= maxReachableDistance
+       );
+     })
+@@
+ function chooseProgressionTile(candidates, index, count, used, world) {
+   if (!candidates.length) {
+     return null;
+   }
+-  const progress = (index + 1) / (count + 1);
++
++  const progress =
++    count <= 1 ? 0.5 : (index + 0.5) / count;
+   const targetIndex = Math.min(
+     candidates.length - 1,
+     Math.floor(progress * candidates.length),
+   );
+-  const spread = Math.max(3, Math.floor(candidates.length / Math.max(4, count)));
+-  const jitter = Math.floor((Math.random() - 0.5) * spread * 2);
++  const spread = Math.max(
++    2,
++    Math.floor(candidates.length / Math.max(6, count * 2)),
++  );
++  const jitter = Math.floor(
++    (Math.random() - 0.5) * spread,
++  );
+@@
+ function placeLabyrinthPickups(
+   world,
+   distances,
+   breakerCount,
+   lightKeys,
+ ) {
+@@
+   const used = new Set([
+     indexOfTile(world.width, playerTileX, playerTileY),
+     indexOfTile(world.width, world.exit.x, world.exit.y),
+   ]);
+-  placeLabyrinthLights(world, distances, used, lightKeys);
+-  placeLabyrinthBreakers(world, distances, used, breakerCount);
++
++  const validLightKeys = lightKeys.filter(
++    (key) => LABYRINTH_LIGHTS[key],
++  );
++  const normalizedBreakerCount = Math.max(
++    0,
++    Math.round(breakerCount),
++  );
++  const candidates = buildPickupCandidates(
++    world,
++    distances,
++    used,
++  );
++  const plan = [];
++  let lightIndex = 0;
++  let breakerIndex = 0;
++
++  while (
++    lightIndex < validLightKeys.length ||
++    breakerIndex < normalizedBreakerCount
++  ) {
++    const lightProgress =
++      validLightKeys.length > 0
++        ? lightIndex / validLightKeys.length
++        : Infinity;
++    const breakerProgress =
++      normalizedBreakerCount > 0
++        ? breakerIndex / normalizedBreakerCount
++        : Infinity;
++
++    if (
++      lightIndex < validLightKeys.length &&
++      (
++        breakerIndex >= normalizedBreakerCount ||
++        lightProgress <= breakerProgress
++      )
++    ) {
++      plan.push({
++        type: "light",
++        lightKey: validLightKeys[lightIndex],
++      });
++      lightIndex += 1;
++    } else {
++      plan.push({ type: "breaker" });
++      breakerIndex += 1;
++    }
++  }
++
++  for (let index = 0; index < plan.length; index += 1) {
++    const tile = chooseProgressionTile(
++      candidates,
++      index,
++      plan.length,
++      used,
++      world,
++    );
++
++    if (!tile) {
++      break;
++    }
++
++    const center = tileCenter(tile);
++    const item = plan[index];
++
++    if (item.type === "light") {
++      const light = LABYRINTH_LIGHTS[item.lightKey];
++
++      world.pickups.push({
++        id: `labyrinth-light-${item.lightKey}-${world.nextId++}`,
++        type: "labyrinthLight",
++        lightKey: item.lightKey,
++        label: light.label,
++        x: center.x,
++        y: center.y,
++        radius: 0.28,
++        color: light.color,
++      });
++      continue;
++    }
++
++    world.pickups.push({
++      id: `labyrinth-breaker-${world.nextId++}`,
++      type: "labyrinthBreaker",
++      label: "10s Wall Breaker",
++      x: center.x,
++      y: center.y,
++      radius: 0.28,
++      color: "#c084fc",
++    });
++  }
+ }

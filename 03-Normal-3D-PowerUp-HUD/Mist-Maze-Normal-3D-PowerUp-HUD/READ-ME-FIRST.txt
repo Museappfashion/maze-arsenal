@@ -1,0 +1,45 @@
+MIST MAZE — NORMAL 3D POWER-UP HUD
+
+This adds a compact power-up HUD to NORMAL 3D levels.
+
+It shows:
+- Stored slot Z
+- Stored slot X
+- Empty slots
+- Active power-up names
+- Live remaining duration for active effects
+
+It does NOT appear:
+- in 2D
+- in Labyrinth mode
+
+The HUD is display-only so it does not steal mouse input or pointer lock.
+
+INSTALL
+=======
+
+1. Copy:
+   src/components/NormalThreeDPowerUpHud.jsx
+
+   into:
+   your-repo/src/components/
+
+2. Choose ONE patch:
+
+   If you already applied the Labyrinth gameplay ZIP from the previous step:
+     git apply patch-after-labyrinth-update.patch
+
+   If you have NOT applied that update and App.jsx is still current main:
+     git apply patch-current-main.patch
+
+3. Run:
+     npm run build
+
+4. Test a normal level in 3D:
+   - empty Z/X slots are visible
+   - collected stored power-ups appear
+   - activating Z/X removes the stored item
+   - active power-up countdown appears
+   - Labyrinth uses its separate Labyrinth HUD
+
+5. Commit and push.

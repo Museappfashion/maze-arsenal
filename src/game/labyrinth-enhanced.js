@@ -1,8 +1,5 @@
 // src/game/labyrinth-enhanced.js
 import {
-  updateLabyrinth as updateLabyrinthCore,
-} from "./labyrinth.js";
-import {
   FLOOR,
   STEEL_WALL,
   VIEW_3D_FOV,
@@ -12,12 +9,21 @@ import {
   getLabyrinthLightStrength,
 } from "../config/labyrinthLights.js";
 import {
+  angleDelta,
+  indexOfTile,
+  tileCenter,
+} from "../utils/math.js";
+import {
+  initializeLabyrinth as initializeLabyrinthCore,
+  updateLabyrinth as updateLabyrinthCore,
+} from "./labyrinth.js?core";
+import {
+  bfsDistances,
   collectFloorTiles,
   hasLineOfSight,
 } from "./maze.js";
-import { angleDelta } from "../utils/math.js";
 
-export * from "./labyrinth.js";
+export * from "./labyrinth.js?core";
 
 const VISIBLE_THRESHOLD_2D = 0.12;
 const VISIBLE_THRESHOLD_3D = 0.08;
@@ -36,11 +42,12 @@ function pickupIsInFieldOfVision(world, pickup) {
     return false;
   }
 
-  const lightStrength = getLabyrinthLightStrength(
-    world,
-    pickup.x,
-    pickup.y,
-  );
+  const lightStrength =
+    getLabyrinthLightStrength(
+      world,
+      pickup.x,
+      pickup.y,
+    );
 
   if (world.viewMode !== "3d") {
     return lightStrength > VISIBLE_THRESHOLD_2D;
@@ -51,10 +58,16 @@ function pickupIsInFieldOfVision(world, pickup) {
   const distance = Math.hypot(dx, dy);
   const angleToPickup = Math.atan2(dy, dx);
   const angularDistance = Math.abs(
-    angleDelta(angleToPickup, world.player.facing),
+    angleDelta(
+      angleToPickup,
+      world.player.facing,
+    ),
   );
 
-  if (angularDistance > VIEW_3D_FOV / 2 + THREE_D_FOV_MARGIN) {
+  if (
+    angularDistance >
+    VIEW_3D_FOV / 2 + THREE_D_FOV_MARGIN
+  ) {
     return false;
   }
 
@@ -93,7 +106,10 @@ function cloneAnchoredPickups(world) {
     .map((pickup) => ({ ...pickup }));
 }
 
-function findReplacementIndex(pickups, anchoredPickup) {
+function findReplacementIndex(
+  pickups,
+  anchoredPickup,
+) {
   if (anchoredPickup.type === "labyrinthLight") {
     return pickups.findIndex(
       (pickup) =>
@@ -130,10 +146,17 @@ function isInteriorTile(world, x, y) {
   );
 }
 
-function carvePathToNearestFloor(world, startX, startY) {
-  const existingFloors = collectFloorTiles(world).filter(
-    (tile) => tile.x !== startX || tile.y !== startY,
-  );
+function carvePathToNearestFloor(
+  world,
+  startX,
+  startY,
+) {
+  const existingFloors = collectFloorTiles(world)
+    .filter(
+      (tile) =>
+        tile.x !== startX ||
+        tile.y !== startY,
+    );
 
   if (!existingFloors.length) {
     return;
@@ -185,7 +208,10 @@ function keepPickupTileWalkable(world, pickup) {
 
   const currentTile = world.grid[tileY][tileX];
 
-  if (currentTile === WALL || currentTile === STEEL_WALL) {
+  if (
+    currentTile === WALL ||
+    currentTile === STEEL_WALL
+  ) {
     world.grid[tileY][tileX] = FLOOR;
   }
 
@@ -203,11 +229,18 @@ function keepPickupTileWalkable(world, pickup) {
   );
 
   if (!connected) {
-    carvePathToNearestFloor(world, tileX, tileY);
+    carvePathToNearestFloor(
+      world,
+      tileX,
+      tileY,
+    );
   }
 }
 
-function restoreAnchoredPickups(world, anchoredPickups) {
+function restoreAnchoredPickups(
+  world,
+  anchoredPickups,
+) {
   if (!anchoredPickups.length) {
     return;
   }
@@ -215,16 +248,20 @@ function restoreAnchoredPickups(world, anchoredPickups) {
   const nextPickups = [...(world.pickups ?? [])];
 
   for (const anchoredPickup of anchoredPickups) {
-    const replacementIndex = findReplacementIndex(
-      nextPickups,
-      anchoredPickup,
-    );
+    const replacementIndex =
+      findReplacementIndex(
+        nextPickups,
+        anchoredPickup,
+      );
 
     if (replacementIndex >= 0) {
       nextPickups.splice(replacementIndex, 1);
     }
 
-    keepPickupTileWalkable(world, anchoredPickup);
+    keepPickupTileWalkable(
+      world,
+      anchoredPickup,
+    );
     nextPickups.push({
       ...anchoredPickup,
       anchoredInVision: true,
@@ -238,6 +275,222 @@ function restoreAnchoredPickups(world, anchoredPickups) {
   world.distanceFieldDirty = true;
 }
 
+function interleavePickups(pickups) {
+  const lights = pickups.filter(
+    (pickup) => pickup.type === "labyrinthLight",
+  );
+  const breakers = pickups.filter(
+    (pickup) => pickup.type === "labyrinthBreaker",
+  );
+  const plan = [];
+  let lightIndex = 0;
+  let breakerIndex = 0;
+
+  while (
+    lightIndex < lights.length ||
+    breakerIndex < breakers.length
+  ) {
+    const lightProgress =
+      lights.length > 0
+        ? lightIndex / lights.length
+        : Infinity;
+    const breakerProgress =
+      breakers.length > 0
+        ? breakerIndex / breakers.length
+        : Infinity;
+
+    if (
+      lightIndex < lights.length &&
+      (
+        breakerIndex >= breakers.length ||
+        lightProgress <= breakerProgress
+      )
+    ) {
+      plan.push(lights[lightIndex]);
+      lightIndex += 1;
+    } else {
+      plan.push(breakers[breakerIndex]);
+      breakerIndex += 1;
+    }
+  }
+
+  return plan;
+}
+
+function chooseCandidate(
+  candidates,
+  targetIndex,
+  used,
+) {
+  for (
+    let offset = 0;
+    offset < candidates.length;
+    offset += 1
+  ) {
+    for (const direction of [1, -1]) {
+      const index =
+        targetIndex + offset * direction;
+
+      if (
+        index < 0 ||
+        index >= candidates.length
+      ) {
+        continue;
+      }
+
+      const candidate = candidates[index];
+
+      if (!used.has(candidate.key)) {
+        used.add(candidate.key);
+        return candidate;
+      }
+    }
+  }
+
+  return null;
+}
+
+function redistributeUnanchoredPickups(world) {
+  if (!world?.labyrinthMode) {
+    return;
+  }
+
+  const pickups = world.pickups ?? [];
+  const movable = pickups.filter(
+    (pickup) =>
+      !pickup.anchoredInVision &&
+      (
+        pickup.type === "labyrinthLight" ||
+        pickup.type === "labyrinthBreaker"
+      ),
+  );
+
+  if (!movable.length) {
+    return;
+  }
+
+  const stationary = pickups.filter(
+    (pickup) => !movable.includes(pickup),
+  );
+
+  const playerTile = {
+    x: Math.floor(world.player.x),
+    y: Math.floor(world.player.y),
+  };
+  const distances = bfsDistances(
+    world,
+    playerTile,
+  );
+  const used = new Set();
+
+  used.add(
+    indexOfTile(
+      world.width,
+      playerTile.x,
+      playerTile.y,
+    ),
+  );
+  used.add(
+    indexOfTile(
+      world.width,
+      world.exit.x,
+      world.exit.y,
+    ),
+  );
+
+  for (const pickup of stationary) {
+    used.add(
+      indexOfTile(
+        world.width,
+        Math.floor(pickup.x),
+        Math.floor(pickup.y),
+      ),
+    );
+  }
+
+  const candidates = collectFloorTiles(world)
+    .map((tile) => {
+      const key = indexOfTile(
+        world.width,
+        tile.x,
+        tile.y,
+      );
+
+      return {
+        ...tile,
+        key,
+        distance: distances[key],
+      };
+    })
+    .filter(
+      (tile) =>
+        tile.distance >= 4 &&
+        !used.has(tile.key),
+    )
+    .sort(
+      (a, b) =>
+        a.distance - b.distance,
+    );
+
+  if (!candidates.length) {
+    return;
+  }
+
+  const plan = interleavePickups(movable);
+  const redistributed = [];
+
+  for (
+    let index = 0;
+    index < plan.length;
+    index += 1
+  ) {
+    const progress =
+      (index + 0.5) / plan.length;
+    const targetIndex = Math.min(
+      candidates.length - 1,
+      Math.floor(
+        progress * candidates.length,
+      ),
+    );
+    const tile = chooseCandidate(
+      candidates,
+      targetIndex,
+      used,
+    );
+
+    if (!tile) {
+      redistributed.push(plan[index]);
+      continue;
+    }
+
+    const center = tileCenter(tile);
+
+    redistributed.push({
+      ...plan[index],
+      x: center.x,
+      y: center.y,
+    });
+  }
+
+  world.pickups = [
+    ...stationary,
+    ...redistributed,
+  ];
+  world.floorTiles = collectFloorTiles(world);
+  world.floorCount = world.floorTiles.length;
+  world.minimapDirty = true;
+  world.distanceFieldDirty = true;
+}
+
+export function initializeLabyrinth(world) {
+  initializeLabyrinthCore(world);
+  redistributeUnanchoredPickups(world);
+
+  if (typeof globalThis !== "undefined") {
+    globalThis.__mistMazeWorld = world;
+  }
+}
+
 export function updateLabyrinth(world) {
   if (!world?.labyrinthMode) {
     updateLabyrinthCore(world);
@@ -246,15 +499,25 @@ export function updateLabyrinth(world) {
 
   anchorVisiblePickups(world);
 
-  const anchoredPickups = cloneAnchoredPickups(world);
+  const anchoredPickups =
+    cloneAnchoredPickups(world);
   const previousMutationNumber =
     world.labyrinth.mutationNumber;
 
   updateLabyrinthCore(world);
 
   if (
-    world.labyrinth.mutationNumber !== previousMutationNumber
+    world.labyrinth.mutationNumber !==
+    previousMutationNumber
   ) {
-    restoreAnchoredPickups(world, anchoredPickups);
+    restoreAnchoredPickups(
+      world,
+      anchoredPickups,
+    );
+    redistributeUnanchoredPickups(world);
+  }
+
+  if (typeof globalThis !== "undefined") {
+    globalThis.__mistMazeWorld = world;
   }
 }

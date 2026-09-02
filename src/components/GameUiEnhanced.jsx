@@ -1,18 +1,48 @@
 // src/components/GameUiEnhanced.jsx
-import { useCallback, useState } from "react";
+import {
+  useCallback,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import {
   SettingsControls as BaseSettingsControls,
   SidebarSettings as BaseSidebarSettings,
-} from "./GameUi.jsx";
+} from "./GameUi.jsx?core";
 
-export * from "./GameUi.jsx";
+export * from "./GameUi.jsx?core";
 
-let warningShownForCurrentGame = false;
-let lifecycleTrackingInstalled = false;
+const WARNING_STORAGE_KEY =
+  "mist-maze-mode-switch-warning-seen-v1";
 
-function resetModeSwitchWarning() {
-  warningShownForCurrentGame = false;
+function warningAlreadySeen() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  try {
+    return (
+      window.localStorage.getItem(
+        WARNING_STORAGE_KEY,
+      ) === "1"
+    );
+  } catch {
+    return false;
+  }
+}
+
+function rememberWarning() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(
+      WARNING_STORAGE_KEY,
+      "1",
+    );
+  } catch {
+    // Browser storage can be unavailable.
+  }
 }
 
 function isLabyrinthScreen() {
@@ -32,75 +62,28 @@ function isLabyrinthScreen() {
   );
 }
 
-function installGameLifecycleTracking() {
-  if (
-    lifecycleTrackingInstalled ||
-    typeof document === "undefined" ||
-    typeof MutationObserver === "undefined"
-  ) {
-    return;
-  }
-
-  lifecycleTrackingInstalled = true;
-  let gameRootPresent = Boolean(
-    document.querySelector(".maze-game-root"),
-  );
-
-  const observer = new MutationObserver(() => {
-    const nextGameRootPresent = Boolean(
-      document.querySelector(".maze-game-root"),
-    );
-
-    if (nextGameRootPresent && !gameRootPresent) {
-      resetModeSwitchWarning();
-    }
-
-    gameRootPresent = nextGameRootPresent;
-  });
-
-  observer.observe(document.documentElement, {
-    childList: true,
-    subtree: true,
-  });
-
-  document.addEventListener(
-    "click",
-    (event) => {
-      const button = event.target?.closest?.("button");
-
-      if (!button) {
-        return;
-      }
-
-      const label = button.textContent?.trim().toUpperCase() ?? "";
-
-      if (label.includes("START NEW MAZE")) {
-        resetModeSwitchWarning();
-      }
-    },
-    true,
-  );
-}
-
-if (typeof document !== "undefined") {
-  installGameLifecycleTracking();
-}
-
 function ModeSwitchWarning({
   open,
   nextMode,
   onContinue,
   onGoBack,
 }) {
-  if (!open || typeof document === "undefined") {
+  if (
+    !open ||
+    typeof document === "undefined"
+  ) {
     return null;
   }
 
   return createPortal(
     <div
       role="presentation"
-      onPointerDown={(event) => event.stopPropagation()}
-      onClick={(event) => event.stopPropagation()}
+      onPointerDown={(event) =>
+        event.stopPropagation()
+      }
+      onClick={(event) =>
+        event.stopPropagation()
+      }
       style={{
         position: "fixed",
         inset: 0,
@@ -108,7 +91,7 @@ function ModeSwitchWarning({
         display: "grid",
         placeItems: "center",
         padding: 20,
-        background: "rgba(2, 6, 23, 0.78)",
+        background: "rgba(2,6,23,0.78)",
         backdropFilter: "blur(8px)",
       }}
     >
@@ -117,13 +100,16 @@ function ModeSwitchWarning({
         aria-modal="true"
         aria-labelledby="mode-switch-warning-title"
         style={{
-          width: "min(520px, calc(100vw - 32px))",
+          width:
+            "min(520px, calc(100vw - 32px))",
           padding: 24,
           borderRadius: 22,
-          border: "1px solid rgba(251, 191, 36, 0.38)",
+          border:
+            "1px solid rgba(251,191,36,0.38)",
           background:
             "linear-gradient(145deg, rgba(30,41,59,0.98), rgba(2,6,23,0.99))",
-          boxShadow: "0 28px 80px rgba(0,0,0,0.55)",
+          boxShadow:
+            "0 28px 80px rgba(0,0,0,0.55)",
           color: "#e2e8f0",
           fontFamily:
             'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
@@ -160,9 +146,10 @@ function ModeSwitchWarning({
             fontSize: 15,
           }}
         >
-          Switching between 2D and 3D during this run makes the
-          current run ineligible for the leaderboard. Your existing
-          personal best is safe.
+          Switching between 2D and 3D
+          during this run makes the current
+          run ineligible for the leaderboard.
+          Your existing personal best is safe.
         </p>
 
         <p
@@ -173,8 +160,7 @@ function ModeSwitchWarning({
             fontSize: 13,
           }}
         >
-          This warning appears only on the first switch attempt of
-          each game.
+          This warning is shown only once.
         </p>
 
         <div
@@ -191,14 +177,16 @@ function ModeSwitchWarning({
             style={{
               minHeight: 46,
               borderRadius: 13,
-              border: "1px solid rgba(148,163,184,0.22)",
-              background: "rgba(30,41,59,0.72)",
+              border:
+                "1px solid rgba(148,163,184,0.22)",
+              background:
+                "rgba(30,41,59,0.72)",
               color: "#cbd5e1",
               fontWeight: 800,
               cursor: "pointer",
             }}
           >
-            GO BACK
+            STAY HERE
           </button>
 
           <button
@@ -208,16 +196,18 @@ function ModeSwitchWarning({
             style={{
               minHeight: 46,
               borderRadius: 13,
-              border: "1px solid rgba(251,191,36,0.55)",
+              border:
+                "1px solid rgba(251,191,36,0.55)",
               background:
                 "linear-gradient(135deg, #f59e0b, #d97706)",
               color: "#111827",
               fontWeight: 900,
               cursor: "pointer",
-              boxShadow: "0 10px 28px rgba(245,158,11,0.22)",
+              boxShadow:
+                "0 10px 28px rgba(245,158,11,0.22)",
             }}
           >
-            CONTINUE ANYWAY
+            SWITCH ANYWAY
           </button>
         </div>
       </section>
@@ -226,20 +216,25 @@ function ModeSwitchWarning({
   );
 }
 
-function useModeSwitchGuard(viewMode, onToggleViewMode) {
-  const [warningOpen, setWarningOpen] = useState(false);
-  const nextMode = viewMode === "3d" ? "2d" : "3d";
+function useModeSwitchGuard(
+  viewMode,
+  onToggleViewMode,
+) {
+  const [warningOpen, setWarningOpen] =
+    useState(false);
+  const nextMode =
+    viewMode === "3d" ? "2d" : "3d";
 
   const requestSwitch = useCallback(() => {
     if (
-      warningShownForCurrentGame ||
-      isLabyrinthScreen()
+      isLabyrinthScreen() ||
+      warningAlreadySeen()
     ) {
       onToggleViewMode?.();
       return;
     }
 
-    warningShownForCurrentGame = true;
+    rememberWarning();
     setWarningOpen(true);
   }, [onToggleViewMode]);
 
@@ -252,18 +247,16 @@ function useModeSwitchGuard(viewMode, onToggleViewMode) {
     setWarningOpen(false);
   }, []);
 
-  const warning = (
-    <ModeSwitchWarning
-      open={warningOpen}
-      nextMode={nextMode}
-      onContinue={continueSwitch}
-      onGoBack={goBack}
-    />
-  );
-
   return {
     requestSwitch,
-    warning,
+    warning: (
+      <ModeSwitchWarning
+        open={warningOpen}
+        nextMode={nextMode}
+        onContinue={continueSwitch}
+        onGoBack={goBack}
+      />
+    ),
   };
 }
 
@@ -272,10 +265,11 @@ export function SettingsControls({
   onToggleViewMode,
   ...props
 }) {
-  const { requestSwitch, warning } = useModeSwitchGuard(
-    viewMode,
-    onToggleViewMode,
-  );
+  const { requestSwitch, warning } =
+    useModeSwitchGuard(
+      viewMode,
+      onToggleViewMode,
+    );
 
   return (
     <>
@@ -292,18 +286,13 @@ export function SettingsControls({
 export function SidebarSettings({
   viewMode,
   onToggleViewMode,
-  onStart,
   ...props
 }) {
-  const { requestSwitch, warning } = useModeSwitchGuard(
-    viewMode,
-    onToggleViewMode,
-  );
-
-  const handleStart = useCallback(() => {
-    resetModeSwitchWarning();
-    onStart?.();
-  }, [onStart]);
+  const { requestSwitch, warning } =
+    useModeSwitchGuard(
+      viewMode,
+      onToggleViewMode,
+    );
 
   return (
     <>
@@ -311,7 +300,6 @@ export function SidebarSettings({
         {...props}
         viewMode={viewMode}
         onToggleViewMode={requestSwitch}
-        onStart={handleStart}
       />
       {warning}
     </>

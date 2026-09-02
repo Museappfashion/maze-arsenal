@@ -1,77 +1,45 @@
-MAZE ARSENAL — DEVELOPER DASHBOARD FIX
-===========================================
+MIST MAZE — NORMAL 3D POWER-UP HUD
 
-These are normal source files. No installer.
+This adds a compact power-up HUD to NORMAL 3D levels.
 
-REPLACE
--------
-1. src/services/developerAnalytics.js
-2. api/developer-usage.js
-3. api/developer-analytics.js
-4. supabase/developer-analytics.sql
+It shows:
+- Stored slot Z
+- Stored slot X
+- Empty slots
+- Active power-up names
+- Live remaining duration for active effects
 
-ADD
----
-5. api/developer-health.js
-6. supabase/CHECK-DEVELOPER-ANALYTICS.sql
-7. VERCEL-SETTINGS.txt
+It does NOT appear:
+- in 2D
+- in Labyrinth mode
 
-INSTALL ORDER
--------------
-1. Copy/replace the files above in your repo.
+The HUD is display-only so it does not steal mouse input or pointer lock.
 
-2. In Supabase:
-   SQL Editor -> run:
-     supabase/developer-analytics.sql
+INSTALL
+=======
 
-3. Then run the read-only verification:
-     supabase/CHECK-DEVELOPER-ANALYTICS.sql
+1. Copy:
+   src/components/NormalThreeDPowerUpHud.jsx
 
-   Expected first row:
-     usage_table_exists        true
-     server_rpc_exists         true
-     service_role_can_execute  true
+   into:
+   your-repo/src/components/
 
-4. In Vercel -> Settings -> Environment Variables, confirm:
-     VITE_SUPABASE_URL
-     VITE_SUPABASE_PUBLISHABLE_KEY
-     SUPABASE_URL
-     SUPABASE_SECRET_KEY
-     DEVELOPER_DASHBOARD_KEY
+2. Choose ONE patch:
 
-   SUPABASE_SERVICE_ROLE_KEY is also accepted as a legacy fallback.
+   If you already applied the Labyrinth gameplay ZIP from the previous step:
+     git apply patch-after-labyrinth-update.patch
 
-5. Supabase:
-     Authentication -> Anonymous Sign-Ins -> ON
+   If you have NOT applied that update and App.jsx is still current main:
+     git apply patch-current-main.patch
 
-6. Redeploy Vercel after changing environment variables.
+3. Run:
+     npm run build
 
-7. Visit:
-     https://mist-maze.com/?developer=1
+4. Test a normal level in 3D:
+   - empty Z/X slots are visible
+   - collected stored power-ups appear
+   - activating Z/X removes the stored item
+   - active power-up countdown appears
+   - Labyrinth uses its separate Labyrinth HUD
 
-8. Type the exact DEVELOPER_DASHBOARD_KEY value.
-
-WHAT THIS FIXES
----------------
-- Removes schema drift: developer-analytics.sql now matches the secure
-  server-only tracking architecture.
-- Browser analytics always goes through /api/developer-usage.
-- Serializes analytics session creation so simultaneous events do not race.
-- Retries once after an expired Supabase session.
-- Uses keepalive so end-of-run analytics are less likely to be lost.
-- Supports modern SUPABASE_SECRET_KEY and legacy
-  SUPABASE_SERVICE_ROLE_KEY.
-- Dashboard no longer depends on enumerating every Supabase Auth user.
-- Dashboard totals are based on actual tracked rows.
-- Server errors now tell you whether the missing piece is:
-    dashboard key,
-    Supabase server credentials,
-    database migration,
-    user authentication,
-    or analytics RPC.
-- Adds /api/developer-health for private server/database diagnostics.
-
-SECURITY
---------
-Never put SUPABASE_SECRET_KEY or DEVELOPER_DASHBOARD_KEY in frontend code.
-Never name the secret VITE_SUPABASE_SECRET_KEY.
+5. Commit and push.

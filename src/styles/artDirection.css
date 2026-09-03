@@ -1,0 +1,683 @@
+/* src/styles/artDirection.css
+   Visual direction: field instrument / printed technical dossier.
+   This file intentionally overrides the existing decorative UI without
+   changing game layout, mechanics, or theme-specific canvas rendering. */
+
+:root {
+  --mm-bg: #090a08;
+  --mm-panel: #0e100d;
+  --mm-panel-2: #131510;
+  --mm-ink: #e4e0d4;
+  --mm-muted: #898b82;
+  --mm-dim: #555950;
+  --mm-line: #2c3029;
+  --mm-line-strong: #454a40;
+  --mm-signal: #d64b3e;
+  --mm-signal-dark: #6e2923;
+  --mm-warning: #c5a65a;
+  --mm-cold: #849ba0;
+  --mm-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --mm-data: "SFMono-Regular", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  --mm-ui: "Arial Narrow", "Aptos Narrow", "Helvetica Neue", Arial, sans-serif;
+}
+
+html,
+body,
+#root {
+  background: var(--mm-bg) !important;
+  color: var(--mm-ink);
+}
+
+#root button,
+#root input,
+#root select {
+  font-family: var(--mm-ui);
+}
+
+#root button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ---------- OPENING SCREEN ---------- */
+
+#root .level-select-screen {
+  background: var(--mm-bg) !important;
+  color: var(--mm-ink) !important;
+  font-family: var(--mm-ui) !important;
+}
+
+#root .level-select-content {
+  gap: clamp(28px, 4.5vh, 54px);
+  padding: clamp(24px, 4vw, 58px);
+}
+
+#root .selector-header {
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--mm-line-strong);
+}
+
+#root .selector-kicker {
+  color: var(--mm-signal) !important;
+  font-family: var(--mm-data);
+  font-size: 10px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.16em !important;
+}
+
+#root .selector-header h1,
+#root .leaderboard-heading-row h2 {
+  color: var(--mm-ink) !important;
+  font-family: var(--mm-display);
+  font-weight: 400 !important;
+}
+
+#root .selector-header h1 {
+  margin-top: 10px;
+  font-size: clamp(44px, 6vw, 84px) !important;
+  line-height: 0.88 !important;
+  letter-spacing: -0.055em !important;
+}
+
+#root .first-page-header-actions {
+  gap: 7px;
+}
+
+#root .first-page-settings-button,
+#root .first-page-support-button {
+  min-height: 40px !important;
+  border: 1px solid var(--mm-line-strong) !important;
+  border-radius: 2px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--mm-muted) !important;
+  font-family: var(--mm-data);
+  font-size: 9px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.08em !important;
+  transition:
+    color 100ms linear,
+    border-color 100ms linear,
+    background 100ms linear !important;
+}
+
+#root .first-page-settings-button:hover,
+#root .first-page-support-button:hover {
+  transform: none !important;
+  filter: none !important;
+  border-color: var(--mm-ink) !important;
+  background: #12140f !important;
+  color: var(--mm-ink) !important;
+}
+
+#root .first-page-support-button {
+  font-size: 0 !important;
+}
+
+#root .first-page-support-button::after {
+  content: "SUPPORT PROJECT";
+  font-size: 9px;
+}
+
+#root .first-page-expanded-panel {
+  border: 1px solid var(--mm-line) !important;
+  border-radius: 0 !important;
+  background: var(--mm-panel) !important;
+  box-shadow: none !important;
+}
+
+#root .level-choice-grid {
+  gap: 1px !important;
+  background: var(--mm-line);
+  border: 1px solid var(--mm-line);
+}
+
+#root .level-choice {
+  min-height: clamp(280px, 37vh, 390px) !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--mm-panel) !important;
+  box-shadow: none !important;
+  transition:
+    background 120ms linear,
+    color 120ms linear !important;
+}
+
+#root .level-choice:hover {
+  transform: none !important;
+  border-color: transparent !important;
+  background: #151711 !important;
+  box-shadow: inset 0 -2px 0 var(--mm-signal) !important;
+}
+
+#root .level-choice:focus-visible {
+  outline: 1px solid var(--mm-signal) !important;
+  outline-offset: -1px !important;
+}
+
+#root .level-preview-wrap {
+  padding: 0 !important;
+  background: #050604;
+}
+
+#root .level-preview-wrap svg {
+  border-radius: 0 !important;
+  filter: saturate(0.72) contrast(1.08);
+}
+
+#root .level-choice-copy {
+  position: relative;
+  padding: 15px 17px 18px !important;
+  border-top: 1px solid var(--mm-line);
+  background: var(--mm-panel) !important;
+}
+
+#root .level-choice-copy::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 0;
+  width: 34px;
+  height: 1px;
+  background: var(--mm-signal);
+}
+
+#root .level-choice-number {
+  color: var(--mm-muted) !important;
+  font-family: var(--mm-data);
+  font-size: 9px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.12em !important;
+}
+
+#root .level-choice-name {
+  margin-top: 5px !important;
+  color: var(--mm-ink);
+  font-family: var(--mm-display);
+  font-size: clamp(23px, 2.2vw, 32px) !important;
+  font-weight: 400 !important;
+  letter-spacing: -0.035em !important;
+}
+
+#root .level-choice-special {
+  color: var(--mm-warning) !important;
+  font-family: var(--mm-data);
+  font-size: 8px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.08em !important;
+}
+
+/* ---------- LEADERBOARD AS A TABLE, NOT A CARD WALL ---------- */
+
+#root .level-leaderboards {
+  padding: 0 !important;
+  border: 0 !important;
+  border-top: 1px solid var(--mm-line-strong) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+#root .leaderboard-heading-row {
+  margin: 0 !important;
+  padding: 24px 0 18px;
+  border-bottom: 1px solid var(--mm-line);
+}
+
+#root .leaderboard-heading-row h2 {
+  font-size: clamp(28px, 3vw, 42px) !important;
+}
+
+#root .leaderboard-limit {
+  color: var(--mm-dim) !important;
+  font-family: var(--mm-data);
+  font-size: 9px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.04em !important;
+}
+
+#root .leaderboard-grid {
+  gap: 1px !important;
+  background: var(--mm-line);
+}
+
+#root .leaderboard-card {
+  padding: 14px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--mm-panel) !important;
+}
+
+#root .leaderboard-level-title span,
+#root .leaderboard-mode-title,
+#root .leaderboard-your-rank span {
+  font-family: var(--mm-data);
+}
+
+#root .leaderboard-mode-badge {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--mm-muted) !important;
+  font-family: var(--mm-data);
+  font-weight: 500 !important;
+}
+
+#root .leaderboard-list li {
+  border-bottom: 1px solid #20231e;
+}
+
+#root .leaderboard-current-user {
+  border-radius: 0 !important;
+  background: #171a14 !important;
+  box-shadow: inset 2px 0 0 var(--mm-signal) !important;
+}
+
+#root .leaderboard-rank {
+  color: var(--mm-dim);
+  font-family: var(--mm-data);
+}
+
+#root .leaderboard-rank-medal {
+  font-size: 0 !important;
+}
+
+#root .leaderboard-list li:nth-child(1) .leaderboard-rank-medal::after,
+#root .leaderboard-list li:nth-child(2) .leaderboard-rank-medal::after,
+#root .leaderboard-list li:nth-child(3) .leaderboard-rank-medal::after {
+  font-size: 9px;
+  color: var(--mm-warning);
+  font-family: var(--mm-data);
+}
+
+#root .leaderboard-list li:nth-child(1) .leaderboard-rank-medal::after {
+  content: "01";
+}
+
+#root .leaderboard-list li:nth-child(2) .leaderboard-rank-medal::after {
+  content: "02";
+}
+
+#root .leaderboard-list li:nth-child(3) .leaderboard-rank-medal::after {
+  content: "03";
+}
+
+#root .leaderboard-time {
+  color: var(--mm-ink) !important;
+  font-family: var(--mm-data);
+  font-weight: 400 !important;
+  font-variant-numeric: tabular-nums;
+}
+
+#root .leaderboard-your-rank {
+  border-radius: 0 !important;
+  border-color: var(--mm-line) !important;
+  background: #0b0c0a !important;
+}
+
+/* ---------- START DIALOG ---------- */
+
+#root .name-prompt-backdrop {
+  background: rgba(0, 0, 0, 0.82) !important;
+  backdrop-filter: none !important;
+}
+
+#root .name-prompt-card {
+  width: min(100%, 500px) !important;
+  padding: 24px !important;
+  border: 1px solid var(--mm-line-strong) !important;
+  border-radius: 0 !important;
+  background: #0d0f0c !important;
+  box-shadow: 14px 14px 0 rgba(0, 0, 0, 0.45) !important;
+}
+
+#root .name-prompt-card h2 {
+  color: var(--mm-ink) !important;
+  font-family: var(--mm-display);
+  font-weight: 400 !important;
+  letter-spacing: -0.035em !important;
+}
+
+#root .name-prompt-description,
+#root .name-prompt-helper {
+  color: var(--mm-muted) !important;
+}
+
+#root .name-prompt-mode {
+  padding: 0 0 7px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--mm-line) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--mm-warning) !important;
+  font-family: var(--mm-data);
+  font-size: 9px !important;
+  font-weight: 500 !important;
+}
+
+#root .name-prompt-label,
+#root .labyrinth-option-group legend {
+  color: var(--mm-muted) !important;
+  font-family: var(--mm-data);
+  font-size: 9px !important;
+  font-weight: 500 !important;
+}
+
+#root .name-prompt-input {
+  border: 0 !important;
+  border-bottom: 1px solid var(--mm-line-strong) !important;
+  border-radius: 0 !important;
+  background: #080906 !important;
+  color: var(--mm-ink) !important;
+  font-family: var(--mm-data);
+  font-weight: 400 !important;
+}
+
+#root .name-prompt-input:focus {
+  border-color: var(--mm-signal) !important;
+  box-shadow: none !important;
+}
+
+#root .labyrinth-choice-button,
+#root .name-prompt-button,
+#root .settings-view-toggle,
+#root .support-amount-button {
+  border: 1px solid var(--mm-line-strong) !important;
+  border-radius: 1px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--mm-muted) !important;
+  font-family: var(--mm-data);
+  font-size: 9px !important;
+  font-weight: 500 !important;
+}
+
+#root .labyrinth-choice-button.active {
+  border-color: var(--mm-warning) !important;
+  background: #1a1810 !important;
+  color: var(--mm-warning) !important;
+}
+
+#root .name-prompt-button.primary {
+  border-color: var(--mm-signal) !important;
+  background: var(--mm-signal-dark) !important;
+  color: var(--mm-ink) !important;
+}
+
+#root .name-prompt-button:hover,
+#root .labyrinth-choice-button:hover,
+#root .settings-view-toggle:hover,
+#root .support-amount-button:hover:not(:disabled) {
+  filter: none !important;
+  background: #171914 !important;
+  color: var(--mm-ink) !important;
+}
+
+#root .labyrinth-warning {
+  border: 0 !important;
+  border-left: 2px solid var(--mm-warning) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #b9b094 !important;
+  font-family: var(--mm-data);
+}
+
+/* ---------- IN-GAME SHELL ---------- */
+
+#root .maze-game-shell {
+  background: var(--mm-bg) !important;
+}
+
+#root .maze-sidebar,
+#root .desktop-3d-sticky {
+  background: #0a0b09 !important;
+  border-color: var(--mm-line) !important;
+}
+
+#root .support-panel,
+#root .audio-volume-controls,
+#root .labyrinth-status-panel,
+#root .labyrinth-locator,
+#root .three-d-sidebar-card,
+#root .three-d-settings-popover,
+#root .three-d-vital {
+  border-color: var(--mm-line) !important;
+  border-radius: 1px !important;
+  background: var(--mm-panel) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+#root .settings-section-title,
+#root .three-d-sidebar-title,
+#root .labyrinth-status-title,
+#root .support-panel-heading strong {
+  color: var(--mm-muted) !important;
+  font-family: var(--mm-data);
+  font-weight: 500 !important;
+  letter-spacing: 0.1em !important;
+}
+
+#root .three-d-gear-only,
+#root .sidebar-settings-gear,
+#root .sidebar-new-maze-button,
+#root .audio-master-toggle,
+#root .audio-test-button,
+#root .three-d-settings-actions button,
+#root .three-d-sidebar-actions button,
+#root .mobile-hud-actions button,
+#root .touch-action-button {
+  border-color: var(--mm-line-strong) !important;
+  border-radius: 1px !important;
+  background: rgba(10, 11, 9, 0.88) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  color: var(--mm-muted) !important;
+  font-family: var(--mm-data);
+  font-weight: 500 !important;
+}
+
+#root .three-d-gear-only:hover,
+#root .sidebar-settings-gear:hover,
+#root .sidebar-new-maze-button:hover,
+#root .three-d-settings-actions button:hover,
+#root .three-d-sidebar-actions button:hover {
+  border-color: var(--mm-ink) !important;
+  color: var(--mm-ink) !important;
+}
+
+#root .game-support-toggle {
+  border: 1px solid var(--mm-line-strong) !important;
+  border-radius: 1px !important;
+  background: #0d0f0c !important;
+  box-shadow: none !important;
+  color: var(--mm-muted) !important;
+  font-family: var(--mm-data);
+  font-size: 0 !important;
+  font-weight: 500 !important;
+}
+
+#root .game-support-toggle::after {
+  content: "SUPPORT";
+  font-size: 9px;
+}
+
+#root .game-support-close {
+  border-radius: 1px !important;
+  border-color: var(--mm-line-strong) !important;
+  background: var(--mm-panel) !important;
+}
+
+#root .audio-status-text {
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--mm-dim) !important;
+  font-family: var(--mm-data);
+}
+
+#root .audio-volume-row > span,
+#root .audio-volume-row strong,
+#root .audio-volume-row em {
+  color: var(--mm-muted) !important;
+  font-family: var(--mm-data);
+  font-weight: 400 !important;
+}
+
+#root .labyrinth-status-grid > div {
+  border-color: #20231e !important;
+  border-radius: 0 !important;
+  background: #0a0b09 !important;
+}
+
+#root .labyrinth-light-button {
+  border-radius: 1px !important;
+  box-shadow: none !important;
+}
+
+#root .labyrinth-light-button.selected {
+  border-color: var(--mm-warning) !important;
+  background: #1b1810 !important;
+  box-shadow: none !important;
+}
+
+#root .locator-dot.player,
+#root .locator-dot.exit,
+#root .three-d-power-dot,
+#root .touch-joystick-knob {
+  box-shadow: none !important;
+}
+
+#root .touch-joystick,
+#root .touch-action-button {
+  backdrop-filter: none !important;
+}
+
+#root .mobile-hud-chip,
+#root .mobile-minimap-hint {
+  border-radius: 1px !important;
+  background: rgba(8, 9, 6, 0.86) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  font-family: var(--mm-data);
+}
+
+/* ---------- RUNTIME-ADDED OVERLAYS ---------- */
+
+#mist-maze-runtime-enhancements {
+  font-family: var(--mm-ui) !important;
+}
+
+#mist-maze-runtime-enhancements > section {
+  border: 1px solid var(--mm-line-strong) !important;
+  border-radius: 0 !important;
+  background: rgba(9, 10, 8, 0.93) !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+#mist-maze-runtime-enhancements > section div {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+#mist-maze-runtime-enhancements > section strong,
+#mist-maze-runtime-enhancements > section span {
+  font-family: var(--mm-data) !important;
+  font-weight: 500 !important;
+}
+
+#mist-maze-runtime-enhancements [data-mist-action="restart"] {
+  min-width: 250px !important;
+  padding: 14px 20px !important;
+  border: 1px solid var(--mm-ink) !important;
+  border-left: 4px solid var(--mm-signal) !important;
+  border-radius: 0 !important;
+  background: rgba(12, 13, 10, 0.96) !important;
+  box-shadow: 8px 8px 0 rgba(0, 0, 0, 0.48) !important;
+  color: var(--mm-ink) !important;
+  font-family: var(--mm-data) !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.13em !important;
+}
+
+#mist-maze-runtime-enhancements [data-mist-action="restart"]:hover {
+  background: var(--mm-ink) !important;
+  color: var(--mm-bg) !important;
+}
+
+#mist-maze-runtime-enhancements [data-mist-action="menu"] {
+  min-width: 0 !important;
+  padding: 7px 1px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--mm-line-strong) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--mm-muted) !important;
+  font-family: var(--mm-data) !important;
+  font-size: 9px !important;
+  font-weight: 400 !important;
+  letter-spacing: 0.06em !important;
+}
+
+/* Thin red Labyrinth timer in both the current and updated runtime forms. */
+#mist-maze-runtime-enhancements [aria-label^="Time remaining"] {
+  min-width: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  color: var(--mm-signal) !important;
+  font-family: var(--mm-data) !important;
+  font-size: 25px !important;
+  font-weight: 300 !important;
+  letter-spacing: 0.03em !important;
+  text-shadow: none !important;
+}
+
+/* ---------- FOCUS / ACCESSIBILITY ---------- */
+
+#root button:focus-visible,
+#root input:focus-visible,
+#root select:focus-visible,
+#mist-maze-runtime-enhancements button:focus-visible {
+  outline: 1px solid var(--mm-signal) !important;
+  outline-offset: 2px !important;
+}
+
+/* ---------- MOBILE ---------- */
+
+@media (max-width: 620px) {
+  #root .level-select-content {
+    padding: 16px !important;
+  }
+
+  #root .selector-header {
+    padding-bottom: 14px;
+  }
+
+  #root .selector-header h1 {
+    font-size: clamp(42px, 15vw, 62px) !important;
+  }
+
+  #root .level-choice-grid {
+    gap: 1px !important;
+  }
+
+  #root .level-choice {
+    min-height: 285px !important;
+  }
+
+  #root .name-prompt-card {
+    padding: 19px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #root *,
+  #mist-maze-runtime-enhancements * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

@@ -10,99 +10,92 @@ import {
 import {
   getLabyrinthTimeRemaining,
 } from "../game/labyrinth.js";
-import {
-  formatTime,
-} from "../utils/math.js";
 
-const ROOT_ID =
-  "mist-maze-runtime-enhancements";
+const ROOT_ID = "mist-maze-runtime-enhancements";
 const THROTTLE_DELAY_MS = 120;
+const OVERLAY_UPDATE_MS = 25;
 
 function getWorld() {
   return globalThis.__mistMazeWorld ?? null;
 }
 
 function getGameCanvas() {
-  return document.querySelector(
-    ".maze-frame > canvas",
-  );
+  return document.querySelector(".maze-frame > canvas");
+}
+
+function getRoot() {
+  return document.getElementById(ROOT_ID);
 }
 
 function findButton(labels) {
-  const normalized = labels.map(
-    (label) => label.toUpperCase(),
-  );
+  const normalized = labels.map((label) => label.toUpperCase());
 
-  return [...document.querySelectorAll("button")]
-    .find((button) => {
-      const text =
-        button.textContent
-          ?.trim()
-          .toUpperCase() ?? "";
-
-      return normalized.some(
-        (label) => text.includes(label),
-      );
-    });
+  return [...document.querySelectorAll("button")].find((button) => {
+    const text = button.textContent?.trim().toUpperCase() ?? "";
+    return normalized.some((label) => text.includes(label));
+  });
 }
 
 function openThreeDSettings() {
-  const gear = document.querySelector(
-    ".three-d-gear-only",
-  );
+  const gear = document.querySelector(".three-d-gear-only");
 
-  if (
-    gear &&
-    gear.getAttribute("aria-expanded") !== "true"
-  ) {
+  if (gear && gear.getAttribute("aria-expanded") !== "true") {
     gear.click();
   }
+}
+
+function clickButton(labels) {
+  const button = findButton(labels);
+
+  if (!button) {
+    return false;
+  }
+
+  button.click();
+  return true;
 }
 
 function triggerRestart() {
   document.exitPointerLock?.();
 
-  const immediate = findButton([
-    "START NEW MAZE",
-  ]);
-
-  if (immediate) {
-    immediate.click();
+  if (clickButton(["START NEW MAZE"])) {
     return;
   }
 
   openThreeDSettings();
 
   window.setTimeout(() => {
-    findButton(["START NEW MAZE"])?.click();
+    clickButton(["START NEW MAZE"]);
   }, 0);
 }
 
 function triggerMainMenu() {
   document.exitPointerLock?.();
 
-  const immediate = findButton([
-    "LEVEL MENU",
-    "CHOOSE ANOTHER LEVEL",
-  ]);
+  if (clickButton(["LEVEL MENU", "CHOOSE ANOTHER LEVEL"])) {
+    const root = getRoot();
 
-  if (immediate) {
-    immediate.click();
+    if (root) {
+      root.style.display = "none";
+    }
     return;
   }
 
   openThreeDSettings();
 
   window.setTimeout(() => {
-    findButton([
-      "LEVEL MENU",
-      "CHOOSE ANOTHER LEVEL",
-    ])?.click();
+    if (clickButton(["LEVEL MENU", "CHOOSE ANOTHER LEVEL"])) {
+      const root = getRoot();
+
+      if (root) {
+        root.style.display = "none";
+      }
+    }
   }, 0);
 }
 
 function ensureRoot() {
-  let root = document.getElementById(ROOT_ID);
+  let root = getRoot();
 
   if (root) {
     return root;
@@ -120,68 +113,49 @@ function ensureRoot() {
   return root;
 }
 
-function createTimer(world) {
-  if (!world.labyrinthMode) {
+function formatTimerSecond(seconds) {
+  const safe = Math.max(0, Math.ceil(Number(seconds) || 0));
+  const minutes = String(Math.floor(safe / 60)).padStart(2, "0");
+  const remainingSeconds = String(safe % 60).padStart(2, "0");
+  return `${minutes}:${remainingSeconds}`;
+}
+
+function getDisplayedTimerSecond(world) {
+  return Math.max(
+    0,
+    Math.ceil(getLabyrinthTimeRemaining(world)),
+  );
+}
+
+function createTimer(world, displayedSecond) {
+  if (
+    !world.labyrinthMode ||
+    world.gameOver ||
+    world.victory
+  ) {
     return "";
   }
 
-  const remaining =
-    getLabyrinthTimeRemaining(world);
-  const seconds = Math.ceil(remaining);
-  const critical = seconds <= 10;
-  const urgent = seconds <= 30;
-
   return `
     <div
+      aria-label="Time remaining ${formatTimerSecond(displayedSecond)}"
       style="
         position:absolute;
-        top:12px;
-        right:12px;
-        min-width:146px;
-        padding:8px 12px 9px;
-        border:1px solid ${
-          critical
-            ? "rgba(255,90,90,.96)"
-            : "rgba(248,113,113,.66)"
-        };
-        border-radius:12px;
-        background:${
-          critical
-            ? "rgba(69,10,10,.95)"
-            : "rgba(24,4,8,.91)"
-        };
-        box-shadow:${
-          urgent
-            ? `0 0 ${critical ? 32 : 20}px rgba(239,68,68,${
-                critical ? ".62" : ".34"
-              })`
-            : "0 10px 30px rgba(0,0,0,.36)"
-        };
-        backdrop-filter:blur(5px);
-        text-align:right;
+        top:16px;
+        right:18px;
+        color:#ff3434;
+        font-family:SFMono-Regular,Consolas,Liberation Mono,monospace;
+        font-size:28px;
+        font-weight:300;
+        font-variant-numeric:tabular-nums;
+        line-height:1;
+        letter-spacing:.035em;
+        opacity:.96;
+        white-space:nowrap;
+        pointer-events:none;
+        user-select:none;
       "
-    >
-      <div
-        style="
-          color:#fca5a5;
-          font-size:9px;
-          font-weight:950;
-          letter-spacing:.16em;
-        "
-      >TIME LEFT</div>
-      <div
-        style="
-          margin-top:1px;
-          color:${critical ? "#fff" : "#ff4d4d"};
-          font-family:SFMono-Regular,Consolas,monospace;
-          font-size:${critical ? 28 : 24}px;
-          font-weight:950;
-          line-height:1;
-          letter-spacing:-.05em;
-          text-shadow:0 0 14px rgba(239,68,68,.72);
-        "
-      >${formatTime(remaining)}</div>
-    </div>
+    >${formatTimerSecond(displayedSecond)}</div>
   `;
 }
 
@@ -299,10 +273,8 @@ function normalPowerUpHtml(world) {
 }
 
 function labyrinthPowerUpHtml(world) {
-  const owned =
-    world.labyrinth?.ownedLights ?? {};
-  const equipped =
-    world.labyrinth?.equippedLight;
+  const owned = world.labyrinth?.ownedLights ?? {};
+  const equipped = world.labyrinth?.equippedLight;
 
   const lights = LABYRINTH_LIGHT_ORDER
     .map((key) => {
@@ -355,8 +327,7 @@ function labyrinthPowerUpHtml(world) {
     .join("");
 
   const equippedLabel = equipped
-    ? LABYRINTH_LIGHTS[equipped]?.label ??
-      "Base Light"
+    ? LABYRINTH_LIGHTS[equipped]?.label ?? "Base Light"
     : "Base Light";
 
   return `
@@ -372,9 +343,7 @@ function labyrinthPowerUpHtml(world) {
       "
     >
       <span>LABYRINTH POWER-UPS</span>
-      <span>BREAKERS ${
-        world.labyrinth?.breakerCharges ?? 0
-      }/10</span>
+      <span>BREAKERS ${world.labyrinth?.breakerCharges ?? 0}/10</span>
     </div>
     <div
       style="
@@ -404,7 +373,7 @@ function createPowerUpHud(world) {
     <section
       style="
         position:absolute;
-        top:${world.labyrinthMode ? 82 : 70}px;
+        top:${world.labyrinthMode ? 58 : 70}px;
         right:12px;
         width:${world.labyrinthMode ? 230 : 220}px;
         padding:10px;
@@ -429,10 +398,9 @@ function createEndOverlay(world) {
     return "";
   }
 
-  const primary =
-    world.gameOver
-      ? "START NEW GAME"
-      : "TRY AGAIN";
+  const primary = world.gameOver
+    ? "START NEW GAME"
+    : "TRY AGAIN";
 
   return `
     <div
@@ -494,10 +462,35 @@ function createEndOverlay(world) {
   `;
 }
 
-function queueTimerTick(
-  world,
-  state,
-) {
+function bindEndOverlayActions(root) {
+  root
+    .querySelector('[data-mist-action="restart"]')
+    ?.addEventListener("click", triggerRestart, { once: true });
+
+  root
+    .querySelector('[data-mist-action="menu"]')
+    ?.addEventListener("click", triggerMainMenu, { once: true });
+}
+
+function positionRoot(root, rect) {
+  root.style.display = "block";
+  root.style.left = `${rect.left}px`;
+  root.style.top = `${rect.top}px`;
+  root.style.width = `${rect.width}px`;
+  root.style.height = `${rect.height}px`;
+}
+
+function resetOverlayForWorld(state, world) {
+  state.world = world;
+  state.terminalWorld = null;
+  state.lastMarkup = "";
+  state.lastTimerWorld = world;
+  state.lastTimerSecond = world?.labyrinthMode
+    ? getDisplayedTimerSecond(world)
+    : null;
+}
+
+function queueTimerTick(world, displayedSecond, state) {
   if (
     !world.labyrinthMode ||
     world.gameOver ||
@@ -510,82 +503,85 @@ function queueTimerTick(
 
   if (state.lastTimerWorld !== world) {
     state.lastTimerWorld = world;
-    state.lastTimerSecond = null;
-  }
-
-  const remaining = Math.max(
-    0,
-    getLabyrinthTimeRemaining(world),
-  );
-  const second = Math.ceil(remaining);
-
-  if (
-    second <= 0 ||
-    state.lastTimerSecond === second
-  ) {
+    state.lastTimerSecond = displayedSecond;
     return;
   }
 
-  state.lastTimerSecond = second;
+  if (state.lastTimerSecond === null) {
+    state.lastTimerSecond = displayedSecond;
+    return;
+  }
+
+  if (state.lastTimerSecond === displayedSecond) {
+    return;
+  }
+
+  state.lastTimerSecond = displayedSecond;
   world.audioEvents ??= [];
 
   if (world.audioEvents.length < 48) {
     world.audioEvents.push({
       type: "labyrinthTick",
-      urgent: second <= 30,
-      critical: second <= 10,
+      second: displayedSecond,
     });
   }
 }
 
 function updateOverlay(root, state) {
-  const canvas = getGameCanvas();
   const world = getWorld();
+  const canvas = getGameCanvas();
 
-  if (!canvas || !world) {
+  if (world && state.world !== world) {
+    resetOverlayForWorld(state, world);
+  }
+
+  if (state.terminalWorld === world && world) {
+    if (canvas) {
+      const terminalRect = canvas.getBoundingClientRect();
+
+      if (terminalRect.width > 0 && terminalRect.height > 0) {
+        positionRoot(root, terminalRect);
+      }
+    }
+
+    return;
+  }
+
+  if (!world || !canvas) {
     root.style.display = "none";
     return;
   }
 
   const rect = canvas.getBoundingClientRect();
 
-  if (
-    rect.width <= 0 ||
-    rect.height <= 0
-  ) {
+  if (rect.width <= 0 || rect.height <= 0) {
     root.style.display = "none";
     return;
   }
 
-  root.style.display = "block";
-  root.style.left = `${rect.left}px`;
-  root.style.top = `${rect.top}px`;
-  root.style.width = `${rect.width}px`;
-  root.style.height = `${rect.height}px`;
+  positionRoot(root, rect);
 
-  queueTimerTick(world, state);
+  const displayedSecond = world.labyrinthMode
+    ? getDisplayedTimerSecond(world)
+    : null;
 
-  root.innerHTML = [
-    createTimer(world),
+  queueTimerTick(world, displayedSecond, state);
+
+  const markup = [
+    createTimer(world, displayedSecond),
     createPowerUpHud(world),
     createEndOverlay(world),
   ].join("");
 
-  root
-    .querySelector('[data-mist-action="restart"]')
-    ?.addEventListener(
-      "click",
-      triggerRestart,
-      { once: true },
-    );
+  if (markup !== state.lastMarkup) {
+    root.innerHTML = markup;
+    state.lastMarkup = markup;
+    bindEndOverlayActions(root);
+  }
 
-  root
-    .querySelector('[data-mist-action="menu"]')
-    ?.addEventListener(
-      "click",
-      triggerMainMenu,
-      { once: true },
-    );
+  if (world.gameOver || world.victory) {
+    state.terminalWorld = world;
+  }
 }
 
 function installRafThrottle() {
@@ -598,10 +594,8 @@ function installRafThrottle() {
 
   window.__mistMazeRafThrottleInstalled = true;
 
-  const nativeRequest =
-    window.requestAnimationFrame.bind(window);
-  const nativeCancel =
-    window.cancelAnimationFrame.bind(window);
+  const nativeRequest = window.requestAnimationFrame.bind(window);
+  const nativeCancel = window.cancelAnimationFrame.bind(window);
   const delayedIds = new Set();
 
   window.requestAnimationFrame = (callback) => {
@@ -644,24 +638,18 @@ export function installRuntimeEnhancements() {
 
   const root = ensureRoot();
   const state = {
+    world: null,
+    terminalWorld: null,
+    lastMarkup: "",
     lastTimerWorld: null,
     lastTimerSecond: null,
   };
 
-  const update = () =>
-    updateOverlay(root, state);
+  const update = () => updateOverlay(root, state);
 
-  window.setInterval(update, 100);
-  window.addEventListener(
-    "resize",
-    update,
-    { passive: true },
-  );
-  window.addEventListener(
-    "scroll",
-    update,
-    { passive: true },
-  );
+  window.setInterval(update, OVERLAY_UPDATE_MS);
+  window.addEventListener("resize", update, { passive: true });
+  window.addEventListener("scroll", update, { passive: true });
 
   update();
 }

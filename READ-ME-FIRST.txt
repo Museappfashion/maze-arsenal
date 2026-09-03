@@ -1,0 +1,28 @@
+MIST MAZE — STICKY END SCREEN + TIMER + MUSIC FIX
+==================================================
+
+Replace exactly these two files:
+
+1. src/features/runtimeEnhancements.js
+2. src/audio/MazeAudioEngine-enhanced.js
+
+Changes:
+- START NEW GAME stays visible after death.
+- TRY AGAIN stays visible after victory.
+- The end overlay stops being rebuilt after death/victory.
+- Labyrinth timer is only thin red MM:SS numbers.
+- No timer box, border, label, background, or glow panel.
+- The timer display and tick use the exact same integer second.
+- No immediate tick on level start.
+- Tick is one short dry high-frequency click, not the old two-tone beep.
+- Music receives a 1.30x volume boost relative to the existing slider setting.
+- SFX volume is unchanged.
+- Existing normal/Labyrinth 3D power-up HUD remains.
+
+Finder install:
+1. Open the maze-arsenal repo in Finder.
+2. Drag these files into the same paths.
+3. Choose Replace.
+4. Commit both changed files in GitHub Desktop.
+5. Push main.
+6. Let Vercel redeploy.

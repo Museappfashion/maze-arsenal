@@ -5,7 +5,18 @@ import {
 
 export * from "./MazeAudioEngine.js?core";
 
+const MUSIC_VOLUME_BOOST = 1.3;
+
 export class MazeAudioEngine extends BaseMazeAudioEngine {
+  setMusicVolume(volume) {
+    const requested = Number(volume);
+    const boosted = Number.isFinite(requested)
+      ? Math.max(0, Math.min(1, requested * MUSIC_VOLUME_BOOST))
+      : 0;
+
+    super.setMusicVolume(boosted);
+  }
+
   playSfx(event, themeKey) {
     if (event?.type !== "labyrinthTick") {
       super.playSfx(event, themeKey);
@@ -18,43 +29,19 @@ export class MazeAudioEngine extends BaseMazeAudioEngine {
       !context ||
       !this.sfxGain ||
       !this.enabled ||
-      !this.canPlaySfx("labyrinthTick", 0.14)
+      !this.canPlaySfx("labyrinthTick", 0.12)
     ) {
       return;
     }
 
-    const now = context.currentTime + 0.004;
-    const critical = Boolean(event.critical);
-    const urgent = Boolean(event.urgent);
-    const frequency = critical
-      ? 1180
-      : urgent
-        ? 940
-        : 720;
-    const volume = critical
-      ? 0.07
-      : urgent
-        ? 0.052
-        : 0.036;
+    const now = context.currentTime + 0.002;
 
-    this.tone(
-      frequency,
+    this.noise(
       now,
-      critical ? 0.055 : 0.04,
-      volume,
-      "square",
+      0.018,
+      0.021,
       this.sfxGain,
+      4200,
     );
-
-    if (critical) {
-      this.tone(
-        frequency * 0.62,
-        now + 0.048,
-        0.055,
-        0.038,
-        "triangle",
-        this.sfxGain,
-      );
-    }
   }
 }

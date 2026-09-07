@@ -5,7 +5,7 @@ import {
   isRobbienatorWeapon,
   ROBBIENATOR_LABEL,
 } from "./robbienator.js";
-import { SWORD_GUN_KEY } from "./weapons.js";
+import { SWORD_GUN_KEY } from "./weapons-enhanced.js";
 
 export * from "./presentations.js?core";
 

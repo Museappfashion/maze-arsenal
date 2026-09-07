@@ -1,0 +1,22 @@
+MIST MAZE — SWORD GUN HOTFIX 2
+
+IMPORTANT:
+Do NOT drag the outer hotfix folder into your repo.
+
+Open your existing maze-arsenal repo, then open:
+src -> config
+
+Replace exactly these two existing files there:
+1. presentations-enhanced.js
+2. specialPlayers.js
+
+After replacement, GitHub Desktop should show BOTH existing files as modified.
+It should NOT show a new folder named Mist-Maze-Sword-Gun-Hotfix-2.
+
+The corrected line in presentations-enhanced.js is:
+import { SWORD_GUN_KEY } from "./weapons-enhanced.js";
+
+The corrected line in specialPlayers.js is:
+import { SWORD_GUN_KEY } from "./weapons-enhanced.js";
+
+Commit and Push origin, then Vercel can rebuild.

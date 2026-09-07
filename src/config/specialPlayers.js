@@ -1,5 +1,5 @@
 // src/config/specialPlayers.js
-import { SWORD_GUN_KEY } from "./weapons.js";
+import { SWORD_GUN_KEY } from "./weapons-enhanced.js";
 
 export const ASHER_PLAYER_NAME = "asher";
 

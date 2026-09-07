@@ -1,19 +1,18 @@
-MIST MAZE — ABANDONED CITY RENDERER UPGRADE
+MIST MAZE — ABANDONED CITY STREET + SKYSCRAPER FIX
 
 Replace:
 src/game/rendering-enhanced.js
 
-What this changes:
-- Level 0 player now has a distinct abandoned-city survivor look
-- 2D city floor now renders as asphalt roads instead of dungeon-like tiles
-- 2D city walls now render as building/city blocks with façade details
-- 3D city view now overlays an urban road perspective, façade/windows, and urban fog
-- Robbie / Asher weapon rendering remains intact
+This fixes:
+- city ground now looks more like a normal street road
+- city walls now look like packed skyscraper blocks
+- city enemies are redrawn so they are visible again
+- city pickups are redrawn so they remain visible over the custom road layer
 
-How to install:
-1. Open your maze-arsenal repo in Finder.
-2. Open src/game
+Install:
+1. Open your repo in Finder
+2. Go to src/game
 3. Replace rendering-enhanced.js
 4. Commit in GitHub Desktop
-5. Push origin
+5. Push
 6. Let Vercel rebuild

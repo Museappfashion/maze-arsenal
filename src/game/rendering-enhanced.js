@@ -19,7 +19,7 @@ import {
 } from "../config/specialPlayers.js";
 import {
   SWORD_GUN_KEY,
-} from "../config/weapons.js";
+} from "../config/weapons-enhanced.js";
 import {
   getCamera,
   getWorldRenderZoom,
@@ -620,7 +620,6 @@ function getVisibleTileBounds(world) {
 
   return {
     camera,
-    zoom,
     scale,
     minX: Math.max(0, Math.floor(camera.x) - 1),
     minY: Math.max(0, Math.floor(camera.y) - 1),
@@ -650,10 +649,21 @@ function isFloorTile(world, x, y) {
 
 function citySeed(x, y, offset = 0) {
   const value = Math.sin(
-    x * 127.1 + y * 311.7 + offset * 61.3,
+    x * 127.1 + y * 311.7 + offset * 74.7,
   ) * 43758.5453123;
 
   return value - Math.floor(value);
+}
+
+function worldToScreen(world, x, y) {
+  const camera = getCamera(world);
+  const scale = DRAW_TILE * getWorldRenderZoom(world);
+
+  return {
+    x: (x - camera.x) * scale,
+    y: (y - camera.y) * scale,
+    scale,
+  };
 }
 
 function roadOrientation(world, x, y) {
@@ -661,145 +671,140 @@ function roadOrientation(world, x, y) {
   const right = isFloorTile(world, x + 1, y);
   const up = isFloorTile(world, x, y - 1);
   const down = isFloorTile(world, x, y + 1);
-  const horizontalScore = Number(left) + Number(right);
-  const verticalScore = Number(up) + Number(down);
+  const horizontal = Number(left) + Number(right);
+  const vertical = Number(up) + Number(down);
 
-  if (horizontalScore > verticalScore) {
+  if (horizontal >= 1 && vertical >= 1) {
+    return "intersection";
+  }
+
+  if (horizontal > vertical) {
     return "horizontal";
   }
 
-  if (verticalScore > horizontalScore) {
+  if (vertical > horizontal) {
     return "vertical";
   }
 
-  return horizontalScore + verticalScore >= 3
-    ? "intersection"
-    : "plaza";
+  return "plaza";
 }
 
-function drawRoadCracks(ctx, sx, sy, size, seed) {
-  ctx.save();
-  ctx.strokeStyle = "rgba(15, 23, 42, 0.34)";
-  ctx.lineWidth = Math.max(1, size * 0.028);
-  ctx.lineCap = "round";
-
-  const startX = sx + size * (0.18 + seed * 0.38);
-  const startY = sy + size * (0.16 + citySeed(seed, seed, 1) * 0.44);
-
-  ctx.beginPath();
-  ctx.moveTo(startX, startY);
-  ctx.lineTo(
-    startX + size * (citySeed(seed, seed, 2) - 0.5) * 0.3,
-    startY + size * 0.12,
+function drawStreetRoadTile2D(ctx, world, x, y, sx, sy, size) {
+  const seed = citySeed(x, y, 1);
+  const asphalt = ctx.createLinearGradient(
+    sx,
+    sy,
+    sx + size,
+    sy + size,
   );
-  ctx.lineTo(
-    startX + size * (citySeed(seed, seed, 3) - 0.5) * 0.5,
-    startY + size * 0.32,
-  );
-  ctx.lineTo(
-    startX + size * (citySeed(seed, seed, 4) - 0.5) * 0.7,
-    startY + size * 0.54,
-  );
-  ctx.stroke();
-  ctx.restore();
-}
+  asphalt.addColorStop(0, "#33373b");
+  asphalt.addColorStop(0.5, seed > 0.5 ? "#3d4145" : "#383c40");
+  asphalt.addColorStop(1, "#262a2e");
+  ctx.fillStyle = asphalt;
+  ctx.fillRect(sx, sy, size, size);
 
-function drawRoadMarkings(ctx, world, x, y, sx, sy, size) {
-  const orientation = roadOrientation(world, x, y);
-
-  ctx.save();
-  ctx.lineCap = "round";
-
-  if (orientation === "horizontal") {
-    ctx.strokeStyle = "rgba(250, 204, 21, 0.86)";
-    ctx.lineWidth = Math.max(2, size * 0.075);
-
-    for (let index = 0; index < 2; index += 1) {
-      const x1 = sx + size * (0.14 + index * 0.34);
-      const x2 = x1 + size * 0.18;
-
-      ctx.beginPath();
-      ctx.moveTo(x1, sy + size * 0.5);
-      ctx.lineTo(x2, sy + size * 0.5);
-      ctx.stroke();
-    }
-
-    if (!isFloorTile(world, x, y - 1)) {
-      ctx.strokeStyle = "rgba(226, 232, 240, 0.3)";
-      ctx.lineWidth = Math.max(1, size * 0.03);
-      ctx.beginPath();
-      ctx.moveTo(sx, sy + size * 0.12);
-      ctx.lineTo(sx + size, sy + size * 0.12);
-      ctx.stroke();
-    }
-
-    if (!isFloorTile(world, x, y + 1)) {
-      ctx.strokeStyle = "rgba(226, 232, 240, 0.3)";
-      ctx.lineWidth = Math.max(1, size * 0.03);
-      ctx.beginPath();
-      ctx.moveTo(sx, sy + size * 0.88);
-      ctx.lineTo(sx + size, sy + size * 0.88);
-      ctx.stroke();
-    }
-  } else if (orientation === "vertical") {
-    ctx.strokeStyle = "rgba(250, 204, 21, 0.86)";
-    ctx.lineWidth = Math.max(2, size * 0.075);
-
-    for (let index = 0; index < 2; index += 1) {
-      const y1 = sy + size * (0.14 + index * 0.34);
-      const y2 = y1 + size * 0.18;
-
-      ctx.beginPath();
-      ctx.moveTo(sx + size * 0.5, y1);
-      ctx.lineTo(sx + size * 0.5, y2);
-      ctx.stroke();
-    }
-
-    if (!isFloorTile(world, x - 1, y)) {
-      ctx.strokeStyle = "rgba(226, 232, 240, 0.3)";
-      ctx.lineWidth = Math.max(1, size * 0.03);
-      ctx.beginPath();
-      ctx.moveTo(sx + size * 0.12, sy);
-      ctx.lineTo(sx + size * 0.12, sy + size);
-      ctx.stroke();
-    }
-
-    if (!isFloorTile(world, x + 1, y)) {
-      ctx.strokeStyle = "rgba(226, 232, 240, 0.3)";
-      ctx.lineWidth = Math.max(1, size * 0.03);
-      ctx.beginPath();
-      ctx.moveTo(sx + size * 0.88, sy);
-      ctx.lineTo(sx + size * 0.88, sy + size);
-      ctx.stroke();
-    }
-  } else if (orientation === "intersection") {
-    ctx.strokeStyle = "rgba(241, 245, 249, 0.82)";
-    ctx.lineWidth = Math.max(2, size * 0.055);
-
-    for (let offset = 0.16; offset <= 0.68; offset += 0.17) {
-      ctx.beginPath();
-      ctx.moveTo(sx + size * offset, sy + size * 0.18);
-      ctx.lineTo(sx + size * offset, sy + size * 0.34);
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.moveTo(sx + size * 0.18, sy + size * offset);
-      ctx.lineTo(sx + size * 0.34, sy + size * offset);
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.moveTo(sx + size * 0.66, sy + size * offset);
-      ctx.lineTo(sx + size * 0.82, sy + size * offset);
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.moveTo(sx + size * offset, sy + size * 0.66);
-      ctx.lineTo(sx + size * offset, sy + size * 0.82);
-      ctx.stroke();
-    }
+  ctx.fillStyle = "rgba(255,255,255,0.04)";
+  for (let index = 0; index < 5; index += 1) {
+    ctx.fillRect(
+      sx + size * citySeed(x, y, 10 + index) * 0.92,
+      sy + size * citySeed(y, x, 20 + index) * 0.92,
+      Math.max(1, size * 0.03),
+      Math.max(1, size * 0.03),
+    );
   }
 
-  ctx.restore();
+  const orientation = roadOrientation(world, x, y);
+
+  ctx.strokeStyle = "rgba(17, 24, 39, 0.34)";
+  ctx.lineWidth = Math.max(1, size * 0.025);
+  ctx.beginPath();
+  ctx.moveTo(sx + size * 0.14, sy + size * 0.18);
+  ctx.lineTo(sx + size * 0.28, sy + size * 0.42);
+  ctx.lineTo(sx + size * 0.2, sy + size * 0.72);
+  ctx.stroke();
+
+  if (orientation === "horizontal") {
+    ctx.strokeStyle = "#facc15";
+    ctx.lineWidth = Math.max(2, size * 0.065);
+    ctx.lineCap = "round";
+
+    for (const offset of [0.44, 0.56]) {
+      for (let dash = 0; dash < 2; dash += 1) {
+        const x1 = sx + size * (0.14 + dash * 0.36);
+        const x2 = x1 + size * 0.16;
+        ctx.beginPath();
+        ctx.moveTo(x1, sy + size * offset);
+        ctx.lineTo(x2, sy + size * offset);
+        ctx.stroke();
+      }
+    }
+
+    ctx.strokeStyle = "rgba(241, 245, 249, 0.22)";
+    ctx.lineWidth = Math.max(1, size * 0.03);
+    ctx.beginPath();
+    ctx.moveTo(sx, sy + size * 0.14);
+    ctx.lineTo(sx + size, sy + size * 0.14);
+    ctx.moveTo(sx, sy + size * 0.86);
+    ctx.lineTo(sx + size, sy + size * 0.86);
+    ctx.stroke();
+  } else if (orientation === "vertical") {
+    ctx.strokeStyle = "#facc15";
+    ctx.lineWidth = Math.max(2, size * 0.065);
+    ctx.lineCap = "round";
+
+    for (const offset of [0.44, 0.56]) {
+      for (let dash = 0; dash < 2; dash += 1) {
+        const y1 = sy + size * (0.14 + dash * 0.36);
+        const y2 = y1 + size * 0.16;
+        ctx.beginPath();
+        ctx.moveTo(sx + size * offset, y1);
+        ctx.lineTo(sx + size * offset, y2);
+        ctx.stroke();
+      }
+    }
+
+    ctx.strokeStyle = "rgba(241, 245, 249, 0.22)";
+    ctx.lineWidth = Math.max(1, size * 0.03);
+    ctx.beginPath();
+    ctx.moveTo(sx + size * 0.14, sy);
+    ctx.lineTo(sx + size * 0.14, sy + size);
+    ctx.moveTo(sx + size * 0.86, sy);
+    ctx.lineTo(sx + size * 0.86, sy + size);
+    ctx.stroke();
+  } else if (orientation === "intersection") {
+    ctx.fillStyle = "rgba(241, 245, 249, 0.75)";
+    const stripeW = size * 0.08;
+    const stripeH = size * 0.18;
+
+    for (let step = 0; step < 4; step += 1) {
+      const offset = size * (0.14 + step * 0.14);
+
+      ctx.fillRect(
+        sx + offset,
+        sy + size * 0.08,
+        stripeW,
+        stripeH,
+      );
+      ctx.fillRect(
+        sx + offset,
+        sy + size * 0.74,
+        stripeW,
+        stripeH,
+      );
+      ctx.fillRect(
+        sx + size * 0.08,
+        sy + offset,
+        stripeH,
+        stripeW,
+      );
+      ctx.fillRect(
+        sx + size * 0.74,
+        sy + offset,
+        stripeH,
+        stripeW,
+      );
+    }
+  }
 }
 
 function drawCityRoads2D(ctx, world) {
@@ -810,84 +815,66 @@ function drawCityRoads2D(ctx, world) {
     return;
   }
 
-  const {
-    camera,
-    scale,
-    minX,
-    minY,
-    maxX,
-    maxY,
-  } = getVisibleTileBounds(world);
+  const bounds = getVisibleTileBounds(world);
 
   ctx.save();
-
-  for (let y = minY; y <= maxY; y += 1) {
-    for (let x = minX; x <= maxX; x += 1) {
+  for (let y = bounds.minY; y <= bounds.maxY; y += 1) {
+    for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
       if (!isFloorTile(world, x, y)) {
         continue;
       }
 
-      const sx = (x - camera.x) * scale;
-      const sy = (y - camera.y) * scale;
-      const seed = citySeed(x, y);
-      const asphalt = ctx.createLinearGradient(
-        sx,
-        sy,
-        sx + scale,
-        sy + scale,
-      );
-
-      asphalt.addColorStop(0, `rgba(31, 41, 55, ${0.96 - seed * 0.08})`);
-      asphalt.addColorStop(0.5, `rgba(55, 65, 81, ${0.94 - seed * 0.08})`);
-      asphalt.addColorStop(1, `rgba(17, 24, 39, ${0.98 - seed * 0.06})`);
-
-      ctx.fillStyle = asphalt;
-      ctx.fillRect(sx, sy, scale, scale);
-
-      ctx.fillStyle = "rgba(226, 232, 240, 0.05)";
-      for (let dot = 0; dot < 6; dot += 1) {
-        ctx.fillRect(
-          sx + scale * citySeed(x, y, dot + 1) * 0.92,
-          sy + scale * citySeed(y, x, dot + 7) * 0.92,
-          Math.max(1, scale * 0.03),
-          Math.max(1, scale * 0.03),
-        );
-      }
-
-      drawRoadCracks(ctx, sx, sy, scale, seed);
-      drawRoadMarkings(ctx, world, x, y, sx, sy, scale);
+      const sx = (x - bounds.camera.x) * bounds.scale;
+      const sy = (y - bounds.camera.y) * bounds.scale;
+      drawStreetRoadTile2D(ctx, world, x, y, sx, sy, bounds.scale);
     }
   }
-
   ctx.restore();
 }
 
-function drawBuildingWindows2D(ctx, sx, sy, size, x, y) {
-  const rows = 2 + Math.floor(citySeed(x, y, 6) * 2);
-  const cols = 2 + Math.floor(citySeed(x, y, 7) * 2);
-  const marginX = size * 0.14;
-  const marginY = size * 0.16;
-  const cellW =
-    (size - marginX * 2) / cols;
-  const cellH =
-    (size - marginY * 2) / rows;
+function drawSkyscraperTile2D(ctx, sx, sy, size, x, y) {
+  const towerCount = 3 + Math.floor(citySeed(x, y, 2) * 2);
 
-  for (let row = 0; row < rows; row += 1) {
-    for (let col = 0; col < cols; col += 1) {
-      const lit =
-        citySeed(x + col, y + row, 8) > 0.58;
+  ctx.fillStyle = citySeed(x, y, 3) > 0.5 ? "#1f2937" : "#111827";
+  ctx.fillRect(sx, sy, size, size);
 
-      ctx.fillStyle = lit
-        ? "rgba(250, 204, 21, 0.38)"
-        : "rgba(148, 163, 184, 0.16)";
+  ctx.fillStyle = "rgba(71, 85, 105, 0.6)";
+  ctx.fillRect(sx, sy, size, size * 0.09);
 
-      ctx.fillRect(
-        sx + marginX + col * cellW + cellW * 0.14,
-        sy + marginY + row * cellH + cellH * 0.18,
-        cellW * 0.58,
-        cellH * 0.42,
-      );
+  for (let tower = 0; tower < towerCount; tower += 1) {
+    const left = sx + size * (0.05 + tower * 0.18);
+    const width = size * (0.14 + citySeed(x + tower, y, 4) * 0.06);
+    const top = sy + size * (0.18 + citySeed(x, y + tower, 5) * 0.12);
+    const height = size * (0.64 + citySeed(x, y, 6 + tower) * 0.1);
+
+    ctx.fillStyle = tower % 2 === 0 ? "#273342" : "#364152";
+    ctx.fillRect(left, top, width, height);
+
+    ctx.fillStyle = "rgba(148, 163, 184, 0.22)";
+    for (let row = 0; row < 5; row += 1) {
+      for (let col = 0; col < 2; col += 1) {
+        const lit = citySeed(x + tower + col, y + row, 30) > 0.62;
+        ctx.fillStyle = lit
+          ? "rgba(250, 204, 21, 0.42)"
+          : "rgba(226, 232, 240, 0.15)";
+        ctx.fillRect(
+          left + width * (0.16 + col * 0.38),
+          top + height * (0.08 + row * 0.16),
+          width * 0.17,
+          height * 0.07,
+        );
+      }
     }
+  }
+
+  ctx.strokeStyle = "rgba(255,255,255,0.08)";
+  ctx.lineWidth = Math.max(1, size * 0.02);
+  for (let stripe = 1; stripe < 4; stripe += 1) {
+    const px = sx + size * (stripe / 4);
+    ctx.beginPath();
+    ctx.moveTo(px, sy + size * 0.1);
+    ctx.lineTo(px, sy + size);
+    ctx.stroke();
   }
 }
 
@@ -899,72 +886,156 @@ function drawCityBuildingBlocks2D(ctx, world) {
     return;
   }
 
-  const {
-    camera,
-    scale,
-    minX,
-    minY,
-    maxX,
-    maxY,
-  } = getVisibleTileBounds(world);
+  const bounds = getVisibleTileBounds(world);
 
   ctx.save();
-
-  for (let y = minY; y <= maxY; y += 1) {
-    for (let x = minX; x <= maxX; x += 1) {
+  for (let y = bounds.minY; y <= bounds.maxY; y += 1) {
+    for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
       if (isFloorTile(world, x, y)) {
         continue;
       }
 
-      const sx = (x - camera.x) * scale;
-      const sy = (y - camera.y) * scale;
-      const seed = citySeed(x, y, 2);
-
-      ctx.fillStyle =
-        seed > 0.66
-          ? "#20262b"
-          : seed > 0.33
-            ? "#31383f"
-            : "#262d34";
-      ctx.fillRect(sx, sy, scale, scale);
-
-      ctx.fillStyle = "rgba(255,255,255,0.05)";
-      ctx.fillRect(
-        sx + scale * 0.06,
-        sy + scale * 0.08,
-        scale * 0.88,
-        scale * 0.1,
-      );
-
-      ctx.fillStyle = "rgba(15,23,42,0.44)";
-      ctx.fillRect(
-        sx + scale * 0.08,
-        sy + scale * 0.2,
-        scale * 0.84,
-        scale * 0.72,
-      );
-
-      drawBuildingWindows2D(ctx, sx, sy, scale, x, y);
-
-      ctx.strokeStyle = "rgba(226, 232, 240, 0.12)";
-      ctx.lineWidth = Math.max(1, scale * 0.03);
-      ctx.strokeRect(
-        sx + scale * 0.05,
-        sy + scale * 0.05,
-        scale * 0.9,
-        scale * 0.9,
-      );
-
-      if (isFloorTile(world, x, y + 1)) {
-        ctx.fillStyle = "rgba(0,0,0,0.26)";
-        ctx.fillRect(
-          sx,
-          sy + scale * 0.8,
-          scale,
-          scale * 0.2,
-        );
-      }
+      const sx = (x - bounds.camera.x) * bounds.scale;
+      const sy = (y - bounds.camera.y) * bounds.scale;
+      drawSkyscraperTile2D(ctx, sx, sy, bounds.scale, x, y);
     }
+  }
+  ctx.restore();
+}
+
+function pickupColor(type) {
+  switch (type) {
+    case "health":
+      return "#22c55e";
+    case "ammo":
+      return "#f59e0b";
+    case "weapon":
+      return "#94a3b8";
+    case "power":
+      return "#8b5cf6";
+    default:
+      return "#e2e8f0";
+  }
+}
+
+function drawCityPickups2D(ctx, world) {
+  if (
+    world.level?.themeKey !== "city" ||
+    world.viewMode === "3d"
+  ) {
+    return;
+  }
+
+  ctx.save();
+
+  for (const pickup of world.pickups ?? []) {
+    const { x, y, scale } = worldToScreen(world, pickup.x, pickup.y);
+    const color = pickup.legendary
+      ? LEGENDARY_GOLD
+      : pickupColor(pickup.type);
+    const size = scale * 0.18;
+
+    ctx.fillStyle = "rgba(15, 23, 42, 0.3)";
+    ctx.beginPath();
+    ctx.ellipse(x, y + size * 1.2, size * 1.4, size * 0.8, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = color;
+
+    if (pickup.type === "health") {
+      ctx.fillRect(x - size * 0.35, y - size * 0.12, size * 0.7, size * 0.24);
+      ctx.fillRect(x - size * 0.12, y - size * 0.35, size * 0.24, size * 0.7);
+    } else if (pickup.type === "ammo") {
+      ctx.beginPath();
+      ctx.arc(x, y, size * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(x, y - size * 0.6);
+      ctx.lineTo(x + size * 0.6, y);
+      ctx.lineTo(x, y + size * 0.6);
+      ctx.lineTo(x - size * 0.6, y);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    if (pickup.legendary) {
+      ctx.strokeStyle = LEGENDARY_WHITE;
+      ctx.lineWidth = Math.max(1, size * 0.12);
+      ctx.beginPath();
+      ctx.arc(x, y, size * 0.9, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+
+  ctx.restore();
+}
+
+function enemyPalette(kind) {
+  switch (kind) {
+    case "turret":
+      return {
+        main: "#fb7185",
+        dark: "#881337",
+        eye: "#fef2f2",
+      };
+    case "melee":
+      return {
+        main: "#ef4444",
+        dark: "#7f1d1d",
+        eye: "#fee2e2",
+      };
+    default:
+      return {
+        main: "#f97316",
+        dark: "#7c2d12",
+        eye: "#fff7ed",
+      };
+  }
+}
+
+function drawCityEnemies2D(ctx, world) {
+  if (
+    world.level?.themeKey !== "city" ||
+    world.viewMode === "3d"
+  ) {
+    return;
+  }
+
+  ctx.save();
+
+  for (const enemy of world.enemies ?? []) {
+    const { x, y, scale } = worldToScreen(world, enemy.x, enemy.y);
+    const radius = Math.max(
+      scale * 0.18,
+      (enemy.radius ?? 0.22) * scale,
+    );
+    const palette = enemyPalette(enemy.kind);
+
+    ctx.fillStyle = "rgba(2, 6, 23, 0.35)";
+    ctx.beginPath();
+    ctx.ellipse(x, y + radius * 1.1, radius * 1.1, radius * 0.7, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = palette.main;
+    ctx.strokeStyle = palette.dark;
+    ctx.lineWidth = Math.max(1, radius * 0.18);
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = palette.eye;
+    ctx.beginPath();
+    ctx.arc(x - radius * 0.34, y - radius * 0.16, radius * 0.16, 0, Math.PI * 2);
+    ctx.arc(x + radius * 0.34, y - radius * 0.16, radius * 0.16, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = palette.dark;
+    ctx.lineWidth = Math.max(1, radius * 0.12);
+    ctx.beginPath();
+    ctx.arc(x, y + radius * 0.1, radius * 0.42, 0.1 * Math.PI, 0.9 * Math.PI);
+    ctx.stroke();
   }
 
   ctx.restore();
@@ -984,34 +1055,34 @@ function drawCityPlayer2D(ctx, world) {
   ctx.save();
   ctx.translate(player.x, player.y);
 
-  ctx.fillStyle = "rgba(2, 6, 23, 0.42)";
+  ctx.fillStyle = "rgba(2, 6, 23, 0.4)";
   ctx.beginPath();
-  ctx.ellipse(0, 11, 16, 9, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 11, 17, 9, 0, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.rotate(angle);
 
   ctx.fillStyle = "#111827";
   ctx.beginPath();
-  ctx.ellipse(-1, 1, 12, 14, 0, 0, Math.PI * 2);
+  ctx.arc(0, 2, 11, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = "#f59e0b";
+  ctx.fillStyle = "#f1c27d";
   ctx.beginPath();
-  ctx.arc(0, -2, 7, 0, Math.PI * 2);
+  ctx.arc(0, -6, 6.5, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = "#334155";
+  ctx.fillStyle = "#475569";
   ctx.fillRect(-10, -1, 20, 14);
 
-  ctx.fillStyle = "#f8fafc";
-  ctx.fillRect(-2, 5, 4, 7);
+  ctx.fillStyle = "#38bdf8";
+  ctx.fillRect(-3, 3, 6, 8);
 
-  ctx.strokeStyle = "rgba(125, 211, 252, 0.66)";
+  ctx.strokeStyle = "#e2e8f0";
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(0, -1);
-  ctx.lineTo(16, -5);
+  ctx.moveTo(4, 0);
+  ctx.lineTo(18, -4);
   ctx.stroke();
 
   ctx.restore();
@@ -1020,67 +1091,60 @@ function drawCityPlayer2D(ctx, world) {
 function drawCityRoadPerspective3D(ctx) {
   ctx.save();
 
-  const horizon = CANVAS_HEIGHT * 0.53;
+  const horizon = CANVAS_HEIGHT * 0.54;
 
-  ctx.fillStyle = "rgba(9, 12, 16, 0.92)";
+  ctx.fillStyle = "#2f3438";
   ctx.beginPath();
-  ctx.moveTo(CANVAS_WIDTH * 0.12, CANVAS_HEIGHT);
-  ctx.lineTo(CANVAS_WIDTH * 0.33, horizon);
-  ctx.lineTo(CANVAS_WIDTH * 0.67, horizon);
-  ctx.lineTo(CANVAS_WIDTH * 0.88, CANVAS_HEIGHT);
+  ctx.moveTo(CANVAS_WIDTH * 0.17, CANVAS_HEIGHT);
+  ctx.lineTo(CANVAS_WIDTH * 0.36, horizon);
+  ctx.lineTo(CANVAS_WIDTH * 0.64, horizon);
+  ctx.lineTo(CANVAS_WIDTH * 0.83, CANVAS_HEIGHT);
   ctx.closePath();
   ctx.fill();
 
-  ctx.fillStyle = "rgba(120, 128, 136, 0.34)";
+  ctx.fillStyle = "#62686e";
   ctx.beginPath();
   ctx.moveTo(0, CANVAS_HEIGHT);
-  ctx.lineTo(CANVAS_WIDTH * 0.26, horizon);
-  ctx.lineTo(CANVAS_WIDTH * 0.33, horizon);
-  ctx.lineTo(CANVAS_WIDTH * 0.12, CANVAS_HEIGHT);
+  ctx.lineTo(CANVAS_WIDTH * 0.28, horizon);
+  ctx.lineTo(CANVAS_WIDTH * 0.36, horizon);
+  ctx.lineTo(CANVAS_WIDTH * 0.17, CANVAS_HEIGHT);
   ctx.closePath();
   ctx.fill();
 
   ctx.beginPath();
   ctx.moveTo(CANVAS_WIDTH, CANVAS_HEIGHT);
-  ctx.lineTo(CANVAS_WIDTH * 0.74, horizon);
-  ctx.lineTo(CANVAS_WIDTH * 0.67, horizon);
-  ctx.lineTo(CANVAS_WIDTH * 0.88, CANVAS_HEIGHT);
+  ctx.lineTo(CANVAS_WIDTH * 0.72, horizon);
+  ctx.lineTo(CANVAS_WIDTH * 0.64, horizon);
+  ctx.lineTo(CANVAS_WIDTH * 0.83, CANVAS_HEIGHT);
   ctx.closePath();
   ctx.fill();
 
-  ctx.strokeStyle = "rgba(250, 204, 21, 0.92)";
+  ctx.strokeStyle = "#facc15";
   ctx.lineCap = "round";
 
-  for (let segment = 0; segment < 9; segment += 1) {
-    const depthA = segment / 9;
-    const depthB = (segment + 0.45) / 9;
-    const y1 =
-      horizon +
-      (CANVAS_HEIGHT - horizon) * depthA;
-    const y2 =
-      horizon +
-      (CANVAS_HEIGHT - horizon) * depthB;
-    const widthA = 2 + depthA * 7;
-    const widthB = 2 + depthB * 7;
+  for (let segment = 0; segment < 8; segment += 1) {
+    const start = segment / 8;
+    const end = (segment + 0.38) / 8;
+    const y1 = horizon + (CANVAS_HEIGHT - horizon) * start;
+    const y2 = horizon + (CANVAS_HEIGHT - horizon) * end;
+    ctx.lineWidth = 2 + start * 8;
 
-    ctx.lineWidth = (widthA + widthB) * 0.5;
-    ctx.beginPath();
-    ctx.moveTo(CANVAS_WIDTH * 0.5, y1);
-    ctx.lineTo(CANVAS_WIDTH * 0.5, y2);
-    ctx.stroke();
+    for (const offset of [-10, 10]) {
+      ctx.beginPath();
+      ctx.moveTo(CANVAS_WIDTH * 0.5 + offset, y1);
+      ctx.lineTo(CANVAS_WIDTH * 0.5 + offset, y2);
+      ctx.stroke();
+    }
   }
 
-  ctx.strokeStyle = "rgba(241, 245, 249, 0.2)";
+  ctx.strokeStyle = "rgba(241,245,249,0.26)";
   ctx.lineWidth = 2;
-  for (let side of [0.28, 0.72]) {
-    ctx.beginPath();
-    ctx.moveTo(CANVAS_WIDTH * side, horizon);
-    ctx.lineTo(
-      CANVAS_WIDTH * (side < 0.5 ? 0.08 : 0.92),
-      CANVAS_HEIGHT,
-    );
-    ctx.stroke();
-  }
+  ctx.beginPath();
+  ctx.moveTo(CANVAS_WIDTH * 0.36, horizon);
+  ctx.lineTo(CANVAS_WIDTH * 0.18, CANVAS_HEIGHT);
+  ctx.moveTo(CANVAS_WIDTH * 0.64, horizon);
+  ctx.lineTo(CANVAS_WIDTH * 0.82, CANVAS_HEIGHT);
+  ctx.stroke();
 
   ctx.restore();
 }
@@ -1095,58 +1159,65 @@ function drawCityWallFacade3D(ctx, world) {
 
   ctx.save();
 
-  ctx.fillStyle = "rgba(4, 8, 15, 0.3)";
-  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  const horizon = CANVAS_HEIGHT * 0.54;
+  const sidePolys = [
+    [
+      [0, CANVAS_HEIGHT],
+      [0, CANVAS_HEIGHT * 0.1],
+      [CANVAS_WIDTH * 0.34, horizon],
+      [CANVAS_WIDTH * 0.18, CANVAS_HEIGHT],
+    ],
+    [
+      [CANVAS_WIDTH, CANVAS_HEIGHT],
+      [CANVAS_WIDTH, CANVAS_HEIGHT * 0.1],
+      [CANVAS_WIDTH * 0.66, horizon],
+      [CANVAS_WIDTH * 0.82, CANVAS_HEIGHT],
+    ],
+  ];
 
-  const skylineBase = CANVAS_HEIGHT * 0.34;
-  ctx.fillStyle = "rgba(15, 23, 42, 0.56)";
-  ctx.beginPath();
-  ctx.moveTo(0, skylineBase + 40);
-
-  for (let x = 0; x <= CANVAS_WIDTH; x += 44) {
-    const seed = citySeed(x, 0, 11);
-    const height = 24 + seed * 82;
-    ctx.lineTo(x, skylineBase + 40);
-    ctx.lineTo(x, skylineBase - height);
-    ctx.lineTo(x + 22, skylineBase - height + seed * 12);
-  }
-
-  ctx.lineTo(CANVAS_WIDTH, skylineBase + 40);
-  ctx.closePath();
-  ctx.fill();
-
-  for (const side of ["left", "right"]) {
-    const leftSide = side === "left";
-
-    ctx.fillStyle = "rgba(17, 24, 39, 0.26)";
+  for (const polygon of sidePolys) {
+    ctx.fillStyle = "rgba(17, 24, 39, 0.24)";
     ctx.beginPath();
-    ctx.moveTo(leftSide ? 0 : CANVAS_WIDTH, CANVAS_HEIGHT);
-    ctx.lineTo(leftSide ? 0 : CANVAS_WIDTH, CANVAS_HEIGHT * 0.18);
-    ctx.lineTo(leftSide ? CANVAS_WIDTH * 0.26 : CANVAS_WIDTH * 0.74, CANVAS_HEIGHT * 0.35);
-    ctx.lineTo(leftSide ? CANVAS_WIDTH * 0.18 : CANVAS_WIDTH * 0.82, CANVAS_HEIGHT);
+    ctx.moveTo(polygon[0][0], polygon[0][1]);
+    for (let index = 1; index < polygon.length; index += 1) {
+      ctx.lineTo(polygon[index][0], polygon[index][1]);
+    }
     ctx.closePath();
     ctx.fill();
+  }
 
-    for (let column = 0; column < 5; column += 1) {
-      for (let row = 0; row < 9; row += 1) {
-        const lit = citySeed(column, row, leftSide ? 3 : 9) > 0.58;
-        const px = leftSide
-          ? 20 + column * 26 + row * 2
-          : CANVAS_WIDTH - 30 - column * 26 - row * 2;
-        const py = 110 + row * 33 + column * 5;
+  const drawWindowBank = (startX, dir) => {
+    for (let row = 0; row < 10; row += 1) {
+      for (let col = 0; col < 6; col += 1) {
+        const px = startX + dir * (col * 24 + row * 1.5);
+        const py = 92 + row * 30 + col * 4;
+        const lit = citySeed(row, col, dir > 0 ? 51 : 52) > 0.58;
 
         ctx.fillStyle = lit
-          ? "rgba(250, 204, 21, 0.28)"
-          : "rgba(203, 213, 225, 0.12)";
-        ctx.fillRect(
-          px,
-          py,
-          10,
-          14,
-        );
+          ? "rgba(250, 204, 21, 0.32)"
+          : "rgba(226, 232, 240, 0.12)";
+        ctx.fillRect(px, py, 9, 13);
       }
     }
+  };
+
+  drawWindowBank(18, 1);
+  drawWindowBank(CANVAS_WIDTH - 28, -1);
+
+  const skylineY = CANVAS_HEIGHT * 0.3;
+  ctx.fillStyle = "rgba(30, 41, 59, 0.62)";
+  ctx.beginPath();
+  ctx.moveTo(0, skylineY + 50);
+  for (let x = 0; x <= CANVAS_WIDTH + 30; x += 30) {
+    const seed = citySeed(x, 0, 60);
+    const height = 30 + seed * 95;
+    ctx.lineTo(x, skylineY + 50);
+    ctx.lineTo(x, skylineY - height);
+    ctx.lineTo(x + 14, skylineY - height + seed * 8);
   }
+  ctx.lineTo(CANVAS_WIDTH, skylineY + 50);
+  ctx.closePath();
+  ctx.fill();
 
   ctx.restore();
 }
@@ -1159,43 +1230,31 @@ function drawUrbanFog(ctx, world) {
   ctx.save();
 
   if (world.viewMode === "3d") {
-    const fog = ctx.createLinearGradient(
-      0,
-      0,
-      0,
-      CANVAS_HEIGHT,
-    );
-    fog.addColorStop(0, "rgba(130, 134, 139, 0.08)");
-    fog.addColorStop(0.38, "rgba(162, 166, 171, 0.15)");
-    fog.addColorStop(0.76, "rgba(114, 118, 122, 0.11)");
-    fog.addColorStop(1, "rgba(96, 100, 104, 0.06)");
+    const fog = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+    fog.addColorStop(0, "rgba(161, 161, 170, 0.08)");
+    fog.addColorStop(0.4, "rgba(212, 212, 216, 0.14)");
+    fog.addColorStop(0.8, "rgba(148, 163, 184, 0.1)");
+    fog.addColorStop(1, "rgba(100, 116, 139, 0.05)");
     ctx.fillStyle = fog;
-    ctx.fillRect(
-      0,
-      0,
-      CANVAS_WIDTH,
-      CANVAS_HEIGHT,
-    );
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
   } else {
-    for (let index = 0; index < 11; index += 1) {
+    for (let index = 0; index < 10; index += 1) {
       const x =
         (
-          index * 131 +
-          world.time * (11 + index)
+          index * 137 +
+          world.time * (14 + index)
         ) %
-          (CANVAS_WIDTH + 320) -
-        160;
-      const y =
-        70 +
-        ((index * 89) % (CANVAS_HEIGHT - 120));
+          (CANVAS_WIDTH + 340) -
+        170;
+      const y = 60 + ((index * 83) % (CANVAS_HEIGHT - 120));
 
-      ctx.fillStyle = "rgba(190, 194, 198, 0.045)";
+      ctx.fillStyle = "rgba(226, 232, 240, 0.05)";
       ctx.beginPath();
       ctx.ellipse(
         x,
         y,
-        170,
-        42,
+        180,
+        34,
         0,
         0,
         Math.PI * 2,
@@ -1218,55 +1277,35 @@ function drawCityPlayer3DAccent(ctx, world) {
   ctx.save();
 
   const bottom = CANVAS_HEIGHT - 8;
-
-  ctx.fillStyle = "rgba(17, 24, 39, 0.9)";
+  ctx.fillStyle = "rgba(17, 24, 39, 0.92)";
   ctx.beginPath();
-  ctx.moveTo(CANVAS_WIDTH * 0.14, bottom);
+  ctx.moveTo(CANVAS_WIDTH * 0.16, bottom);
   ctx.quadraticCurveTo(
-    CANVAS_WIDTH * 0.18,
-    CANVAS_HEIGHT * 0.72,
+    CANVAS_WIDTH * 0.2,
+    CANVAS_HEIGHT * 0.74,
     CANVAS_WIDTH * 0.31,
-    CANVAS_HEIGHT * 0.8,
+    CANVAS_HEIGHT * 0.82,
   );
   ctx.lineTo(CANVAS_WIDTH * 0.36, bottom);
   ctx.closePath();
   ctx.fill();
 
   ctx.beginPath();
-  ctx.moveTo(CANVAS_WIDTH * 0.86, bottom);
+  ctx.moveTo(CANVAS_WIDTH * 0.84, bottom);
   ctx.quadraticCurveTo(
-    CANVAS_WIDTH * 0.82,
-    CANVAS_HEIGHT * 0.72,
+    CANVAS_WIDTH * 0.8,
+    CANVAS_HEIGHT * 0.74,
     CANVAS_WIDTH * 0.69,
-    CANVAS_HEIGHT * 0.8,
+    CANVAS_HEIGHT * 0.82,
   );
   ctx.lineTo(CANVAS_WIDTH * 0.64, bottom);
   ctx.closePath();
   ctx.fill();
 
-  ctx.fillStyle = "rgba(245, 158, 11, 0.92)";
+  ctx.fillStyle = "rgba(241, 194, 125, 0.95)";
   ctx.beginPath();
-  ctx.ellipse(
-    CANVAS_WIDTH * 0.34,
-    CANVAS_HEIGHT * 0.84,
-    22,
-    15,
-    0.4,
-    0,
-    Math.PI * 2,
-  );
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.ellipse(
-    CANVAS_WIDTH * 0.66,
-    CANVAS_HEIGHT * 0.84,
-    22,
-    15,
-    -0.4,
-    0,
-    Math.PI * 2,
-  );
+  ctx.ellipse(CANVAS_WIDTH * 0.34, CANVAS_HEIGHT * 0.84, 20, 14, 0.3, 0, Math.PI * 2);
+  ctx.ellipse(CANVAS_WIDTH * 0.66, CANVAS_HEIGHT * 0.84, 20, 14, -0.3, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.restore();
@@ -1284,11 +1323,11 @@ export function drawWorld(ctx, world) {
     } else {
       drawCityRoads2D(ctx, world);
       drawCityBuildingBlocks2D(ctx, world);
+      drawCityPickups2D(ctx, world);
+      drawCityEnemies2D(ctx, world);
       drawUrbanFog(ctx, world);
       drawCityPlayer2D(ctx, world);
     }
-  } else {
-    drawUrbanFog(ctx, world);
   }
 
   if (world.viewMode === "3d") {

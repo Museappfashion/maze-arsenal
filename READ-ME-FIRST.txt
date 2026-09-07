@@ -1,28 +1,226 @@
-MIST MAZE — STICKY END SCREEN + TIMER + MUSIC FIX
-==================================================
+MIST MAZE — ABANDONED CITY + LEGENDARY UPDATE
+================================================
 
-Replace exactly these two files:
+FINAL DIRECT-REPLACEMENT BUNDLE
+No .patch files.
+No soundtrack files.
+No Terminal is required to copy the source files.
 
-1. src/features/runtimeEnhancements.js
-2. src/audio/MazeAudioEngine-enhanced.js
+WHAT TO COPY
+------------
+Copy these files into the exact same paths in your maze-arsenal repo:
 
-Changes:
-- START NEW GAME stays visible after death.
-- TRY AGAIN stays visible after victory.
-- The end overlay stops being rebuilt after death/victory.
-- Labyrinth timer is only thin red MM:SS numbers.
-- No timer box, border, label, background, or glow panel.
-- The timer display and tick use the exact same integer second.
-- No immediate tick on level start.
-- Tick is one short dry high-frequency click, not the old two-tone beep.
-- Music receives a 1.30x volume boost relative to the existing slider setting.
-- SFX volume is unchanged.
-- Existing normal/Labyrinth 3D power-up HUD remains.
+vite.config.js
+src/main.jsx
 
-Finder install:
-1. Open the maze-arsenal repo in Finder.
-2. Drag these files into the same paths.
-3. Choose Replace.
-4. Commit both changed files in GitHub Desktop.
-5. Push main.
-6. Let Vercel redeploy.
+src/audio/MazeAudioEngine-enhanced.js
+src/components/GameUiEnhanced.jsx
+
+src/config/constants-enhanced.js
+src/config/legendaryPowerUps.js
+src/config/presentations-enhanced.js
+src/config/robbienator.js
+src/config/specialPlayers.js
+src/config/weapons-enhanced.js
+
+src/features/runtimeEnhancements.js
+
+src/game/gameplay-enhanced.js
+src/game/labyrinth-enhanced.js
+src/game/rendering-enhanced.js
+src/game/world-enhanced.js
+
+src/services/leaderboard-enhanced.js
+src/services/progression.js
+
+SUPABASE — REQUIRED ONCE
+------------------------
+After the source files are committed/pushed, open Supabase -> SQL Editor and run:
+
+supabase/leaderboard-top-runs-migration.sql
+
+This migration:
+- adds Level 0 to the secure leaderboard RPCs
+- removes the one-PB-per-user uniqueness rule
+- stores every completed valid run
+- returns the top 10 per level + mode
+- allows the same player to occupy multiple top-10 positions
+- still returns the current user's best rank when it is outside the top 10
+
+IMPORTANT:
+Do NOT rerun the old supabase/setup.sql after this migration unless it has
+first been updated to match this new top-runs design. The old setup.sql can
+recreate the previous personal-best-only uniqueness rule.
+
+Supabase Anonymous Sign-Ins must remain enabled.
+
+FEATURES
+--------
+ABANDONED CITY — LEVEL 0
+- New Level 0: Abandoned City
+- 13x13 logical maze
+- easier enemy HP/damage/speed/budget than Level 1
+- default weapon names
+- gray traditional urban mist/fog
+- city-block/building wall treatment in 2D and 3D
+- starts unlocked
+
+LEVEL PROGRESSION
+- Beat Level 0 -> unlock Level 1
+- Beat Level 1 -> unlock Level 2
+- Beat Level 2 -> unlock Level 3
+- either 2D or 3D completion unlocks the next level for both modes
+- Labyrinth is always unlocked
+- unlocks persist in localStorage on the same browser/device
+- locked level cards show two metal chains in an X plus a center padlock
+
+POWER-UP HOLDER
+- 3 normal slots
+- Z / X / C on keyboard
+- P1 / P2 / P3 on touch controls
+- 3D HUD shows all three slots
+
+LEGENDARY POWER-UPS
+Exactly 2 normal power-up pickups are marked Legendary every normal run.
+
+Legendary visual:
+- gold/white aura
+- gold ring
+- star marker
+- Legendary status retained while stored/active
+
+Legendary effects:
+- Juggernaut: max HP 220
+- Wall Breaker: 12 uses, no timer
+- Berserk: 2x movement speed + 2x damage
+- Haste: 14x movement speed with collision-safe substeps
+- Rapid Fire: existing faster fire rate; ammo consumption per second remains
+  equal to normal weapon firing over the same time
+- Shield: 90% damage reduction
+- Regeneration: 151 actual HP healing pool; pauses while full and ends only
+  after all 151 healing points have been applied
+- Magnet: obtains visible pickups except weapons/guns
+- Overcharge: at least 300 ammo + effectively infinite projectile travel
+  until a wall stops the projectile
+- Piercing Rounds: unlimited enemy piercing + 1.5x ranged damage
+- Vampirism: heals 100% of actual enemy damage dealt
+- Frost Field: enemy movement reduced to half base speed and disables pursuit
+  acceleration/charger speed bonus while active
+- Long Arms: 2x melee damage, 5x melee reach, full-circle attack
+- Scattershot: each pellet/projectile receives full original shot damage
+- Precision: 1.5x ranged damage, 1.5x projectile speed, exactly zero spread
+- Ammo Surge: fills ammo; existing generation can overflow normal capacity;
+  overflow remains until spent
+- Sonar: full sight range
+- Phase Walk: existing Phase Walk behavior + reflects attempted enemy damage
+- Demolition: 10 wall-breaking shots, no timer
+- Bounty: reward occurs on every successful hit; HP/ammo can overflow
+
+Unless stated above, normal power-up duration/behavior is preserved.
+
+ENEMY SPEED RAMP
+- enemy must already be aggroed
+- AND walking/path distance to player must be <= 30 tiles
+- straight-line proximity through a wall is not enough to start the speed ramp
+- existing pursuit maximum multiplier is retained
+- when an enemy successfully hits the player, its pursuit ramp resets to base
+- it can ramp again afterward when conditions are satisfied
+
+ROBBIE
+Case-insensitive: Robbie / robbie / ROBBIE
+- starts with 200 ammo and the DMR Robbienator
+- DMR is the smiley banana Robbienator
+- machete becomes a smiley Plunger
+- every other normal weapon gets its own Robbie color skin + smiley face
+- weapon combat stats stay normal
+- Robbie runs remain leaderboard-ineligible
+
+ASHER
+Case-insensitive: Asher / asher / ASHER
+- Sword Gun is automatically owned
+- select with key 0
+- damage 45
+- cooldown 0.55 sec
+- ammo cost 1
+- projectile speed 14
+- spread 0
+- blade pierces unlimited enemies
+- a wall stops the blade
+- normal leaderboard eligibility remains
+
+END SCREEN
+- START NEW GAME appears only after death/time-out
+- TRY AGAIN appears only after victory
+- button disappears immediately when clicked
+- it stays hidden during the next run
+- it appears again only when the next run ends
+- smaller Back to main menu remains
+
+LEADERBOARD
+- server-timed run flow is retained
+- top 10 fastest valid runs per level + 2D/3D mode
+- same player may occupy multiple positions
+- mode-switched/Robbie runs stay ineligible
+
+LABYRINTH / AUDIO PRESERVED
+- Labyrinth always unlocked
+- fairer light/Wall Breaker distribution
+- visible Labyrinth pickups remain anchored during shifts
+- thin red MM:SS timer
+- dry tick exactly when the displayed second changes
+- 3D Labyrinth status HUD
+- music output remains 30% louder than original enhanced setting
+
+INSTALL WITH FINDER / GITHUB DESKTOP
+------------------------------------
+1. In GitHub Desktop, select the main branch.
+2. Repository -> Show in Finder.
+3. Unzip this download.
+4. Copy the listed source files into the same paths in maze-arsenal.
+5. Choose Replace for existing files.
+6. GitHub Desktop should show all copied files as changed/new.
+7. Commit the source changes.
+8. Push origin.
+9. Let Vercel deploy.
+10. Run the included Supabase migration once in the SQL Editor.
+11. Test the checklist below.
+
+TEST CHECKLIST
+--------------
+[ ] Vercel production build succeeds with no ./vercel/path0 alias errors.
+[ ] Level 0 Abandoned City appears first and is playable.
+[ ] Levels 1-3 initially show crossed chains + padlock on a fresh browser.
+[ ] Beat Level 0; Level 1 unlocks and stays unlocked after closing/reopening.
+[ ] Labyrinth remains open regardless of progression.
+[ ] Z/X/C store and activate three power-ups.
+[ ] Touch controls show P1/P2/P3.
+[ ] Each normal run contains exactly 2 gold Legendary power-up pickups.
+[ ] Legendary Wall Breaker shows 12 uses and no timer.
+[ ] Legendary Demolition shows 10 uses and no timer.
+[ ] Legendary Regeneration counts down its remaining HP pool.
+[ ] Legendary Rapid Fire uses normal-equivalent ammo over equal firing time.
+[ ] Enemy pursuit acceleration waits for aggro + <=30 path tiles.
+[ ] Enemy pursuit acceleration resets after the enemy hits the player.
+[ ] Robbie receives Robbienator + 200 ammo.
+[ ] Robbie machete is a smiley Plunger.
+[ ] Robbie's other normal weapons have smiley skins.
+[ ] Asher owns Sword Gun and key 0 selects it.
+[ ] Sword Gun blade passes through multiple enemies but stops at walls.
+[ ] Death: START NEW GAME appears.
+[ ] Click START NEW GAME: button disappears immediately.
+[ ] Button stays gone during the next run and returns only at that run's end.
+[ ] Global leaderboard can show multiple runs from the same player.
+[ ] Level 0 has separate 2D and 3D leaderboard tables.
+
+VERIFICATION
+------------
+All plain JavaScript replacement files and vite.config.js passed Node syntax
+checking in the artifact environment.
+
+The two JSX files received structural checks for required exports/elements and
+balanced braces/parentheses/fragments.
+
+A full `npm run build` could not be executed in the artifact environment
+because the repo dependencies are not installed there and outbound package /
+GitHub access is unavailable. The first Vercel deployment is therefore the
+final production-bundler verification step.

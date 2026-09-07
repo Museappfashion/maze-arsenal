@@ -1,0 +1,33 @@
+FINAL STATIC VERIFICATION
+=========================
+
+Bundle:
+Mist-Maze-Abandoned-City-Legendary-Upgrade
+
+PASS
+----
+- 15 plain .js source files checked with `node --check`
+- vite.config.js checked with `node --check`
+- src/main.jsx structural JSX check passed
+- src/components/GameUiEnhanced.jsx structural JSX check passed
+- corrected absolute Vite alias replacements retained
+- no .patch files
+- no soundtrack files
+- P1/P2/P3 touch slot duplication guard verified in generated source
+- Legendary Regeneration HUD displays remaining HP instead of Infinity
+- Legendary Wall Breaker/Demolition display remaining uses instead of Infinity
+- top-runs Supabase migration included
+
+NOT EXECUTED HERE
+-----------------
+- npm install
+- npm run build
+- browser gameplay tests
+- live Supabase migration execution
+
+Reason:
+The artifact environment has no repo node_modules and cannot reach GitHub/npm
+to fetch dependencies. Vercel's build is the production bundler check.
+
+If Vercel reports an error, keep the deployment log and do not revert all
+features; the error can be fixed against the exact failing import/line.

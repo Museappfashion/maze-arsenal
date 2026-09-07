@@ -7,6 +7,8 @@ import { createPortal } from "react-dom";
 import {
   SettingsControls as BaseSettingsControls,
   SidebarSettings as BaseSidebarSettings,
+  TouchControls as BaseTouchControls,
+  TouchJoystick,
 } from "./GameUi.jsx?core";
 
 export * from "./GameUi.jsx?core";
@@ -21,9 +23,7 @@ function warningAlreadySeen() {
 
   try {
     return (
-      window.localStorage.getItem(
-        WARNING_STORAGE_KEY,
-      ) === "1"
+      window.localStorage.getItem(WARNING_STORAGE_KEY) === "1"
     );
   } catch {
     return false;
@@ -31,25 +31,14 @@ function warningAlreadySeen() {
 }
 
 function rememberWarning() {
-  if (typeof window === "undefined") {
-    return;
-  }
-
   try {
-    window.localStorage.setItem(
-      WARNING_STORAGE_KEY,
-      "1",
-    );
+    window.localStorage.setItem(WARNING_STORAGE_KEY, "1");
   } catch {
-    // Browser storage can be unavailable.
+    // Restricted storage can be unavailable.
   }
 }
 
 function isLabyrinthScreen() {
-  if (typeof document === "undefined") {
-    return false;
-  }
-
   return Boolean(
     document.querySelector(
       [
@@ -66,24 +55,17 @@ function ModeSwitchWarning({
   open,
   nextMode,
   onContinue,
-  onGoBack,
+  onCancel,
 }) {
-  if (
-    !open ||
-    typeof document === "undefined"
-  ) {
+  if (!open || typeof document === "undefined") {
     return null;
   }
 
   return createPortal(
     <div
       role="presentation"
-      onPointerDown={(event) =>
-        event.stopPropagation()
-      }
-      onClick={(event) =>
-        event.stopPropagation()
-      }
+      onPointerDown={(event) => event.stopPropagation()}
+      onClick={(event) => event.stopPropagation()}
       style={{
         position: "fixed",
         inset: 0,
@@ -91,7 +73,7 @@ function ModeSwitchWarning({
         display: "grid",
         placeItems: "center",
         padding: 20,
-        background: "rgba(2,6,23,0.78)",
+        background: "rgba(2,6,23,0.8)",
         backdropFilter: "blur(8px)",
       }}
     >
@@ -100,19 +82,14 @@ function ModeSwitchWarning({
         aria-modal="true"
         aria-labelledby="mode-switch-warning-title"
         style={{
-          width:
-            "min(520px, calc(100vw - 32px))",
+          width: "min(520px, calc(100vw - 32px))",
           padding: 24,
           borderRadius: 22,
-          border:
-            "1px solid rgba(251,191,36,0.38)",
+          border: "1px solid rgba(251,191,36,0.38)",
           background:
             "linear-gradient(145deg, rgba(30,41,59,0.98), rgba(2,6,23,0.99))",
-          boxShadow:
-            "0 28px 80px rgba(0,0,0,0.55)",
+          boxShadow: "0 28px 80px rgba(0,0,0,0.55)",
           color: "#e2e8f0",
-          fontFamily:
-            'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         }}
       >
         <div
@@ -121,48 +98,27 @@ function ModeSwitchWarning({
             fontSize: 12,
             fontWeight: 900,
             letterSpacing: "0.12em",
-            textTransform: "uppercase",
           }}
         >
-          Leaderboard warning
+          LEADERBOARD WARNING
         </div>
-
         <h2
           id="mode-switch-warning-title"
-          style={{
-            margin: "8px 0 0",
-            fontSize: 24,
-            lineHeight: 1.15,
-          }}
+          style={{ margin: "8px 0 0", fontSize: 24 }}
         >
           Switch to {nextMode.toUpperCase()}?
         </h2>
-
         <p
           style={{
             margin: "14px 0 0",
             color: "#cbd5e1",
-            lineHeight: 1.65,
-            fontSize: 15,
+            lineHeight: 1.6,
           }}
         >
-          Switching between 2D and 3D
-          during this run makes the current
-          run ineligible for the leaderboard.
-          Your existing personal best is safe.
+          Switching between 2D and 3D makes this run
+          ineligible for the leaderboard. Existing scores
+          are safe.
         </p>
-
-        <p
-          style={{
-            margin: "10px 0 0",
-            color: "#94a3b8",
-            lineHeight: 1.55,
-            fontSize: 13,
-          }}
-        >
-          This warning is shown only once.
-        </p>
-
         <div
           style={{
             display: "grid",
@@ -171,42 +127,10 @@ function ModeSwitchWarning({
             marginTop: 22,
           }}
         >
-          <button
-            type="button"
-            onClick={onGoBack}
-            style={{
-              minHeight: 46,
-              borderRadius: 13,
-              border:
-                "1px solid rgba(148,163,184,0.22)",
-              background:
-                "rgba(30,41,59,0.72)",
-              color: "#cbd5e1",
-              fontWeight: 800,
-              cursor: "pointer",
-            }}
-          >
+          <button type="button" onClick={onCancel}>
             STAY HERE
           </button>
-
-          <button
-            type="button"
-            onClick={onContinue}
-            autoFocus
-            style={{
-              minHeight: 46,
-              borderRadius: 13,
-              border:
-                "1px solid rgba(251,191,36,0.55)",
-              background:
-                "linear-gradient(135deg, #f59e0b, #d97706)",
-              color: "#111827",
-              fontWeight: 900,
-              cursor: "pointer",
-              boxShadow:
-                "0 10px 28px rgba(245,158,11,0.22)",
-            }}
-          >
+          <button type="button" onClick={onContinue} autoFocus>
             SWITCH ANYWAY
           </button>
         </div>
@@ -216,14 +140,9 @@ function ModeSwitchWarning({
   );
 }
 
-function useModeSwitchGuard(
-  viewMode,
-  onToggleViewMode,
-) {
-  const [warningOpen, setWarningOpen] =
-    useState(false);
-  const nextMode =
-    viewMode === "3d" ? "2d" : "3d";
+function useModeSwitchGuard(viewMode, onToggleViewMode) {
+  const [open, setOpen] = useState(false);
+  const nextMode = viewMode === "3d" ? "2d" : "3d";
 
   const requestSwitch = useCallback(() => {
     if (
@@ -235,26 +154,22 @@ function useModeSwitchGuard(
     }
 
     rememberWarning();
-    setWarningOpen(true);
+    setOpen(true);
   }, [onToggleViewMode]);
 
   const continueSwitch = useCallback(() => {
-    setWarningOpen(false);
+    setOpen(false);
     onToggleViewMode?.();
   }, [onToggleViewMode]);
-
-  const goBack = useCallback(() => {
-    setWarningOpen(false);
-  }, []);
 
   return {
     requestSwitch,
     warning: (
       <ModeSwitchWarning
-        open={warningOpen}
+        open={open}
         nextMode={nextMode}
         onContinue={continueSwitch}
-        onGoBack={goBack}
+        onCancel={() => setOpen(false)}
       />
     ),
   };
@@ -266,10 +181,7 @@ export function SettingsControls({
   ...props
 }) {
   const { requestSwitch, warning } =
-    useModeSwitchGuard(
-      viewMode,
-      onToggleViewMode,
-    );
+    useModeSwitchGuard(viewMode, onToggleViewMode);
 
   return (
     <>
@@ -289,10 +201,7 @@ export function SidebarSettings({
   ...props
 }) {
   const { requestSwitch, warning } =
-    useModeSwitchGuard(
-      viewMode,
-      onToggleViewMode,
-    );
+    useModeSwitchGuard(viewMode, onToggleViewMode);
 
   return (
     <>
@@ -305,3 +214,94 @@ export function SidebarSettings({
     </>
   );
 }
+
+export function TouchControls({
+  gameMode,
+  storedPowerUps,
+  onMove,
+  onAim,
+  onLookDelta,
+  onAimStart,
+  onAimEnd,
+  onNextWeapon,
+  onNextLight,
+  labyrinthLightLabel = "Base Light",
+  onPowerUp,
+  labyrinthMode = false,
+  labyrinthBreakers = 0,
+  onBreaker,
+}) {
+  if (labyrinthMode) {
+    return (
+      <BaseTouchControls
+        gameMode={gameMode}
+        storedPowerUps={storedPowerUps}
+        onMove={onMove}
+        onAim={onAim}
+        onLookDelta={onLookDelta}
+        onAimStart={onAimStart}
+        onAimEnd={onAimEnd}
+        onNextWeapon={onNextWeapon}
+        onNextLight={onNextLight}
+        labyrinthLightLabel={labyrinthLightLabel}
+        onPowerUp={onPowerUp}
+        labyrinthMode
+        labyrinthBreakers={labyrinthBreakers}
+        onBreaker={onBreaker}
+      />
+    );
+  }
+
+  return (
+    <div
+      className="touch-controls"
+      aria-label="Touch game controls"
+    >
+      <div className="touch-move-control">
+        <TouchJoystick
+          label="MOVE"
+          onVector={onMove}
+        />
+      </div>
+
+      <div className="touch-aim-control">
+        <TouchJoystick
+          label={gameMode === "3d" ? "LOOK" : "AIM"}
+          mode={gameMode === "3d" ? "look" : "vector"}
+          onVector={onAim}
+          onLookDelta={onLookDelta}
+          onPointerStart={onAimStart}
+          onPointerEnd={onAimEnd}
+        />
+      </div>
+
+      <div className="touch-action-controls">
+        <button
+          type="button"
+          className="touch-action-button"
+          aria-label="Switch to next weapon"
+          onClick={onNextWeapon}
+        >
+          WEAPON
+        </button>
+
+        <div className="touch-power-buttons">
+          {[0, 1, 2].map((slotIndex) => (
+            <button
+              key={slotIndex}
+              type="button"
+              data-mist-power-slot={slotIndex}
+              className="touch-action-button touch-power-button"
+              aria-label={`Use power-up slot ${slotIndex + 1}`}
+              disabled={!storedPowerUps[slotIndex]}
+              onClick={() => onPowerUp(slotIndex)}
+            >
+              P{slotIndex + 1}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+

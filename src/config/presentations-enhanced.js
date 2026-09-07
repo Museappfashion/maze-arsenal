@@ -5,15 +5,32 @@ import {
   isRobbienatorWeapon,
   ROBBIENATOR_LABEL,
 } from "./robbienator.js";
+import { SWORD_GUN_KEY } from "./weapons.js";
 
 export * from "./presentations.js?core";
 
 export function getWeaponPresentation(world, weaponKey) {
+  if (hasRobbienatorLoadout(world) && weaponKey === "machete") {
+    return {
+      label: "Plunger",
+      description:
+        "Robbie's smiley plunger. It keeps the machete's normal combat stats.",
+    };
+  }
+
   if (isRobbienatorWeapon(world, weaponKey)) {
     return {
       label: ROBBIENATOR_LABEL,
       description:
-        "A precision banana of questionable engineering and excellent potassium.",
+        "A precision banana with a smile and deeply questionable engineering.",
+    };
+  }
+
+  if (weaponKey === SWORD_GUN_KEY) {
+    return {
+      label: "Sword Gun",
+      description:
+        "Fires wall-stopped blades that pierce every enemy in their path.",
     };
   }
 

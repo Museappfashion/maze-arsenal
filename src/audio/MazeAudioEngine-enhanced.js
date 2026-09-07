@@ -34,10 +34,8 @@ export class MazeAudioEngine extends BaseMazeAudioEngine {
       return;
     }
 
-    const now = context.currentTime + 0.002;
-
     this.noise(
-      now,
+      context.currentTime + 0.002,
       0.018,
       0.021,
       this.sfxGain,

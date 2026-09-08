@@ -102,18 +102,20 @@ function tileIsDiscovered(world, x, y) {
 }
 
 function getCityMistAlpha(visibleStrength) {
-  if (visibleStrength >= 0.97) {
+  // Undiscovered City stays completely hidden.
+  if (visibleStrength <= 0.78) {
+    return 1;
+  }
+
+  // Only feather the very edge of the player's reveal radius.
+  if (visibleStrength >= 0.98) {
     return 0;
   }
 
-  if (visibleStrength > 0) {
-    return Math.max(
-      0,
-      0.92 - visibleStrength * 0.92,
-    );
-  }
+  const edgeProgress =
+    (visibleStrength - 0.78) / (0.98 - 0.78);
 
-  return 0.92;
+  return 1 - edgeProgress;
 }
 
 function drawCityUndiscoveredMist(ctx, world) {
@@ -148,33 +150,41 @@ function drawCityUndiscoveredMist(ctx, world) {
       const width = Math.ceil(bounds.scale) + 1;
       const height = Math.ceil(bounds.scale) + 1;
 
-      const mist = ctx.createLinearGradient(
-        screenX,
-        screenY,
-        screenX,
-        screenY + bounds.scale,
-      );
+      const noise =
+        Math.round((citySeed(x, y, 77) - 0.5) * 12);
+      const red = 168 + noise;
+      const green = 173 + noise;
+      const blue = 179 + noise;
 
-      mist.addColorStop(
-        0,
-        `rgba(${CITY_MIST_COLOR[0] + 8}, ${CITY_MIST_COLOR[1] + 8}, ${CITY_MIST_COLOR[2] + 8}, ${Math.min(1, alpha * 0.95)})`,
-      );
-      mist.addColorStop(
-        0.52,
-        `rgba(${CITY_MIST_COLOR[0]}, ${CITY_MIST_COLOR[1]}, ${CITY_MIST_COLOR[2]}, ${alpha})`,
-      );
-      mist.addColorStop(
-        1,
-        `rgba(${CITY_MIST_COLOR[0] - 12}, ${CITY_MIST_COLOR[1] - 12}, ${CITY_MIST_COLOR[2] - 12}, ${Math.min(1, alpha * 1.03)})`,
-      );
+      if (alpha >= 0.999) {
+        ctx.fillStyle = `rgb(${red}, ${green}, ${blue})`;
+      } else {
+        ctx.fillStyle =
+          `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+      }
 
-      ctx.fillStyle = mist;
       ctx.fillRect(
         Math.floor(screenX),
         Math.floor(screenY),
         width,
         height,
       );
+
+      if (alpha >= 0.999) {
+        const haze = citySeed(x, y, 91);
+        const hazeTone =
+          haze > 0.5
+            ? "rgba(255, 255, 255, 0.035)"
+            : "rgba(71, 85, 105, 0.035)";
+
+        ctx.fillStyle = hazeTone;
+        ctx.fillRect(
+          Math.floor(screenX),
+          Math.floor(screenY),
+          width,
+          height,
+        );
+      }
     }
   }
 

@@ -616,6 +616,46 @@ function drawVictoryCelebration(ctx, world) {
     0.5 *
       Math.sin(time * 3.2);
 
+  const panelWidth =
+    Math.min(640, CANVAS_WIDTH * 0.76);
+  const panelHeight = 238;
+  const panelX =
+    centerX - panelWidth * 0.5;
+  const panelY =
+    centerY - 74;
+
+  ctx.fillStyle =
+    "rgba(2,6,23,0.84)";
+  ctx.strokeStyle =
+    "rgba(103,232,249,0.24)";
+  ctx.lineWidth = 1.5;
+
+  if (typeof ctx.roundRect === "function") {
+    ctx.beginPath();
+    ctx.roundRect(
+      panelX,
+      panelY,
+      panelWidth,
+      panelHeight,
+      22,
+    );
+    ctx.fill();
+    ctx.stroke();
+  } else {
+    ctx.fillRect(
+      panelX,
+      panelY,
+      panelWidth,
+      panelHeight,
+    );
+    ctx.strokeRect(
+      panelX,
+      panelY,
+      panelWidth,
+      panelHeight,
+    );
+  }
+
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 

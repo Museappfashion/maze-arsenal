@@ -6,7 +6,6 @@ import { defineConfig } from "vite";
 function sourcePath(relativePath) {
   return fileURLToPath(new URL(relativePath, import.meta.url));
 }
-
 export default defineConfig({
   plugins: [react()],
   resolve: {
@@ -20,7 +19,7 @@ export default defineConfig({
       { find: /^(?:.*\/)?game\/gameplay\.js$/, replacement: sourcePath("./src/game/gameplay-enhanced.js") },
       { find: /^(?:.*\/)?game\/labyrinth\.js$/, replacement: sourcePath("./src/game/labyrinth-enhanced.js") },
       { find: /^(?:.*\/)?game\/world\.js$/, replacement: sourcePath("./src/game/world-enhanced.js") },
-      { find: /^(?:.*\/)?game\/rendering\.js$/, replacement: sourcePath("./src/game/rendering-enhanced.js") },
+      { find: /^(?:.*\/)?game\/rendering\.js$/, replacement: sourcePath("./src/game/rendering-city-conform.js") },
     ],
   },
 });

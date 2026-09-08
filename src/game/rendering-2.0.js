@@ -35,19 +35,6 @@ const PHASE_OVERLAYS = [
   },
 ];
 
-function formatRunTime(seconds) {
-  const safe = Math.max(
-    0,
-    Number(seconds) || 0,
-  );
-  const minutes = Math.floor(safe / 60);
-  const remaining = safe - minutes * 60;
-
-  return `${String(minutes).padStart(2, "0")}:${remaining
-    .toFixed(2)
-    .padStart(5, "0")}`;
-}
-
 function getWorldScreenPosition(world, x, y) {
   const camera = getCamera(world);
   const scale =
@@ -473,161 +460,34 @@ function drawResultOverlay(ctx, world) {
     return;
   }
 
-  const cinematic =
-    world.__cinematic ?? {};
-  const currentTime =
-    Math.max(0, Number(world.time) || 0);
-  const previousBest =
-    Number.isFinite(
-      Number(cinematic.previousBest),
-    )
-      ? Number(cinematic.previousBest)
-      : null;
-  const improved =
-    world.victory &&
-    (
-      previousBest === null ||
-      currentTime < previousBest
-    );
-  const difference =
-    previousBest === null
-      ? null
-      : Math.abs(
-          previousBest - currentTime,
-        );
-
-  const width = Math.min(
-    470,
-    CANVAS_WIDTH * 0.72,
-  );
-  const height = 236;
-  const left =
-    (CANVAS_WIDTH - width) / 2;
-  const top =
-    (CANVAS_HEIGHT - height) / 2;
+  const explored = getDiscoveredPercent(world);
+  const enemiesDefeated =
+    world.__cinematic?.enemiesDefeated ?? 0;
+  const centerX = CANVAS_WIDTH * 0.5;
+  const titleY = CANVAS_HEIGHT * 0.31;
 
   ctx.save();
-
-  ctx.fillStyle =
-    "rgba(2, 6, 23, 0.84)";
-  ctx.fillRect(
-    left - 3,
-    top - 3,
-    width + 6,
-    height + 6,
-  );
-
-  const panel =
-    ctx.createLinearGradient(
-      left,
-      top,
-      left + width,
-      top + height,
-    );
-  panel.addColorStop(
-    0,
-    "rgba(15,23,42,0.98)",
-  );
-  panel.addColorStop(
-    1,
-    "rgba(3,7,18,0.98)",
-  );
-  ctx.fillStyle = panel;
-  ctx.fillRect(
-    left,
-    top,
-    width,
-    height,
-  );
-
-  ctx.strokeStyle =
-    improved
-      ? "#22c55e"
-      : world.victory
-        ? "#38bdf8"
-        : "#ef4444";
-  ctx.lineWidth = 2;
-  ctx.strokeRect(
-    left + 1,
-    top + 1,
-    width - 2,
-    height - 2,
-  );
-
   ctx.textAlign = "center";
-  ctx.fillStyle =
-    improved
-      ? "#86efac"
-      : world.victory
-        ? "#e0f2fe"
-        : "#fecaca";
-  ctx.font =
-    "900 25px system-ui, sans-serif";
+  ctx.textBaseline = "middle";
+
+  ctx.shadowColor = "rgba(0, 0, 0, 0.72)";
+  ctx.shadowBlur = 8;
+  ctx.fillStyle = "#f8fafc";
+  ctx.font = "900 28px system-ui, sans-serif";
+  ctx.fillText("MAZE ENDED", centerX, titleY);
+
+  ctx.shadowBlur = 5;
+  ctx.fillStyle = "#e2e8f0";
+  ctx.font = "700 15px system-ui, sans-serif";
   ctx.fillText(
-    improved
-      ? "NEW PERSONAL BEST"
-      : world.victory
-        ? "MAZE ESCAPED"
-        : "RUN ENDED",
-    CANVAS_WIDTH * 0.5,
-    top + 45,
+    `${explored}% explored`,
+    centerX,
+    titleY + 34,
   );
-
-  ctx.fillStyle = "#ffffff";
-  ctx.font =
-    "900 40px ui-monospace, SFMono-Regular, Menlo, monospace";
   ctx.fillText(
-    formatRunTime(currentTime),
-    CANVAS_WIDTH * 0.5,
-    top + 98,
-  );
-
-  ctx.font =
-    "700 14px system-ui, sans-serif";
-
-  if (difference !== null) {
-    ctx.fillStyle =
-      improved
-        ? "#4ade80"
-        : "#cbd5e1";
-    ctx.fillText(
-      improved
-        ? `▲ ${difference.toFixed(2)} seconds faster`
-        : world.victory
-          ? `${difference.toFixed(2)} seconds from your PB`
-          : `PB ${formatRunTime(previousBest)}`,
-      CANVAS_WIDTH * 0.5,
-      top + 126,
-    );
-  } else {
-    ctx.fillStyle = "#cbd5e1";
-    ctx.fillText(
-      world.victory
-        ? "First recorded escape"
-        : "Keep pushing for your first escape",
-      CANVAS_WIDTH * 0.5,
-      top + 126,
-    );
-  }
-
-  ctx.fillStyle =
-    "rgba(226,232,240,0.84)";
-  ctx.font =
-    "600 13px system-ui, sans-serif";
-  ctx.fillText(
-    `${getDiscoveredPercent(world)}% explored`,
-    CANVAS_WIDTH * 0.5,
-    top + 154,
-  );
-
-  ctx.fillStyle =
-    "rgba(148,163,184,0.9)";
-  ctx.font =
-    "700 12px system-ui, sans-serif";
-  ctx.fillText(
-    "Use START NEW MAZE to run it again",
-    CANVAS_WIDTH * 0.5,
-    top + 197,
+    `${enemiesDefeated} enemies defeated`,
+    centerX,
+    titleY + 57,
   );
 
   ctx.restore();

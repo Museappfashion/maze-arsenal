@@ -1,7 +1,6 @@
 // src/game/gameplay-2.0.js
 import { WEAPONS } from "../config/weapons-enhanced.js";
 import { hasRobbienatorLoadout } from "../config/robbienator.js";
-import { loadLeaderboards } from "../services/leaderboard-enhanced.js";
 import { getDiscoveredPercent } from "./maze.js";
 import * as enhanced from "./gameplay-enhanced.js";
 
@@ -60,18 +59,6 @@ function ensureCinematic(world) {
     return world.__cinematic;
   }
 
-  let previousBest = null;
-
-  try {
-    const leaderboards = loadLeaderboards();
-    previousBest =
-      leaderboards?.[world.level?.key]?.[
-        world.runMode === "3d" ? "3d" : "2d"
-      ]?.[0]?.time ?? null;
-  } catch {
-    previousBest = null;
-  }
-
   world.__cinematic = {
     recoilKick: 0,
     recoilRoll: 0,
@@ -83,7 +70,8 @@ function ensureCinematic(world) {
     phaseIndex: 0,
     phaseLabel: PHASES[0].label,
     phaseTransitionTtl: 0,
-    previousBest,
+    enemiesDefeated: 0,
+    defeatedEnemyIds: new Set(),
     lastRegisteredShotAt: -Infinity,
   };
 
@@ -213,6 +201,14 @@ function registerEnemyDamage(world, beforeEnemies) {
     const x = enemy?.x ?? before.x;
     const y = enemy?.y ?? before.y;
     const dead = !enemy || afterHp <= 0;
+
+    if (
+      dead &&
+      !cinematic.defeatedEnemyIds.has(enemyId)
+    ) {
+      cinematic.defeatedEnemyIds.add(enemyId);
+      cinematic.enemiesDefeated += 1;
+    }
 
     cinematic.hitReactions.push({
       enemyId,

@@ -34,6 +34,7 @@ import {
   drawFog as drawFogCore,
   drawPickups as drawPickupsCore,
   drawProjectile as drawProjectileCore,
+  drawWeaponShape as drawWeaponShapeCore,
   drawWorld as drawWorldCore,
 } from "./rendering.js?core";
 import { angleDelta } from "../utils/math.js";
@@ -319,8 +320,7 @@ function playerScreenPosition(world) {
 }
 
 function drawSpecialHeldWeapon2D(ctx, world) {
-  const robbie =
-    hasRobbienatorLoadout(world);
+  const robbie = hasRobbienatorLoadout(world);
   const asher =
     hasAsherLoadout(world) &&
     world.player.weapon === SWORD_GUN_KEY;
@@ -330,16 +330,34 @@ function drawSpecialHeldWeapon2D(ctx, world) {
   }
 
   const player = playerScreenPosition(world);
-  const reach = 22;
+  const swingState =
+    robbie ? getCitySwingState(world) : null;
+
+  let angle = world.player.facing - 0.1;
+  let reach = 22;
+
+  if (swingState) {
+    const startAngle = -1.12;
+    const swingAngle =
+      startAngle +
+      (0.98 - startAngle) *
+        swingState.eased;
+
+    angle =
+      world.player.facing +
+      swingState.directionOffset +
+      swingAngle;
+    reach = 14;
+  }
 
   ctx.save();
   ctx.translate(
     player.x +
-      Math.cos(world.player.facing) * reach,
+      Math.cos(angle) * reach,
     player.y +
-      Math.sin(world.player.facing) * reach,
+      Math.sin(angle) * reach,
   );
-  ctx.rotate(world.player.facing - 0.1);
+  ctx.rotate(angle);
 
   if (asher) {
     drawSwordGun(ctx, 42);
@@ -355,8 +373,7 @@ function drawSpecialHeldWeapon2D(ctx, world) {
 }
 
 function drawSpecialHeldWeapon3D(ctx, world) {
-  const robbie =
-    hasRobbienatorLoadout(world);
+  const robbie = hasRobbienatorLoadout(world);
   const asher =
     hasAsherLoadout(world) &&
     world.player.weapon === SWORD_GUN_KEY;
@@ -367,6 +384,8 @@ function drawSpecialHeldWeapon3D(ctx, world) {
 
   const width = ctx.canvas.width;
   const height = ctx.canvas.height;
+  const swingState =
+    robbie ? getCitySwingState(world) : null;
 
   ctx.save();
 
@@ -377,7 +396,10 @@ function drawSpecialHeldWeapon3D(ctx, world) {
     height,
   );
   cover.addColorStop(0, "rgba(2,6,23,0)");
-  cover.addColorStop(0.48, "rgba(2,6,23,0.74)");
+  cover.addColorStop(
+    0.48,
+    "rgba(2,6,23,0.74)",
+  );
   cover.addColorStop(1, "rgba(2,6,23,0.94)");
 
   ctx.fillStyle = cover;
@@ -392,7 +414,12 @@ function drawSpecialHeldWeapon3D(ctx, world) {
     width * 0.5,
     height - 70,
   );
-  ctx.rotate(-0.12);
+
+  const swingRotation = swingState
+    ? -0.92 + swingState.eased * 1.42
+    : -0.12;
+
+  ctx.rotate(swingRotation);
 
   if (asher) {
     drawSwordGun(ctx, 220);
@@ -804,7 +831,200 @@ function cityLogicalConnections(world, cellX, cellY) {
   };
 }
 
-function drawCityCenterLine2D(ctx, world) {}
+function drawCityCenterLine2D(ctx, world) {
+  if (
+    world.level?.themeKey !== "city" ||
+    world.viewMode === "3d"
+  ) {
+    return;
+  }
+
+  const camera = getCamera(world);
+  const scale = DRAW_TILE * getWorldRenderZoom(world);
+  const { cols, rows } = cityLogicalDimensions(world);
+  const halfRoad = PASSAGE_WIDTH / 2;
+  const lineWidth = Math.max(2, scale * 0.055);
+
+  const screenPoint = (worldX, worldY) => ({
+    x: (worldX - camera.x) * scale,
+    y: (worldY - camera.y) * scale,
+  });
+
+  ctx.save();
+  ctx.strokeStyle = "#e0bd24";
+  ctx.lineWidth = lineWidth;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+
+  for (let cellY = 0; cellY < rows; cellY += 1) {
+    for (let cellX = 0; cellX < cols; cellX += 1) {
+      const origin = logicalCityCellOrigin(cellX, cellY);
+      const centerWorldX = origin.x + halfRoad;
+      const centerWorldY = origin.y + halfRoad;
+      const center = screenPoint(centerWorldX, centerWorldY);
+      const connections = cityLogicalConnections(
+        world,
+        cellX,
+        cellY,
+      );
+
+      if (connections.east && cellX + 1 < cols) {
+        const neighbor = logicalCityCellOrigin(
+          cellX + 1,
+          cellY,
+        );
+        const end = screenPoint(
+          neighbor.x + halfRoad,
+          neighbor.y + halfRoad,
+        );
+
+        ctx.moveTo(center.x, center.y);
+        ctx.lineTo(end.x, end.y);
+      }
+
+      if (connections.south && cellY + 1 < rows) {
+        const neighbor = logicalCityCellOrigin(
+          cellX,
+          cellY + 1,
+        );
+        const end = screenPoint(
+          neighbor.x + halfRoad,
+          neighbor.y + halfRoad,
+        );
+
+        ctx.moveTo(center.x, center.y);
+        ctx.lineTo(end.x, end.y);
+      }
+
+      const openDirections = Object.entries(connections)
+        .filter(([, open]) => open)
+        .map(([direction]) => direction);
+
+      if (openDirections.length === 1) {
+        const direction = openDirections[0];
+        let deadEndX = centerWorldX;
+        let deadEndY = centerWorldY;
+
+        if (direction === "east") {
+          deadEndX = origin.x;
+        } else if (direction === "west") {
+          deadEndX = origin.x + PASSAGE_WIDTH;
+        } else if (direction === "south") {
+          deadEndY = origin.y;
+        } else if (direction === "north") {
+          deadEndY = origin.y + PASSAGE_WIDTH;
+        }
+
+        const deadEnd = screenPoint(deadEndX, deadEndY);
+        ctx.moveTo(center.x, center.y);
+        ctx.lineTo(deadEnd.x, deadEnd.y);
+      }
+    }
+  }
+
+  ctx.stroke();
+  ctx.restore();
+}
+
+
+function drawCityPowerUpHalosCoreScale(ctx, world, camera) {
+  const pulse =
+    0.5 +
+    Math.sin((world.time ?? 0) * 4.2) * 0.5;
+
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+
+  for (const pickup of world.pickups ?? []) {
+    const isPowerUp =
+      pickup.type === "powerup" ||
+      pickup.type === "power" ||
+      Boolean(pickup.powerUp);
+
+    if (!isPowerUp) {
+      continue;
+    }
+
+    const visibility = visibleStrengthAt(
+      world,
+      Math.floor(pickup.x),
+      Math.floor(pickup.y),
+    );
+
+    if (visibility <= 0.08) {
+      continue;
+    }
+
+    const x = (pickup.x - camera.x) * DRAW_TILE;
+    const y = (pickup.y - camera.y) * DRAW_TILE;
+    const radius = DRAW_TILE * (0.58 + pulse * 0.14);
+    const legendary = Boolean(pickup.legendary);
+
+    const glow = ctx.createRadialGradient(
+      x,
+      y,
+      DRAW_TILE * 0.08,
+      x,
+      y,
+      radius,
+    );
+
+    if (legendary) {
+      glow.addColorStop(0, "rgba(255,255,255,0.95)");
+      glow.addColorStop(0.3, "rgba(250,204,21,0.7)");
+      glow.addColorStop(1, "rgba(250,204,21,0)");
+    } else {
+      glow.addColorStop(0, "rgba(255,255,255,0.9)");
+      glow.addColorStop(0.3, "rgba(168,85,247,0.64)");
+      glow.addColorStop(0.72, "rgba(139,92,246,0.28)");
+      glow.addColorStop(1, "rgba(139,92,246,0)");
+    }
+
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+function getCitySwingState(world) {
+  const swing = world.player?.meleeSwing;
+
+  if (!swing) {
+    return null;
+  }
+
+  const elapsed = world.time - swing.startedAt;
+
+  if (
+    elapsed < 0 ||
+    elapsed >= swing.duration ||
+    swing.duration <= 0
+  ) {
+    return null;
+  }
+
+  const progress = Math.max(
+    0,
+    Math.min(1, elapsed / swing.duration),
+  );
+  const eased =
+    0.5 -
+    Math.cos(progress * Math.PI) * 0.5;
+
+  return {
+    swing,
+    progress,
+    eased,
+    directionOffset: angleDelta(
+      swing.directionAngle,
+      world.player.facing,
+    ),
+  };
+}
 
 function drawCoreCityLayer2D(ctx, world) {
   const zoom = getWorldRenderZoom(world);
@@ -814,6 +1034,7 @@ function drawCoreCityLayer2D(ctx, world) {
   ctx.save();
   ctx.scale(zoom, zoom);
 
+  // First pass is exactly the normal game fog.
   drawFogCore(
     ctx,
     world,
@@ -823,7 +1044,26 @@ function drawCoreCityLayer2D(ctx, world) {
     bounds.minY,
     bounds.maxY,
   );
+
+  // A partial second pass strengthens the same gray city fog
+  // without adding a new full-screen overlay.
+  ctx.save();
+  ctx.globalAlpha = 0.32;
+  drawFogCore(
+    ctx,
+    world,
+    camera,
+    bounds.minX,
+    bounds.maxX,
+    bounds.minY,
+    bounds.maxY,
+  );
+  ctx.restore();
+
   drawExitPortalCore(ctx, world, camera);
+
+  // Glow goes after fog but before the normal pickup art.
+  drawCityPowerUpHalosCoreScale(ctx, world, camera);
   drawPickupsCore(ctx, world, camera);
 
   for (const projectile of world.projectiles ?? []) {
@@ -832,9 +1072,6 @@ function drawCoreCityLayer2D(ctx, world) {
 
   drawEffectsCore(ctx, world, camera);
   ctx.restore();
-
-  drawCityPowerupHalos2D(ctx, world);
-  drawExtraGrayFog2D(ctx, world);
 }
 
 function drawCoreCityLabels2D(ctx, world) {
@@ -877,220 +1114,11 @@ function drawStreetCracks(ctx, sx, sy, size, x, y) {
 
 
 
-
-function detectCityCenterOffset(world, axis) {
-  const stride = PASSAGE_WIDTH + 1;
-  let bestOffset = Math.max(1, Math.floor(PASSAGE_WIDTH / 2));
-  let bestScore = -1;
-
-  for (let offset = 1; offset < stride; offset += 1) {
-    let score = 0;
-
-    if (axis === "x") {
-      for (let x = offset; x < world.width; x += stride) {
-        for (let y = 0; y < world.height; y += 1) {
-          if (isFloorTile(world, x - 1, y) && isFloorTile(world, x, y)) {
-            score += 1;
-          }
-        }
-      }
-    } else {
-      for (let y = offset; y < world.height; y += stride) {
-        for (let x = 0; x < world.width; x += 1) {
-          if (isFloorTile(world, x, y - 1) && isFloorTile(world, x, y)) {
-            score += 1;
-          }
-        }
-      }
-    }
-
-    if (score > bestScore) {
-      bestScore = score;
-      bestOffset = offset;
-    }
-  }
-
-  return bestOffset;
-}
-
-function drawCityCorridorCenterlines2D(ctx, world) {
-  if (world.level?.themeKey !== "city" || world.viewMode === "3d") {
-    return;
-  }
-
-  const camera = getCamera(world);
-  const zoom = getWorldRenderZoom(world);
-  const scale = DRAW_TILE * zoom;
-  const stride = PASSAGE_WIDTH + 1;
-  const xOffset = detectCityCenterOffset(world, "x");
-  const yOffset = detectCityCenterOffset(world, "y");
-
-  const toScreenX = (worldX) => (worldX - camera.x) * scale;
-  const toScreenY = (worldY) => (worldY - camera.y) * scale;
-
-  ctx.save();
-  ctx.strokeStyle = "#e7c93a";
-  ctx.lineWidth = Math.max(2, scale * 0.06);
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-
-  for (let y = yOffset; y < world.height; y += stride) {
-    let runStart = null;
-
-    for (let x = 0; x <= world.width; x += 1) {
-      const open =
-        x < world.width &&
-        y > 0 &&
-        isFloorTile(world, x, y - 1) &&
-        isFloorTile(world, x, y);
-
-      if (open && runStart === null) {
-        runStart = x;
-      }
-
-      if ((!open || x === world.width) && runStart !== null) {
-        const runEnd = x;
-        ctx.beginPath();
-        ctx.moveTo(toScreenX(runStart), toScreenY(y));
-        ctx.lineTo(toScreenX(runEnd), toScreenY(y));
-        ctx.stroke();
-        runStart = null;
-      }
-    }
-  }
-
-  for (let x = xOffset; x < world.width; x += stride) {
-    let runStart = null;
-
-    for (let y = 0; y <= world.height; y += 1) {
-      const open =
-        y < world.height &&
-        x > 0 &&
-        isFloorTile(world, x - 1, y) &&
-        isFloorTile(world, x, y);
-
-      if (open && runStart === null) {
-        runStart = y;
-      }
-
-      if ((!open || y === world.height) && runStart !== null) {
-        const runEnd = y;
-        ctx.beginPath();
-        ctx.moveTo(toScreenX(x), toScreenY(runStart));
-        ctx.lineTo(toScreenX(x), toScreenY(runEnd));
-        ctx.stroke();
-        runStart = null;
-      }
-    }
-  }
-
-  ctx.restore();
-}
-
-function drawCityPowerupHalos2D(ctx, world) {
-  if (world.level?.themeKey !== "city" || world.viewMode === "3d") {
-    return;
-  }
-
-  ctx.save();
-
-  for (const pickup of world.pickups ?? []) {
-    const kind = normalizeCityPickupType(
-      pickup.kind ?? pickup.type,
-      pickup,
-    );
-
-    if (kind !== "power") {
-      continue;
-    }
-
-    const position = worldToScreen(world, pickup.x, pickup.y);
-    const radius = Math.max(10, position.scale * 0.34);
-
-    const gradient = ctx.createRadialGradient(
-      position.x,
-      position.y,
-      radius * 0.15,
-      position.x,
-      position.y,
-      radius * 1.8,
-    );
-    gradient.addColorStop(0, "rgba(196, 181, 253, 0.9)");
-    gradient.addColorStop(0.38, "rgba(168, 85, 247, 0.45)");
-    gradient.addColorStop(0.72, "rgba(96, 165, 250, 0.18)");
-    gradient.addColorStop(1, "rgba(96, 165, 250, 0)");
-
-    ctx.globalCompositeOperation = "screen";
-    ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.arc(position.x, position.y, radius * 1.8, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  ctx.restore();
-}
-
-function drawExtraGrayFog2D(ctx, world) {
-  if (world.level?.themeKey !== "city" || world.viewMode === "3d") {
-    return;
-  }
-
-  const drift = (Date.now() % 24000) / 24000;
-
-  ctx.save();
-  ctx.globalCompositeOperation = "source-over";
-
-  const veil = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-  veil.addColorStop(0, "rgba(226, 232, 240, 0.12)");
-  veil.addColorStop(0.45, "rgba(203, 213, 225, 0.18)");
-  veil.addColorStop(1, "rgba(148, 163, 184, 0.14)");
-  ctx.fillStyle = veil;
-  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-  const banks = [
-    { x: CANVAS_WIDTH * (0.16 + drift * 0.08), y: CANVAS_HEIGHT * 0.2, rx: CANVAS_WIDTH * 0.28, ry: CANVAS_HEIGHT * 0.08, a: 0.16 },
-    { x: CANVAS_WIDTH * (0.72 - drift * 0.06), y: CANVAS_HEIGHT * 0.38, rx: CANVAS_WIDTH * 0.34, ry: CANVAS_HEIGHT * 0.09, a: 0.18 },
-    { x: CANVAS_WIDTH * (0.38 + drift * 0.04), y: CANVAS_HEIGHT * 0.62, rx: CANVAS_WIDTH * 0.3, ry: CANVAS_HEIGHT * 0.09, a: 0.17 },
-    { x: CANVAS_WIDTH * (0.8 - drift * 0.05), y: CANVAS_HEIGHT * 0.84, rx: CANVAS_WIDTH * 0.25, ry: CANVAS_HEIGHT * 0.08, a: 0.16 },
-  ];
-
-  for (const bank of banks) {
-    const fog = ctx.createRadialGradient(
-      bank.x,
-      bank.y,
-      0,
-      bank.x,
-      bank.y,
-      bank.rx,
-    );
-    fog.addColorStop(0, `rgba(226, 232, 240, ${bank.a})`);
-    fog.addColorStop(0.55, `rgba(203, 213, 225, ${bank.a * 0.72})`);
-    fog.addColorStop(1, "rgba(203, 213, 225, 0)");
-    ctx.fillStyle = fog;
-    ctx.beginPath();
-    ctx.ellipse(bank.x, bank.y, bank.rx, bank.ry, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  ctx.restore();
-}
-
-function isLikelyMeleeWeaponKey(weaponKey) {
-  const key = String(weaponKey ?? "").toLowerCase();
-  return (
-    key.includes("machete") ||
-    key.includes("crowbar") ||
-    key.includes("bat") ||
-    key.includes("knife") ||
-    key.includes("blade") ||
-    key.includes("sword") ||
-    key.includes("axe") ||
-    key.includes("plunger")
-  );
-}
-
 function drawCityRoads2D(ctx, world) {
-  if (world.level?.themeKey !== "city" || world.viewMode === "3d") {
+  if (
+    world.level?.themeKey !== "city" ||
+    world.viewMode === "3d"
+  ) {
     return;
   }
 
@@ -1106,77 +1134,154 @@ function drawCityRoads2D(ctx, world) {
 
       const sx = (x - bounds.camera.x) * bounds.scale;
       const sy = (y - bounds.camera.y) * bounds.scale;
-
+      const variation = citySeed(x, y, 1);
       const asphalt = ctx.createLinearGradient(
         sx,
         sy,
         sx + bounds.scale,
         sy + bounds.scale,
       );
-      const seed = citySeed(x, y, 1);
-      asphalt.addColorStop(0, seed > 0.5 ? "#464b50" : "#41464b");
-      asphalt.addColorStop(0.55, "#3c4146");
-      asphalt.addColorStop(1, "#363b40");
+
+      asphalt.addColorStop(
+        0,
+        variation > 0.5 ? "#3e4245" : "#393d40",
+      );
+      asphalt.addColorStop(0.55, "#35393c");
+      asphalt.addColorStop(1, "#303437");
 
       ctx.fillStyle = asphalt;
-      ctx.fillRect(sx, sy, bounds.scale + 0.5, bounds.scale + 0.5);
+      ctx.fillRect(
+        sx,
+        sy,
+        bounds.scale + 0.5,
+        bounds.scale + 0.5,
+      );
 
-      drawStreetCracks(ctx, sx, sy, bounds.scale, x, y);
+      drawStreetCracks(
+        ctx,
+        sx,
+        sy,
+        bounds.scale,
+        x,
+        y,
+      );
     }
   }
 
   ctx.restore();
-  drawCityCorridorCenterlines2D(ctx, world);
+  drawCityCenterLine2D(ctx, world);
 }
 
 
 
 
 function drawSkyscraperTile2D(ctx, world, x, y, sx, sy, size) {
-  const palette = [
-    { face: "#f1f5f9", side: "#cbd5e1", trim: "#94a3b8", window: "#dbeafe" },
-    { face: "#171717", side: "#0f172a", trim: "#3f3f46", window: "#9ca3af" },
-    { face: "#a3a3a3", side: "#737373", trim: "#d4d4d8", window: "#f5f5f5" },
-    { face: "#e5e7eb", side: "#9ca3af", trim: "#6b7280", window: "#ffffff" },
+  const templates = [
+    {
+      fill: "#d9d9d9",
+      roof: "#f3f4f6",
+      shadow: "#9ca3af",
+      height: 0.66,
+    },
+    {
+      fill: "#171717",
+      roof: "#404040",
+      shadow: "#0a0a0a",
+      height: 0.92,
+    },
+    {
+      fill: "#8a8a8a",
+      roof: "#b1b1b1",
+      shadow: "#5a5a5a",
+      height: 0.48,
+    },
+    {
+      fill: "#c7c7c7",
+      roof: "#e5e7eb",
+      shadow: "#8f8f8f",
+      height: 0.74,
+    },
   ];
+  const template = templates[wallTileFacadeIndex(x, y)];
+  const inset = size * 0.04;
+  const width = size - inset * 2;
+  const depth = size * template.height;
+  const topY = sy + size - depth - inset;
 
-  const variant = palette[((x % 4) + 4) % 4];
-  const local = citySeed(x, y, 4);
+  ctx.save();
 
-  ctx.fillStyle = variant.face;
+  // Prevent the old blue wall texture from showing above short buildings.
+  ctx.fillStyle = template.shadow;
+  ctx.globalAlpha = 0.92;
   ctx.fillRect(sx, sy, size + 0.5, size + 0.5);
-
-  ctx.fillStyle = variant.side;
-  ctx.fillRect(sx, sy + size * 0.06, size * 0.2, size * 0.88);
-  ctx.fillRect(sx + size * 0.8, sy + size * 0.06, size * 0.2, size * 0.88);
-
-  ctx.fillStyle = variant.trim;
-  ctx.fillRect(sx, sy, size + 0.5, size * 0.07);
-  ctx.fillRect(sx, sy + size * 0.93, size + 0.5, size * 0.07);
-
-  const rows = 3;
-  const cols = 2;
-  const startX = sx + size * 0.28;
-  const startY = sy + size * 0.18;
-  const gapX = size * 0.18;
-  const gapY = size * 0.18;
-  const ww = size * 0.12;
-  const wh = size * 0.1;
-
-  ctx.fillStyle = variant.window;
-  for (let row = 0; row < rows; row += 1) {
-    for (let col = 0; col < cols; col += 1) {
-      const wx = startX + col * gapX;
-      const wy = startY + row * gapY;
-      ctx.globalAlpha = ((row + col + Math.floor(local * 3)) % 2 === 0) ? 0.92 : 0.58;
-      ctx.fillRect(wx, wy, ww, wh);
-    }
-  }
   ctx.globalAlpha = 1;
 
-  ctx.strokeStyle = "rgba(15, 23, 42, 0.32)";
-  ctx.lineWidth = 1;
-  ctx.strokeRect(sx + 0.5, sy + 0.5, size - 1, size - 1);
+  ctx.fillStyle = template.shadow;
+  ctx.fillRect(
+    sx + inset + size * 0.03,
+    topY + size * 0.03,
+    width,
+    depth,
+  );
+
+  ctx.fillStyle = template.fill;
+  ctx.fillRect(
+    sx + inset,
+    topY,
+    width,
+    depth,
+  );
+
+  ctx.fillStyle = template.roof;
+  ctx.fillRect(
+    sx + inset,
+    topY,
+    width,
+    Math.max(2, size * 0.085),
+  );
+
+  ctx.strokeStyle = "rgba(17, 24, 39, 0.4)";
+  ctx.lineWidth = Math.max(1, size * 0.02);
+  ctx.strokeRect(
+    sx + inset,
+    topY,
+    width,
+    depth,
+  );
+
+  const windowRows = Math.max(
+    2,
+    Math.floor(depth / (size * 0.16)),
+  );
+  const windowCols = 2;
+  const darkWindows = template.fill === "#171717";
+
+  ctx.fillStyle = darkWindows
+    ? "rgba(245, 245, 245, 0.22)"
+    : "rgba(31, 41, 55, 0.16)";
+
+  for (let row = 0; row < windowRows; row += 1) {
+    const wy =
+      topY +
+      size * 0.13 +
+      row * size * 0.13;
+
+    for (let col = 0; col < windowCols; col += 1) {
+      const wx =
+        sx +
+        inset +
+        width * (0.22 + col * 0.34);
+
+      ctx.fillRect(
+        wx,
+        wy,
+        width * 0.16,
+        size * 0.05,
+      );
+    }
+  }
+
+  ctx.restore();
 }
 
 function drawCityBuildingBlocks2D(ctx, world) {
@@ -1942,50 +2047,115 @@ function drawCityEnemies2D(ctx, world) {
 }
 
 function drawCityPlayer2D(ctx, world) {
-  if (world.level?.themeKey !== "city" || world.viewMode === "3d") {
+  if (
+    world.level?.themeKey !== "city" ||
+    world.viewMode === "3d"
+  ) {
     return;
   }
 
   const player = playerScreenPosition(world);
-  const meleeEquipped = isLikelyMeleeWeaponKey(world.player.weapon);
+  const swingState = getCitySwingState(world);
 
   ctx.save();
   ctx.translate(player.x, player.y);
   ctx.rotate(world.player.facing);
 
-  ctx.fillStyle = "rgba(15, 23, 42, 0.24)";
+  // City-specific survivor body.
+  ctx.fillStyle = "rgba(2, 6, 23, 0.35)";
   ctx.beginPath();
-  ctx.ellipse(0, 14, meleeEquipped ? 12 : 14, 6, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 12, 16, 8, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  if (meleeEquipped) {
-    ctx.globalAlpha = 0.88;
-  }
+  ctx.fillStyle = "#111827";
+  ctx.fillRect(-10, -1, 20, 14);
 
   ctx.fillStyle = "#1d4ed8";
-  ctx.save();
-  ctx.translate(meleeEquipped ? -3 : 0, meleeEquipped ? 2 : 0);
-  ctx.rotate(-0.22);
-  ctx.fillRect(-10, -7, 18, 14);
-  ctx.restore();
+  ctx.fillRect(-4, 4, 8, 8);
 
-  ctx.fillStyle = "#f2d3a4";
+  ctx.fillStyle = "#f1c27d";
   ctx.beginPath();
-  ctx.arc(8, -6, 6.8, 0, Math.PI * 2);
+  ctx.arc(0, -5, 6.5, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.fillStyle = "#0f172a";
-  ctx.beginPath();
-  ctx.arc(-7, -3, 4.2, 0, Math.PI * 2);
-  ctx.fill();
+  // Reuse the core weapon art and the real meleeSwing state.
+  if (swingState) {
+    const weaponKey =
+      swingState.swing.weaponKey ??
+      world.player.weapon;
 
-  if (meleeEquipped) {
-    ctx.globalAlpha = 0.5;
-    ctx.strokeStyle = "rgba(255,255,255,0.3)";
-    ctx.lineWidth = 1.8;
-    ctx.beginPath();
-    ctx.arc(10, -2, 18, -0.9, 0.85);
-    ctx.stroke();
+    if (weaponKey === "fists") {
+      const thrust =
+        Math.sin(swingState.progress * Math.PI);
+
+      ctx.save();
+      ctx.rotate(swingState.directionOffset);
+      ctx.strokeStyle = "#f8fafc";
+      ctx.globalAlpha =
+        0.7 * (1 - swingState.progress);
+      ctx.lineWidth = 3;
+      ctx.lineCap = "round";
+
+      for (const offset of [-5, 5]) {
+        ctx.beginPath();
+        ctx.moveTo(7, offset);
+        ctx.lineTo(18 + thrust * 14, offset);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    } else {
+      const startAngle = -1.12;
+      const endAngle =
+        startAngle +
+        (0.98 - startAngle) *
+          swingState.eased;
+
+      ctx.save();
+      ctx.rotate(swingState.directionOffset);
+
+      ctx.strokeStyle = "rgba(255,255,255,0.78)";
+      ctx.globalAlpha =
+        0.72 *
+        (1 - swingState.progress * 0.45);
+      ctx.lineWidth = 4;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.arc(
+        0,
+        0,
+        24,
+        startAngle,
+        endAngle,
+      );
+      ctx.stroke();
+
+      ctx.restore();
+
+      ctx.save();
+      ctx.rotate(
+        swingState.directionOffset +
+          endAngle,
+      );
+      ctx.translate(8, 0);
+      drawWeaponShapeCore(
+        ctx,
+        world,
+        weaponKey,
+        29,
+      );
+      ctx.restore();
+    }
+  } else if (!hasRobbienatorLoadout(world)) {
+    ctx.save();
+    ctx.translate(8, 4);
+    drawWeaponShapeCore(
+      ctx,
+      world,
+      world.player.weapon,
+      25,
+    );
+    ctx.restore();
   }
 
   ctx.restore();

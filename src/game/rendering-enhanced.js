@@ -717,34 +717,40 @@ function drawSidewalkEdges(ctx, edges, sx, sy, size) {}
 
 
 
+
 function drawRoadMarks2D(ctx, world, x, y, sx, sy, size) {
   const left = scanStreetDistance(world, x, y, -1, 0);
   const right = scanStreetDistance(world, x, y, 1, 0);
   const up = scanStreetDistance(world, x, y, 0, -1);
   const down = scanStreetDistance(world, x, y, 0, 1);
-  const horizontalReach = left + right;
-  const verticalReach = up + down;
-  const roadHeight = up + down + 1;
-  const roadWidth = left + right + 1;
-  const centerBandRow = Math.max(0, Math.floor(roadHeight / 2) - 1);
-  const centerBandCol = Math.max(0, Math.floor(roadWidth / 2) - 1);
-  const inHorizontalCenterBand = up === centerBandRow;
-  const inVerticalCenterBand = left === centerBandCol;
-  const lineWidth = Math.max(2, size * 0.09);
+  const corridorWidth = left + right + 1;
+  const corridorHeight = up + down + 1;
+  const yellow = "#e7c62c";
+  const thickness = Math.max(2, size * 0.055);
 
   ctx.save();
-  ctx.strokeStyle = "#f4c430";
-  ctx.lineWidth = lineWidth;
-  ctx.lineCap = "butt";
+  ctx.strokeStyle = yellow;
+  ctx.lineWidth = thickness;
+  ctx.lineCap = "round";
 
-  if ((left > 0 || right > 0 || horizontalReach >= 3) && inHorizontalCenterBand) {
+  const shouldDrawHorizontal =
+    corridorHeight >= 4 &&
+    up === 1 &&
+    (left > 0 || right > 0);
+
+  if (shouldDrawHorizontal) {
     ctx.beginPath();
     ctx.moveTo(sx, sy + size);
     ctx.lineTo(sx + size, sy + size);
     ctx.stroke();
   }
 
-  if ((up > 0 || down > 0 || verticalReach >= 3) && inVerticalCenterBand) {
+  const shouldDrawVertical =
+    corridorWidth >= 4 &&
+    left === 1 &&
+    (up > 0 || down > 0);
+
+  if (shouldDrawVertical) {
     ctx.beginPath();
     ctx.moveTo(sx + size, sy);
     ctx.lineTo(sx + size, sy + size);
@@ -780,6 +786,7 @@ function drawStreetCracks(ctx, sx, sy, size, x, y) {
 
 
 
+
 function drawCityRoads2D(ctx, world) {
   if (
     world.level?.themeKey !== "city" ||
@@ -800,17 +807,16 @@ function drawCityRoads2D(ctx, world) {
 
       const sx = (x - bounds.camera.x) * bounds.scale;
       const sy = (y - bounds.camera.y) * bounds.scale;
+      const tileShade = 0.3 + citySeed(x, y, 13) * 0.12;
       const asphalt = ctx.createLinearGradient(
         sx,
         sy,
         sx + bounds.scale,
         sy + bounds.scale,
       );
-      const variation = citySeed(x, y, 1);
-
-      asphalt.addColorStop(0, variation > 0.5 ? "#44484b" : "#3f4346");
-      asphalt.addColorStop(0.55, "#3a3e41");
-      asphalt.addColorStop(1, "#35393c");
+      asphalt.addColorStop(0, `rgba(30, 34, 38, ${0.94})`);
+      asphalt.addColorStop(0.45, `rgba(52, 57, 62, ${0.96})`);
+      asphalt.addColorStop(1, `rgba(37, 42, 47, ${0.98})`);
 
       ctx.fillStyle = asphalt;
       ctx.fillRect(
@@ -820,15 +826,22 @@ function drawCityRoads2D(ctx, world) {
         bounds.scale + 0.5,
       );
 
-      ctx.fillStyle = "rgba(255,255,255,0.012)";
-      for (let speck = 0; speck < 2; speck += 1) {
-        ctx.fillRect(
-          sx + bounds.scale * citySeed(x, y, 70 + speck),
-          sy + bounds.scale * citySeed(y, x, 80 + speck),
-          Math.max(1, bounds.scale * 0.01),
-          Math.max(1, bounds.scale * 0.01),
-        );
-      }
+      ctx.fillStyle = `rgba(255,255,255,${0.02 + citySeed(y, x, 22) * 0.018})`;
+      ctx.fillRect(
+        sx,
+        sy,
+        bounds.scale,
+        bounds.scale,
+      );
+
+      ctx.strokeStyle = `rgba(15, 23, 42, ${0.08 + tileShade * 0.04})`;
+      ctx.lineWidth = Math.max(1, bounds.scale * 0.018);
+      ctx.beginPath();
+      ctx.moveTo(sx + bounds.scale * 0.22, sy + bounds.scale * 0.18);
+      ctx.lineTo(sx + bounds.scale * 0.34, sy + bounds.scale * 0.4);
+      ctx.moveTo(sx + bounds.scale * 0.63, sy + bounds.scale * 0.28);
+      ctx.lineTo(sx + bounds.scale * 0.52, sy + bounds.scale * 0.56);
+      ctx.stroke();
 
       drawRoadMarks2D(
         ctx,
@@ -839,14 +852,6 @@ function drawCityRoads2D(ctx, world) {
         sy,
         bounds.scale,
       );
-      drawStreetCracks(
-        ctx,
-        sx,
-        sy,
-        bounds.scale,
-        x,
-        y,
-      );
     }
   }
 
@@ -855,67 +860,92 @@ function drawCityRoads2D(ctx, world) {
 
 
 
+
 function drawSkyscraperTile2D(ctx, world, x, y, sx, sy, size) {
-  const heights = [0.6, 0.9, 0.42, 0.68];
-  const colors = ["#d9d9d9", "#121212", "#7c7c7c", "#f1f1f1"];
-  const gap = size * 0.035;
-  const buildingWidth = (size - gap * 5) / 4;
+  const templates = [
+    {
+      fill: "#d9d9d9",
+      roof: "#f3f4f6",
+      shadow: "#9ca3af",
+      height: 0.66,
+    },
+    {
+      fill: "#171717",
+      roof: "#404040",
+      shadow: "#0a0a0a",
+      height: 0.92,
+    },
+    {
+      fill: "#8a8a8a",
+      roof: "#b1b1b1",
+      shadow: "#5a5a5a",
+      height: 0.48,
+    },
+    {
+      fill: "#c7c7c7",
+      roof: "#e5e7eb",
+      shadow: "#8f8f8f",
+      height: 0.74,
+    },
+  ];
+  const template = templates[wallTileFacadeIndex(x, y)];
+  const inset = size * 0.04;
+  const width = size - inset * 2;
+  const depth = size * template.height;
+  const topY = sy + size - depth - inset;
 
   ctx.save();
-  ctx.fillStyle = "#8c9196";
-  ctx.fillRect(sx, sy, size, size);
 
-  for (let index = 0; index < 4; index += 1) {
-    const buildingX = sx + gap + index * (buildingWidth + gap);
-    const buildingHeight = size * heights[index];
-    const buildingY = sy + size - buildingHeight - size * 0.06;
-    const color = colors[index];
+  ctx.fillStyle = template.shadow;
+  ctx.fillRect(
+    sx + inset + size * 0.03,
+    topY + size * 0.03,
+    width,
+    depth,
+  );
 
-    ctx.fillStyle = "rgba(0, 0, 0, 0.25)";
-    ctx.fillRect(
-      buildingX + size * 0.012,
-      buildingY + size * 0.02,
-      buildingWidth,
-      buildingHeight,
-    );
+  ctx.fillStyle = template.fill;
+  ctx.fillRect(
+    sx + inset,
+    topY,
+    width,
+    depth,
+  );
 
-    ctx.fillStyle = color;
-    ctx.fillRect(
-      buildingX,
-      buildingY,
-      buildingWidth,
-      buildingHeight,
-    );
+  ctx.fillStyle = template.roof;
+  ctx.fillRect(
+    sx + inset,
+    topY,
+    width,
+    Math.max(2, size * 0.085),
+  );
 
-    ctx.strokeStyle = "rgba(15, 23, 42, 0.35)";
-    ctx.lineWidth = Math.max(1, size * 0.015);
-    ctx.strokeRect(
-      buildingX,
-      buildingY,
-      buildingWidth,
-      buildingHeight,
-    );
+  ctx.strokeStyle = "rgba(17, 24, 39, 0.4)";
+  ctx.lineWidth = Math.max(1, size * 0.02);
+  ctx.strokeRect(
+    sx + inset,
+    topY,
+    width,
+    depth,
+  );
 
-    const windowColor =
-      color === "#121212"
-        ? "rgba(255, 255, 255, 0.22)"
-        : "rgba(35, 35, 35, 0.22)";
-    const rows = Math.max(2, Math.floor(buildingHeight / (size * 0.14)));
+  const windowRows = Math.max(2, Math.floor(depth / (size * 0.16)));
+  const windowCols = 2;
+  const darkWindows = template.fill === "#171717";
+  ctx.fillStyle = darkWindows
+    ? "rgba(245, 245, 245, 0.22)"
+    : "rgba(31, 41, 55, 0.16)";
 
-    ctx.fillStyle = windowColor;
-    for (let row = 0; row < rows; row += 1) {
-      const wy = buildingY + size * 0.05 + row * size * 0.11;
+  for (let row = 0; row < windowRows; row += 1) {
+    const wy = topY + size * 0.13 + row * size * 0.13;
+    for (let col = 0; col < windowCols; col += 1) {
+      const wx =
+        sx + inset + width * (0.22 + col * 0.34);
       ctx.fillRect(
-        buildingX + buildingWidth * 0.22,
+        wx,
         wy,
-        buildingWidth * 0.18,
-        size * 0.035,
-      );
-      ctx.fillRect(
-        buildingX + buildingWidth * 0.6,
-        wy,
-        buildingWidth * 0.18,
-        size * 0.035,
+        width * 0.16,
+        size * 0.05,
       );
     }
   }
@@ -959,6 +989,15 @@ function drawCityBuildingBlocks2D(ctx, world) {
 }
 
 
+
+
+function clamp01(value) {
+  return Math.max(0, Math.min(1, value));
+}
+
+function wallTileFacadeIndex(x, y) {
+  return Math.abs(x + y) % 4;
+}
 
 function formatPowerUpLabel(pickup) {
   const raw =
@@ -1041,171 +1080,173 @@ function drawMedkitPickup(ctx, x, y, size) {
   ctx.stroke();
 }
 
+
 function drawAmmoPickup(ctx, x, y, size) {
-  ctx.fillStyle = "rgba(2, 6, 23, 0.28)";
+  ctx.fillStyle = "rgba(15, 23, 42, 0.24)";
   ctx.beginPath();
   ctx.ellipse(
     x,
     y + size * 1.02,
-    size * 1.2,
-    size * 0.6,
+    size * 0.92,
+    size * 0.46,
     0,
     0,
     Math.PI * 2,
   );
   ctx.fill();
 
-  ctx.fillStyle = "#c47a2c";
+  ctx.fillStyle = "#4b5563";
+  ctx.strokeStyle = "#111827";
+  ctx.lineWidth = Math.max(1, size * 0.06);
+  ctx.beginPath();
+  ctx.roundRect(
+    x - size * 0.54,
+    y - size * 0.26,
+    size * 1.08,
+    size * 0.6,
+    size * 0.12,
+  );
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "#f59e0b";
+  ctx.fillRect(
+    x - size * 0.36,
+    y - size * 0.07,
+    size * 0.72,
+    size * 0.14,
+  );
+
   ctx.strokeStyle = "#7c2d12";
-  ctx.lineWidth = Math.max(1, size * 0.08);
-
-  for (const offset of [-size * 0.24, size * 0.24]) {
-    ctx.beginPath();
-    ctx.roundRect(
-      x + offset - size * 0.13,
-      y - size * 0.44,
-      size * 0.26,
-      size * 0.94,
-      size * 0.12,
+  for (const offset of [-size * 0.2, 0, size * 0.2]) {
+    ctx.fillStyle = "#b45309";
+    ctx.fillRect(
+      x + offset - size * 0.045,
+      y - size * 0.42,
+      size * 0.09,
+      size * 0.34,
     );
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = "#f8d28a";
+    ctx.fillStyle = "#fde68a";
     ctx.beginPath();
     ctx.arc(
       x + offset,
-      y - size * 0.34,
-      size * 0.13,
+      y - size * 0.42,
+      size * 0.045,
       Math.PI,
       Math.PI * 2,
     );
     ctx.fill();
-
-    ctx.fillStyle = "#c47a2c";
   }
 }
+
 
 
 function drawPowerUpPickup(ctx, world, pickup, x, y, size) {
   const color = pickup.legendary
     ? LEGENDARY_GOLD
-    : pickupColor("powerup");
+    : "#8b5cf6";
   const label = formatPowerUpLabel(pickup);
 
-  ctx.fillStyle = "rgba(2, 6, 23, 0.28)";
+  ctx.fillStyle = "rgba(15, 23, 42, 0.26)";
   ctx.beginPath();
   ctx.ellipse(
     x,
-    y + size * 1.12,
-    size * 1.18,
-    size * 0.62,
+    y + size * 1.08,
+    size * 0.9,
+    size * 0.46,
     0,
     0,
     Math.PI * 2,
   );
   ctx.fill();
 
-  const glow = ctx.createRadialGradient(
+  const halo = ctx.createRadialGradient(
     x,
     y,
-    size * 0.14,
+    size * 0.12,
     x,
     y,
-    size * 1.18,
+    size * 1.08,
   );
-  glow.addColorStop(0, "rgba(255,255,255,0.72)");
-  glow.addColorStop(
-    0.4,
+  halo.addColorStop(0, "rgba(255,255,255,0.7)");
+  halo.addColorStop(
+    0.55,
     pickup.legendary
-      ? "rgba(250, 204, 21, 0.55)"
-      : "rgba(168, 85, 247, 0.42)",
+      ? "rgba(250, 204, 21, 0.46)"
+      : "rgba(139, 92, 246, 0.36)",
   );
-  glow.addColorStop(1, "rgba(0,0,0,0)");
+  halo.addColorStop(1, "rgba(0,0,0,0)");
 
-  ctx.fillStyle = glow;
+  ctx.fillStyle = halo;
   ctx.beginPath();
-  ctx.arc(x, y, size * 1.18, 0, Math.PI * 2);
+  ctx.arc(x, y, size * 1.08, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.fillStyle = color;
   ctx.strokeStyle = "#f8fafc";
-  ctx.lineWidth = Math.max(1, size * 0.08);
+  ctx.lineWidth = Math.max(1, size * 0.07);
   ctx.beginPath();
-  ctx.moveTo(x, y - size * 0.66);
-  ctx.lineTo(x + size * 0.66, y);
-  ctx.lineTo(x, y + size * 0.66);
-  ctx.lineTo(x - size * 0.66, y);
+  ctx.moveTo(x, y - size * 0.62);
+  ctx.lineTo(x + size * 0.38, y - size * 0.14);
+  ctx.lineTo(x + size * 0.22, y + size * 0.5);
+  ctx.lineTo(x - size * 0.22, y + size * 0.5);
+  ctx.lineTo(x - size * 0.38, y - size * 0.14);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
 
-  ctx.strokeStyle = "#f8fafc";
-  ctx.lineWidth = Math.max(1, size * 0.055);
-  ctx.beginPath();
-  ctx.moveTo(x, y - size * 0.34);
-  ctx.lineTo(x, y + size * 0.34);
-  ctx.moveTo(x - size * 0.34, y);
-  ctx.lineTo(x + size * 0.34, y);
-  ctx.stroke();
-
-  ctx.font = `700 ${Math.max(9, size * 0.48)}px system-ui`;
+  ctx.font = `700 ${Math.max(10, size * 0.42)}px system-ui`;
   ctx.textAlign = "center";
   ctx.textBaseline = "bottom";
-  ctx.lineWidth = Math.max(2, size * 0.13);
-  ctx.strokeStyle = "rgba(2, 6, 23, 0.92)";
-  ctx.fillStyle = pickup.legendary ? "#fde68a" : "#ede9fe";
-  ctx.strokeText(label, x, y - size * 0.92);
-  ctx.fillText(label, x, y - size * 0.92);
+  ctx.lineWidth = Math.max(2, size * 0.12);
+  ctx.strokeStyle = "rgba(15, 23, 42, 0.92)";
+  ctx.fillStyle = pickup.legendary ? "#fde68a" : "#f5f3ff";
+  ctx.strokeText(label, x, y - size * 0.86);
+  ctx.fillText(label, x, y - size * 0.86);
 }
 
+
 function drawWeaponPickup(ctx, x, y, size) {
-  ctx.fillStyle = "rgba(2, 6, 23, 0.32)";
+  ctx.fillStyle = "rgba(15, 23, 42, 0.24)";
   ctx.beginPath();
   ctx.ellipse(
     x,
-    y + size * 1.06,
-    size * 1.15,
-    size * 0.6,
+    y + size * 1.05,
+    size * 0.94,
+    size * 0.46,
     0,
     0,
     Math.PI * 2,
   );
   ctx.fill();
 
-  ctx.fillStyle = "#cbd5e1";
-  ctx.strokeStyle = "#334155";
-  ctx.lineWidth = Math.max(1, size * 0.08);
+  ctx.fillStyle = "#1f2937";
+  ctx.strokeStyle = "#e5e7eb";
+  ctx.lineWidth = Math.max(1, size * 0.06);
   ctx.beginPath();
   ctx.roundRect(
-    x - size * 0.72,
+    x - size * 0.58,
     y - size * 0.18,
-    size * 1.02,
-    size * 0.24,
-    size * 0.08,
+    size * 1.16,
+    size * 0.48,
+    size * 0.1,
   );
   ctx.fill();
   ctx.stroke();
 
-  ctx.beginPath();
-  ctx.roundRect(
-    x - size * 0.06,
-    y - size * 0.18,
-    size * 0.24,
-    size * 0.62,
-    size * 0.08,
+  ctx.fillStyle = "#9ca3af";
+  ctx.fillRect(
+    x - size * 0.36,
+    y - size * 0.02,
+    size * 0.72,
+    size * 0.12,
   );
-  ctx.fill();
-  ctx.stroke();
-
-  ctx.font = `700 ${Math.max(8, size * 0.45)}px system-ui`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "bottom";
-  ctx.lineWidth = Math.max(2, size * 0.14);
-  ctx.strokeStyle = "rgba(2, 6, 23, 0.88)";
-  ctx.fillStyle = "#e2e8f0";
-  ctx.strokeText("GUN", x, y - size * 0.98);
-  ctx.fillText("GUN", x, y - size * 0.98);
+  ctx.fillRect(
+    x + size * 0.12,
+    y - size * 0.33,
+    size * 0.16,
+    size * 0.36,
+  );
 }
 
 function drawCityPickups2D(ctx, world) {
@@ -1256,31 +1297,33 @@ function drawCityPickups2D(ctx, world) {
 }
 
 
+
 function enemyPalette(kind) {
   switch (kind) {
     case "turret":
       return {
-        core: "#fb7185",
-        shell: "#be123c",
-        glow: "rgba(251, 113, 133, 0.34)",
-        eye: "#fff1f2",
+        core: "#ef476f",
+        shell: "#7f1d3f",
+        glow: "rgba(239, 71, 111, 0.26)",
+        eye: "#ffe4ec",
       };
     case "melee":
       return {
         core: "#f97316",
-        shell: "#9a3412",
-        glow: "rgba(249, 115, 22, 0.34)",
+        shell: "#7c2d12",
+        glow: "rgba(249, 115, 22, 0.28)",
         eye: "#fff7ed",
       };
     default:
       return {
         core: "#f59e0b",
-        shell: "#92400e",
-        glow: "rgba(245, 158, 11, 0.34)",
+        shell: "#78350f",
+        glow: "rgba(245, 158, 11, 0.28)",
         eye: "#fffbeb",
       };
   }
 }
+
 
 
 function drawCityEnemies2D(ctx, world) {
@@ -1298,105 +1341,98 @@ function drawCityEnemies2D(ctx, world) {
     const x = position.x;
     const y = position.y;
     const radius = Math.max(
-      position.scale * 0.18,
+      position.scale * 0.14,
       (enemy.radius ?? 0.22) * position.scale,
     );
     const palette = enemyPalette(enemy.kind);
 
-    const glow = ctx.createRadialGradient(
+    const halo = ctx.createRadialGradient(
       x,
       y,
-      radius * 0.2,
+      radius * 0.1,
       x,
       y,
-      radius * 1.8,
+      radius * 1.55,
     );
-    glow.addColorStop(0, palette.glow);
-    glow.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = glow;
+    halo.addColorStop(0, palette.glow);
+    halo.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = halo;
     ctx.beginPath();
-    ctx.arc(x, y, radius * 1.8, 0, Math.PI * 2);
+    ctx.arc(x, y, radius * 1.55, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = "rgba(2, 6, 23, 0.36)";
+    ctx.fillStyle = "rgba(15, 23, 42, 0.26)";
     ctx.beginPath();
     ctx.ellipse(
       x,
-      y + radius * 1.1,
-      radius * 1.18,
-      radius * 0.7,
+      y + radius * 1.05,
+      radius * 0.98,
+      radius * 0.46,
       0,
       0,
       Math.PI * 2,
     );
     ctx.fill();
 
-    ctx.fillStyle = palette.shell;
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.fill();
+    if (enemy.kind === "melee") {
+      ctx.fillStyle = palette.shell;
+      ctx.beginPath();
+      ctx.moveTo(x, y - radius);
+      ctx.lineTo(x + radius * 0.92, y - radius * 0.18);
+      ctx.lineTo(x + radius * 0.58, y + radius * 0.92);
+      ctx.lineTo(x - radius * 0.58, y + radius * 0.92);
+      ctx.lineTo(x - radius * 0.92, y - radius * 0.18);
+      ctx.closePath();
+      ctx.fill();
 
-    ctx.fillStyle = palette.core;
-    ctx.beginPath();
-    ctx.arc(x, y, radius * 0.82, 0, Math.PI * 2);
-    ctx.fill();
+      ctx.fillStyle = palette.core;
+      ctx.beginPath();
+      ctx.moveTo(x, y - radius * 0.76);
+      ctx.lineTo(x + radius * 0.66, y - radius * 0.1);
+      ctx.lineTo(x + radius * 0.42, y + radius * 0.68);
+      ctx.lineTo(x - radius * 0.42, y + radius * 0.68);
+      ctx.lineTo(x - radius * 0.66, y - radius * 0.1);
+      ctx.closePath();
+      ctx.fill();
+    } else if (enemy.kind === "turret") {
+      ctx.fillStyle = palette.shell;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = palette.core;
+      ctx.beginPath();
+      ctx.arc(x, y, radius * 0.72, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = palette.eye;
+      ctx.lineWidth = Math.max(1, radius * 0.12);
+      ctx.beginPath();
+      ctx.moveTo(x - radius * 0.52, y);
+      ctx.lineTo(x + radius * 0.52, y);
+      ctx.moveTo(x, y - radius * 0.52);
+      ctx.lineTo(x, y + radius * 0.52);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = palette.shell;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = palette.core;
+      ctx.beginPath();
+      ctx.arc(x, y, radius * 0.82, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     ctx.fillStyle = palette.eye;
     ctx.beginPath();
-    ctx.arc(
-      x - radius * 0.24,
-      y - radius * 0.12,
-      radius * 0.12,
-      0,
-      Math.PI * 2,
-    );
-    ctx.arc(
-      x + radius * 0.24,
-      y - radius * 0.12,
-      radius * 0.12,
-      0,
-      Math.PI * 2,
-    );
+    ctx.arc(x - radius * 0.22, y - radius * 0.12, radius * 0.1, 0, Math.PI * 2);
+    ctx.arc(x + radius * 0.22, y - radius * 0.12, radius * 0.1, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.strokeStyle = palette.eye;
-    ctx.lineWidth = Math.max(1, radius * 0.1);
+    ctx.lineWidth = Math.max(1, radius * 0.08);
     ctx.beginPath();
-
-    if (enemy.kind === "turret") {
-      ctx.arc(
-        x,
-        y + radius * 0.06,
-        radius * 0.32,
-        Math.PI,
-        Math.PI * 2,
-      );
-    } else if (enemy.kind === "melee") {
-      ctx.moveTo(x - radius * 0.34, y + radius * 0.18);
-      ctx.lineTo(x, y + radius * 0.34);
-      ctx.lineTo(x + radius * 0.34, y + radius * 0.18);
-    } else {
-      ctx.arc(
-        x,
-        y + radius * 0.12,
-        radius * 0.32,
-        0.18,
-        Math.PI - 0.18,
-      );
-    }
-
+    ctx.arc(x, y + radius * 0.12, radius * 0.24, 0.2, Math.PI - 0.2);
     ctx.stroke();
-
-    if (enemy.kind === "turret") {
-      ctx.strokeStyle = palette.shell;
-      ctx.lineWidth = Math.max(1, radius * 0.16);
-      ctx.beginPath();
-      ctx.moveTo(x - radius * 0.68, y - radius * 0.68);
-      ctx.lineTo(x + radius * 0.68, y + radius * 0.68);
-      ctx.moveTo(x + radius * 0.68, y - radius * 0.68);
-      ctx.lineTo(x - radius * 0.68, y + radius * 0.68);
-      ctx.stroke();
-    }
   }
 
   ctx.restore();
@@ -1577,6 +1613,7 @@ function drawCityWallFacade3D(ctx, world) {
 
 
 
+
 function drawUrbanFog(ctx, world) {
   if (world.level?.themeKey !== "city") {
     return;
@@ -1584,42 +1621,27 @@ function drawUrbanFog(ctx, world) {
 
   ctx.save();
 
-  for (let index = 0; index < 14; index += 1) {
-    const x =
-      (
-        index * 113 +
-        world.time * (5.5 + index * 0.45)
-      ) %
-        (CANVAS_WIDTH + 520) -
-      260;
-    const y =
-      36 +
-      ((index * 79) % Math.max(140, CANVAS_HEIGHT - 80));
-    const width = 180 + (index % 5) * 48;
-    const height = 32 + (index % 4) * 12;
+  for (let index = 0; index < 18; index += 1) {
+    const drift = world.time * (4 + index * 0.22);
+    const x = ((index * 97 + drift) % (CANVAS_WIDTH + 420)) - 210;
+    const y = 28 + ((index * 61) % Math.max(120, CANVAS_HEIGHT - 56));
+    const width = 140 + (index % 5) * 52;
+    const height = 18 + (index % 4) * 10;
 
     ctx.fillStyle =
       index % 2 === 0
-        ? "rgba(190, 196, 203, 0.08)"
-        : "rgba(160, 166, 173, 0.06)";
+        ? "rgba(200, 205, 210, 0.05)"
+        : "rgba(160, 166, 172, 0.045)";
     ctx.beginPath();
-    ctx.ellipse(
-      x,
-      y,
-      width,
-      height,
-      0,
-      0,
-      Math.PI * 2,
-    );
+    ctx.ellipse(x, y, width, height, 0, 0, Math.PI * 2);
     ctx.fill();
   }
 
-  const veil = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-  veil.addColorStop(0, "rgba(148, 163, 184, 0.03)");
-  veil.addColorStop(0.4, "rgba(203, 213, 225, 0.05)");
-  veil.addColorStop(1, "rgba(100, 116, 139, 0.04)");
-  ctx.fillStyle = veil;
+  const wash = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+  wash.addColorStop(0, "rgba(226, 232, 240, 0.03)");
+  wash.addColorStop(0.4, "rgba(148, 163, 184, 0.04)");
+  wash.addColorStop(1, "rgba(100, 116, 139, 0.03)");
+  ctx.fillStyle = wash;
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
   ctx.restore();

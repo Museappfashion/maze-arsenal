@@ -719,37 +719,73 @@ function drawSidewalkEdges(ctx, edges, sx, sy, size) {}
 
 
 
+
+function getOpenStreetDirections(world, x, y) {
+  return {
+    left: isFloorTile(world, x - 1, y),
+    right: isFloorTile(world, x + 1, y),
+    up: isFloorTile(world, x, y - 1),
+    down: isFloorTile(world, x, y + 1),
+  };
+}
+
+function getCityEnemyRole(enemy) {
+  const explicitKind = String(enemy?.kind ?? "").toLowerCase();
+  const explicitAttack = String(enemy?.attackStyle ?? "").toLowerCase();
+
+  if (explicitKind.includes("turret")) {
+    return "turret";
+  }
+
+  if (
+    explicitKind.includes("melee") ||
+    explicitAttack === "contact" ||
+    Number(enemy?.contactDamage ?? 0) > 0
+  ) {
+    return "chaser";
+  }
+
+  return "turret";
+}
+
+
 function drawRoadMarks2D(ctx, world, x, y, sx, sy, size) {
-  const left = scanStreetDistance(world, x, y, -1, 0);
-  const right = scanStreetDistance(world, x, y, 1, 0);
-  const up = scanStreetDistance(world, x, y, 0, -1);
-  const down = scanStreetDistance(world, x, y, 0, 1);
-  const corridorWidth = left + right + 1;
-  const corridorHeight = up + down + 1;
-  const lineThickness = Math.max(2, size * 0.052);
-  const overlap = Math.max(1, size * 0.04);
+  const open = getOpenStreetDirections(world, x, y);
+  const half = size * 0.5;
+  const overlap = Math.max(1.2, size * 0.06);
+
+  const centerX = sx + half;
+  const centerY = sy + half;
+  const lineThickness = Math.max(2, size * 0.05);
 
   ctx.save();
-  ctx.fillStyle = "#e0be24";
+  ctx.strokeStyle = "#e1bc22";
+  ctx.lineWidth = lineThickness;
+  ctx.lineCap = "square";
 
-  if (corridorHeight >= 4 && up === 1) {
-    ctx.fillRect(
-      sx - overlap,
-      sy + size - lineThickness * 0.5,
-      size + overlap * 2,
-      lineThickness,
-    );
+  ctx.beginPath();
+
+  if (open.left) {
+    ctx.moveTo(centerX, centerY);
+    ctx.lineTo(sx - overlap, centerY);
   }
 
-  if (corridorWidth >= 4 && left === 1) {
-    ctx.fillRect(
-      sx + size - lineThickness * 0.5,
-      sy - overlap,
-      lineThickness,
-      size + overlap * 2,
-    );
+  if (open.right) {
+    ctx.moveTo(centerX, centerY);
+    ctx.lineTo(sx + size + overlap, centerY);
   }
 
+  if (open.up) {
+    ctx.moveTo(centerX, centerY);
+    ctx.lineTo(centerX, sy - overlap);
+  }
+
+  if (open.down) {
+    ctx.moveTo(centerX, centerY);
+    ctx.lineTo(centerX, sy + size + overlap);
+  }
+
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -1360,34 +1396,29 @@ function drawCityPickups2D(ctx, world) {
 
 
 
-function enemyPalette(kind) {
-  switch (kind) {
+
+function enemyPalette(role) {
+  switch (role) {
     case "turret":
       return {
-        outer: "#4b5563",
-        main: "#fb7185",
-        eye: "#fee2e2",
-        accent: "#1f2937",
-        glow: "rgba(251, 113, 133, 0.22)",
+        body: "#c026d3",
+        shell: "#701a75",
+        detail: "#fdf4ff",
+        shadow: "rgba(15, 23, 42, 0.28)",
+        glow: "rgba(217, 70, 239, 0.22)",
       };
-    case "melee":
-      return {
-        outer: "#7c2d12",
-        main: "#f97316",
-        eye: "#fff7ed",
-        accent: "#431407",
-        glow: "rgba(249, 115, 22, 0.22)",
-      };
+    case "chaser":
     default:
       return {
-        outer: "#78350f",
-        main: "#f59e0b",
-        eye: "#fffbeb",
-        accent: "#451a03",
-        glow: "rgba(245, 158, 11, 0.22)",
+        body: "#f97316",
+        shell: "#7c2d12",
+        detail: "#fff7ed",
+        shadow: "rgba(15, 23, 42, 0.28)",
+        glow: "rgba(249, 115, 22, 0.22)",
       };
   }
 }
+
 
 
 
@@ -1407,112 +1438,99 @@ function drawCityEnemies2D(ctx, world) {
     const x = position.x;
     const y = position.y;
     const radius = Math.max(
-      position.scale * 0.17,
-      (enemy.radius ?? 0.22) * position.scale * 1.02,
+      position.scale * 0.18,
+      (enemy.radius ?? 0.22) * position.scale * 1.2,
     );
-    const palette = enemyPalette(enemy.kind);
+    const role = getCityEnemyRole(enemy);
+    const palette = enemyPalette(role);
 
     const glow = ctx.createRadialGradient(
       x,
       y,
-      radius * 0.15,
+      radius * 0.2,
       x,
       y,
-      radius * 1.5,
+      radius * 1.45,
     );
     glow.addColorStop(0, palette.glow);
     glow.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = glow;
     ctx.beginPath();
-    ctx.arc(x, y, radius * 1.5, 0, Math.PI * 2);
+    ctx.arc(x, y, radius * 1.45, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = "rgba(15, 23, 42, 0.26)";
+    ctx.fillStyle = palette.shadow;
     ctx.beginPath();
     ctx.ellipse(
       x,
       y + radius * 1.02,
-      radius * 0.94,
-      radius * 0.4,
+      radius * 0.98,
+      radius * 0.44,
       0,
       0,
       Math.PI * 2,
     );
     ctx.fill();
 
-    if (enemy.kind === "turret") {
-      ctx.fillStyle = palette.outer;
+    if (role === "turret") {
+      ctx.fillStyle = palette.shell;
       ctx.beginPath();
       ctx.roundRect(
-        x - radius * 0.9,
-        y - radius * 0.9,
-        radius * 1.8,
-        radius * 1.8,
-        radius * 0.35,
+        x - radius * 0.96,
+        y - radius * 0.96,
+        radius * 1.92,
+        radius * 1.92,
+        radius * 0.34,
       );
       ctx.fill();
 
-      ctx.fillStyle = palette.main;
+      ctx.fillStyle = palette.body;
       ctx.beginPath();
       ctx.roundRect(
-        x - radius * 0.58,
-        y - radius * 0.58,
-        radius * 1.16,
-        radius * 1.16,
-        radius * 0.28,
+        x - radius * 0.62,
+        y - radius * 0.62,
+        radius * 1.24,
+        radius * 1.24,
+        radius * 0.24,
       );
       ctx.fill();
 
-      ctx.strokeStyle = palette.eye;
-      ctx.lineWidth = Math.max(1, radius * 0.12);
+      ctx.strokeStyle = palette.detail;
+      ctx.lineWidth = Math.max(1.5, radius * 0.12);
       ctx.beginPath();
-      ctx.moveTo(x - radius * 0.36, y);
-      ctx.lineTo(x + radius * 0.36, y);
-      ctx.moveTo(x, y - radius * 0.36);
-      ctx.lineTo(x, y + radius * 0.36);
+      ctx.moveTo(x - radius * 0.34, y);
+      ctx.lineTo(x + radius * 0.34, y);
+      ctx.moveTo(x, y - radius * 0.34);
+      ctx.lineTo(x, y + radius * 0.34);
       ctx.stroke();
-    } else if (enemy.kind === "melee") {
-      ctx.fillStyle = palette.outer;
-      ctx.beginPath();
-      ctx.moveTo(x, y - radius);
-      ctx.lineTo(x + radius * 0.86, y - radius * 0.16);
-      ctx.lineTo(x + radius * 0.42, y + radius * 0.9);
-      ctx.lineTo(x - radius * 0.42, y + radius * 0.9);
-      ctx.lineTo(x - radius * 0.86, y - radius * 0.16);
-      ctx.closePath();
-      ctx.fill();
 
-      ctx.fillStyle = palette.main;
+      ctx.fillStyle = palette.detail;
       ctx.beginPath();
-      ctx.moveTo(x, y - radius * 0.72);
-      ctx.lineTo(x + radius * 0.58, y - radius * 0.08);
-      ctx.lineTo(x + radius * 0.28, y + radius * 0.62);
-      ctx.lineTo(x - radius * 0.28, y + radius * 0.62);
-      ctx.lineTo(x - radius * 0.58, y - radius * 0.08);
-      ctx.closePath();
+      ctx.arc(x, y, radius * 0.12, 0, Math.PI * 2);
       ctx.fill();
-    } else {
-      ctx.fillStyle = palette.outer;
-      ctx.beginPath();
-      ctx.arc(x, y, radius, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = palette.main;
-      ctx.beginPath();
-      ctx.arc(x, y, radius * 0.8, 0, Math.PI * 2);
-      ctx.fill();
+      continue;
     }
 
-    ctx.fillStyle = palette.eye;
+    ctx.fillStyle = palette.shell;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = palette.body;
+    ctx.beginPath();
+    ctx.arc(x, y, radius * 0.82, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = palette.detail;
     ctx.beginPath();
     ctx.arc(x - radius * 0.22, y - radius * 0.12, radius * 0.1, 0, Math.PI * 2);
     ctx.arc(x + radius * 0.22, y - radius * 0.12, radius * 0.1, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.strokeStyle = palette.accent;
-    ctx.lineWidth = Math.max(1, radius * 0.1);
+    ctx.strokeStyle = palette.detail;
+    ctx.lineWidth = Math.max(1.2, radius * 0.08);
     ctx.beginPath();
-    ctx.arc(x, y + radius * 0.1, radius * 0.25, 0.2, Math.PI - 0.2);
+    ctx.arc(x, y + radius * 0.08, radius * 0.24, 0.18, Math.PI - 0.18);
     ctx.stroke();
   }
 
@@ -1696,6 +1714,7 @@ function drawCityWallFacade3D(ctx, world) {
 
 
 
+
 function drawUrbanFog(ctx, world) {
   if (world.level?.themeKey !== "city") {
     return;
@@ -1703,27 +1722,62 @@ function drawUrbanFog(ctx, world) {
 
   ctx.save();
 
-  for (let index = 0; index < 24; index += 1) {
-    const drift = world.time * (5 + index * 0.16);
-    const x = ((index * 91 + drift) % (CANVAS_WIDTH + 520)) - 260;
-    const y = 22 + ((index * 59) % Math.max(140, CANVAS_HEIGHT - 44));
-    const width = 120 + (index % 6) * 46;
-    const height = 18 + (index % 5) * 9;
+  for (let layer = 0; layer < 3; layer += 1) {
+    const baseAlpha = [0.06, 0.085, 0.11][layer];
+    const cloudCount = [8, 10, 12][layer];
+    const speed = [4.5, 7.5, 10.5][layer];
 
-    ctx.fillStyle =
-      index % 2 === 0
-        ? "rgba(214, 219, 223, 0.08)"
-        : "rgba(167, 173, 179, 0.07)";
-    ctx.beginPath();
-    ctx.ellipse(x, y, width, height, 0, 0, Math.PI * 2);
-    ctx.fill();
+    for (let index = 0; index < cloudCount; index += 1) {
+      const drift = world.time * speed + index * 83;
+      const x = ((drift + layer * 140) % (CANVAS_WIDTH + 420)) - 210;
+      const y =
+        42 +
+        ((index * 67 + layer * 31) % Math.max(140, CANVAS_HEIGHT - 84));
+      const width = 180 + (index % 4) * 50 + layer * 22;
+      const height = 28 + (index % 3) * 10 + layer * 8;
+
+      ctx.fillStyle =
+        layer === 0
+          ? `rgba(222, 226, 230, ${baseAlpha})`
+          : layer === 1
+            ? `rgba(188, 194, 201, ${baseAlpha})`
+            : `rgba(145, 151, 158, ${baseAlpha})`;
+
+      ctx.beginPath();
+      ctx.ellipse(x, y, width, height, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.ellipse(
+        x + width * 0.28,
+        y + height * 0.16,
+        width * 0.66,
+        height * 0.88,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.ellipse(
+        x - width * 0.24,
+        y - height * 0.08,
+        width * 0.58,
+        height * 0.78,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+    }
   }
 
-  const wash = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-  wash.addColorStop(0, "rgba(226, 232, 240, 0.045)");
-  wash.addColorStop(0.45, "rgba(148, 163, 184, 0.06)");
-  wash.addColorStop(1, "rgba(100, 116, 139, 0.05)");
-  ctx.fillStyle = wash;
+  const veil = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
+  veil.addColorStop(0, "rgba(226, 232, 240, 0.05)");
+  veil.addColorStop(0.5, "rgba(148, 163, 184, 0.08)");
+  veil.addColorStop(1, "rgba(100, 116, 139, 0.06)");
+  ctx.fillStyle = veil;
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
   ctx.restore();

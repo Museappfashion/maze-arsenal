@@ -6,6 +6,7 @@ import { defineConfig } from "vite";
 function sourcePath(relativePath) {
   return fileURLToPath(new URL(relativePath, import.meta.url));
 }
+
 export default defineConfig({
   plugins: [react()],
   resolve: {

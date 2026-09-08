@@ -641,6 +641,49 @@ function tickCinematic(world, dt) {
   updateRunPhase(world);
 }
 
+export function activateStoredPowerUp(world, slotIndex) {
+  const key = world.player.powerUpSlots[slotIndex];
+
+  if (key !== "juggernaut") {
+    return enhanced.activateStoredPowerUp(
+      world,
+      slotIndex,
+    );
+  }
+
+  const legendary = Boolean(
+    world.player.legendaryPowerUpSlots?.[slotIndex],
+  );
+  const activated =
+    enhanced.activateStoredPowerUp(
+      world,
+      slotIndex,
+    );
+
+  if (!activated) {
+    return false;
+  }
+
+  if (legendary) {
+    world.player.maxHp = 220;
+    world.player.hp = Math.min(
+      world.player.hp,
+      world.player.maxHp,
+    );
+    return true;
+  }
+
+  world.player.maxHp = Math.round(
+    world.player.baseMaxHp * 2,
+  );
+  world.player.hp = Math.min(
+    world.player.hp,
+    world.player.maxHp,
+  );
+
+  return true;
+}
+
 export function attack(world) {
   enableJojoMode(world);
 

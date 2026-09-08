@@ -3,7 +3,12 @@ import {
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
   DRAW_TILE,
+  VIEW_3D_FOV,
 } from "../config/constants-enhanced.js";
+import {
+  ENEMY_PURSUIT_MAX_SPEED_MULTIPLIER,
+  ENEMY_PURSUIT_RAMP_SECONDS,
+} from "../config/enemies.js";
 import {
   getCamera,
   getWorldRenderZoom,
@@ -12,6 +17,7 @@ import {
 import { getDiscoveredPercent } from "./maze.js";
 import {
   drawWorld as drawCityConformWorld,
+  project3DSprite,
 } from "./rendering-city-conform.js";
 
 export * from "./rendering-city-conform.js";
@@ -493,6 +499,360 @@ function drawResultOverlay(ctx, world) {
   ctx.restore();
 }
 
+
+function clamp01(value) {
+  return Math.max(0, Math.min(1, value));
+}
+
+function getEnemyPursuitVisualState(world, enemy) {
+  if (
+    !enemy.awake ||
+    !Number.isFinite(enemy.pursuitStartedAt)
+  ) {
+    return null;
+  }
+
+  const elapsed = Math.max(
+    0,
+    (world.time ?? 0) - enemy.pursuitStartedAt,
+  );
+  const progress = clamp01(
+    elapsed / ENEMY_PURSUIT_RAMP_SECONDS,
+  );
+  const multiplier =
+    1 +
+    (
+      ENEMY_PURSUIT_MAX_SPEED_MULTIPLIER - 1
+    ) *
+      progress;
+
+  return {
+    elapsed,
+    progress,
+    multiplier,
+  };
+}
+
+function getPursuitColor(progress) {
+  const red = Math.round(245 + 10 * progress);
+  const green = Math.round(158 - 105 * progress);
+  const blue = Math.round(11 - 2 * progress);
+
+  return `rgb(${red}, ${green}, ${blue})`;
+}
+
+function drawPursuitVisuals2D(ctx, world) {
+  const camera = getCamera(world);
+  const scale =
+    DRAW_TILE * getWorldRenderZoom(world);
+
+  for (const enemy of world.enemies ?? []) {
+    const state =
+      getEnemyPursuitVisualState(world, enemy);
+
+    if (!state || enemy.hp <= 0) {
+      continue;
+    }
+
+    const tileX = Math.floor(enemy.x);
+    const tileY = Math.floor(enemy.y);
+
+    if (
+      visibleStrengthAt(
+        world,
+        tileX,
+        tileY,
+      ) <= 0.12
+    ) {
+      continue;
+    }
+
+    const x =
+      (enemy.x - camera.x) * scale;
+    const y =
+      (enemy.y - camera.y) * scale;
+    const radius =
+      Math.max(
+        8,
+        enemy.radius * scale,
+      );
+    const color =
+      getPursuitColor(state.progress);
+    const late =
+      clamp01(
+        (state.progress - 0.45) / 0.55,
+      );
+    const pulse =
+      0.5 +
+      0.5 *
+        Math.sin(
+          (world.time ?? 0) *
+            (5 + state.progress * 5) +
+            enemy.x * 1.7,
+        );
+
+    ctx.save();
+
+    if (state.progress > 0.22) {
+      const playerDx =
+        world.player.x - enemy.x;
+      const playerDy =
+        world.player.y - enemy.y;
+      const length =
+        Math.max(
+          0.001,
+          Math.hypot(playerDx, playerDy),
+        );
+      const trailLength =
+        radius *
+        (
+          0.35 +
+          state.progress * 1.35
+        );
+
+      ctx.globalAlpha =
+        0.08 +
+        late * 0.22;
+      ctx.strokeStyle = color;
+      ctx.lineWidth =
+        Math.max(
+          2,
+          radius *
+            (
+              0.1 +
+              state.progress * 0.06
+            ),
+        );
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(
+        x -
+          (playerDx / length) *
+            radius *
+            0.25,
+        y -
+          (playerDy / length) *
+            radius *
+            0.25,
+      );
+      ctx.lineTo(
+        x -
+          (playerDx / length) *
+            trailLength,
+        y -
+          (playerDy / length) *
+            trailLength,
+      );
+      ctx.stroke();
+    }
+
+    ctx.globalCompositeOperation =
+      "lighter";
+    ctx.shadowColor = color;
+    ctx.shadowBlur =
+      5 + state.progress * 18;
+
+    ctx.globalAlpha =
+      0.1 +
+      state.progress * 0.28 +
+      pulse * late * 0.1;
+    ctx.strokeStyle = color;
+    ctx.lineWidth =
+      1.2 + state.progress * 2.4;
+    ctx.beginPath();
+    ctx.arc(
+      x,
+      y,
+      radius *
+        (
+          1.08 +
+          pulse * 0.08 * late
+        ),
+      0,
+      Math.PI * 2,
+    );
+    ctx.stroke();
+
+    const eyeOffset =
+      radius * 0.26;
+    const eyeY =
+      y - radius * 0.12;
+    const eyeRadius =
+      Math.max(
+        1.5,
+        radius *
+          (
+            0.07 +
+            state.progress * 0.035
+          ),
+      );
+
+    ctx.globalAlpha =
+      0.35 +
+      state.progress * 0.65;
+    ctx.fillStyle = color;
+
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.arc(
+        x + side * eyeOffset,
+        eyeY,
+        eyeRadius,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+}
+
+function drawPursuitVisuals3D(ctx, world) {
+  const projectionPlane =
+    CANVAS_WIDTH /
+    2 /
+    Math.tan(VIEW_3D_FOV / 2);
+
+  for (const enemy of world.enemies ?? []) {
+    const state =
+      getEnemyPursuitVisualState(world, enemy);
+
+    if (!state || enemy.hp <= 0) {
+      continue;
+    }
+
+    const projection =
+      project3DSprite(
+        world,
+        enemy.x,
+        enemy.y,
+        projectionPlane,
+      );
+
+    if (!projection) {
+      continue;
+    }
+
+    const distance =
+      Math.hypot(
+        enemy.x - world.player.x,
+        enemy.y - world.player.y,
+      );
+
+    if (distance > 10) {
+      continue;
+    }
+
+    const bodyHeight =
+      Math.max(
+        26,
+        Math.min(
+          CANVAS_HEIGHT * 0.95,
+          projection.scale *
+            (
+              enemy.radius * 2.35 +
+              0.42
+            ),
+        ),
+      );
+    const centerY =
+      CANVAS_HEIGHT * 0.46 -
+      bodyHeight * 0.05;
+    const color =
+      getPursuitColor(state.progress);
+    const late =
+      clamp01(
+        (state.progress - 0.45) / 0.55,
+      );
+    const pulse =
+      0.5 +
+      0.5 *
+        Math.sin(
+          (world.time ?? 0) *
+            (5 + state.progress * 5),
+        );
+    const radius =
+      Math.max(
+        10,
+        bodyHeight * 0.28,
+      );
+
+    ctx.save();
+    ctx.globalCompositeOperation =
+      "lighter";
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    ctx.shadowBlur =
+      7 + state.progress * 22;
+
+    ctx.globalAlpha =
+      0.06 +
+      state.progress * 0.2 +
+      pulse * late * 0.08;
+    ctx.lineWidth =
+      1.2 + state.progress * 2.6;
+    ctx.beginPath();
+    ctx.ellipse(
+      projection.screenX,
+      centerY,
+      radius *
+        (
+          1.05 +
+          pulse * late * 0.09
+        ),
+      radius * 1.22,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.stroke();
+
+    const eyeY =
+      centerY - bodyHeight * 0.07;
+    const eyeOffset =
+      radius * 0.28;
+    const eyeRadius =
+      Math.max(
+        1.5,
+        bodyHeight *
+          (
+            0.018 +
+            state.progress * 0.009
+          ),
+      );
+
+    ctx.globalAlpha =
+      0.28 +
+      state.progress * 0.7;
+
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.arc(
+        projection.screenX +
+          side * eyeOffset,
+        eyeY,
+        eyeRadius,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+}
+
+function drawEnemyPursuitVisuals(ctx, world) {
+  if (world.viewMode === "3d") {
+    drawPursuitVisuals3D(ctx, world);
+    return;
+  }
+
+  drawPursuitVisuals2D(ctx, world);
+}
+
 export function drawWorld(ctx, world) {
   const cinematic =
     world.__cinematic ?? {};
@@ -526,6 +886,7 @@ export function drawWorld(ctx, world) {
   );
 
   drawCityConformWorld(ctx, world);
+  drawEnemyPursuitVisuals(ctx, world);
   drawAnimatedPickupEffects(ctx, world);
   drawCinematicParticles(ctx, world);
   drawEnemyHitReactions(ctx, world);

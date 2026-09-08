@@ -21,6 +21,9 @@ import {
   SWORD_GUN_KEY,
 } from "../config/weapons-enhanced.js";
 import {
+  getPowerUpPresentation,
+} from "../config/presentations-enhanced.js";
+import {
   getCamera,
   getWorldRenderZoom,
 } from "./gameplay.js";
@@ -1169,19 +1172,247 @@ function drawCityBuildingBlocks2D(ctx, world) {
   ctx.restore();
 }
 
+
 function pickupColor(type) {
   switch (type) {
     case "health":
-      return "#22c55e";
+      return "#ef4444";
     case "ammo":
       return "#f59e0b";
     case "weapon":
       return "#94a3b8";
-    case "power":
+    case "powerup":
       return "#8b5cf6";
     default:
       return "#e2e8f0";
   }
+}
+
+
+function drawMedkitPickup(ctx, x, y, size) {
+  ctx.fillStyle = "rgba(2, 6, 23, 0.28)";
+  ctx.beginPath();
+  ctx.ellipse(
+    x,
+    y + size * 1.05,
+    size * 1.15,
+    size * 0.62,
+    0,
+    0,
+    Math.PI * 2,
+  );
+  ctx.fill();
+
+  ctx.fillStyle = "#f8fafc";
+  ctx.strokeStyle = "#cbd5e1";
+  ctx.lineWidth = Math.max(1, size * 0.08);
+  ctx.beginPath();
+  ctx.roundRect(
+    x - size * 0.7,
+    y - size * 0.46,
+    size * 1.4,
+    size * 0.98,
+    size * 0.2,
+  );
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "#ef4444";
+  ctx.fillRect(
+    x - size * 0.14,
+    y - size * 0.3,
+    size * 0.28,
+    size * 0.66,
+  );
+  ctx.fillRect(
+    x - size * 0.33,
+    y - size * 0.11,
+    size * 0.66,
+    size * 0.28,
+  );
+
+  ctx.strokeStyle = "#94a3b8";
+  ctx.lineWidth = Math.max(1, size * 0.06);
+  ctx.beginPath();
+  ctx.moveTo(x - size * 0.25, y - size * 0.54);
+  ctx.lineTo(x + size * 0.25, y - size * 0.54);
+  ctx.stroke();
+}
+
+function drawAmmoPickup(ctx, x, y, size) {
+  ctx.fillStyle = "rgba(2, 6, 23, 0.28)";
+  ctx.beginPath();
+  ctx.ellipse(
+    x,
+    y + size * 1.02,
+    size * 1.2,
+    size * 0.6,
+    0,
+    0,
+    Math.PI * 2,
+  );
+  ctx.fill();
+
+  ctx.fillStyle = "#c47a2c";
+  ctx.strokeStyle = "#7c2d12";
+  ctx.lineWidth = Math.max(1, size * 0.08);
+
+  for (const offset of [-size * 0.24, size * 0.24]) {
+    ctx.beginPath();
+    ctx.roundRect(
+      x + offset - size * 0.13,
+      y - size * 0.44,
+      size * 0.26,
+      size * 0.94,
+      size * 0.12,
+    );
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = "#f8d28a";
+    ctx.beginPath();
+    ctx.arc(
+      x + offset,
+      y - size * 0.34,
+      size * 0.13,
+      Math.PI,
+      Math.PI * 2,
+    );
+    ctx.fill();
+
+    ctx.fillStyle = "#c47a2c";
+  }
+}
+
+function drawPowerUpPickup(ctx, world, pickup, x, y, size) {
+  const color = pickup.legendary
+    ? LEGENDARY_GOLD
+    : pickupColor("powerup");
+  const presentation = getPowerUpPresentation(
+    world,
+    pickup.powerUp ?? "",
+  );
+
+  ctx.fillStyle = "rgba(2, 6, 23, 0.32)";
+  ctx.beginPath();
+  ctx.ellipse(
+    x,
+    y + size * 1.15,
+    size * 1.25,
+    size * 0.68,
+    0,
+    0,
+    Math.PI * 2,
+  );
+  ctx.fill();
+
+  const glow = ctx.createRadialGradient(
+    x,
+    y,
+    size * 0.16,
+    x,
+    y,
+    size * 1.3,
+  );
+  glow.addColorStop(0, "rgba(255,255,255,0.76)");
+  glow.addColorStop(
+    0.4,
+    pickup.legendary
+      ? "rgba(250, 204, 21, 0.58)"
+      : "rgba(139, 92, 246, 0.42)",
+  );
+  glow.addColorStop(1, "rgba(0,0,0,0)");
+
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(x, y, size * 1.3, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = color;
+  ctx.strokeStyle = "#f8fafc";
+  ctx.lineWidth = Math.max(1, size * 0.08);
+  ctx.beginPath();
+  ctx.moveTo(x, y - size * 0.72);
+  ctx.lineTo(x + size * 0.72, y);
+  ctx.lineTo(x, y + size * 0.72);
+  ctx.lineTo(x - size * 0.72, y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.strokeStyle = "#f8fafc";
+  ctx.lineWidth = Math.max(1, size * 0.06);
+  ctx.beginPath();
+  ctx.moveTo(x, y - size * 0.38);
+  ctx.lineTo(x, y + size * 0.38);
+  ctx.moveTo(x - size * 0.38, y);
+  ctx.lineTo(x + size * 0.38, y);
+  ctx.stroke();
+
+  const label =
+    presentation?.short ||
+    presentation?.label ||
+    String(pickup.powerUp ?? "Power");
+
+  ctx.font = `700 ${Math.max(9, size * 0.55)}px system-ui`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "bottom";
+  ctx.lineWidth = Math.max(2, size * 0.14);
+  ctx.strokeStyle = "rgba(2, 6, 23, 0.9)";
+  ctx.fillStyle = pickup.legendary
+    ? "#fde68a"
+    : "#ede9fe";
+  ctx.strokeText(label, x, y - size * 1.06);
+  ctx.fillText(label, x, y - size * 1.06);
+}
+
+function drawWeaponPickup(ctx, x, y, size) {
+  ctx.fillStyle = "rgba(2, 6, 23, 0.32)";
+  ctx.beginPath();
+  ctx.ellipse(
+    x,
+    y + size * 1.06,
+    size * 1.15,
+    size * 0.6,
+    0,
+    0,
+    Math.PI * 2,
+  );
+  ctx.fill();
+
+  ctx.fillStyle = "#cbd5e1";
+  ctx.strokeStyle = "#334155";
+  ctx.lineWidth = Math.max(1, size * 0.08);
+  ctx.beginPath();
+  ctx.roundRect(
+    x - size * 0.72,
+    y - size * 0.18,
+    size * 1.02,
+    size * 0.24,
+    size * 0.08,
+  );
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.roundRect(
+    x - size * 0.06,
+    y - size * 0.18,
+    size * 0.24,
+    size * 0.62,
+    size * 0.08,
+  );
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.font = `700 ${Math.max(8, size * 0.45)}px system-ui`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "bottom";
+  ctx.lineWidth = Math.max(2, size * 0.14);
+  ctx.strokeStyle = "rgba(2, 6, 23, 0.88)";
+  ctx.fillStyle = "#e2e8f0";
+  ctx.strokeText("GUN", x, y - size * 0.98);
+  ctx.fillText("GUN", x, y - size * 0.98);
 }
 
 function drawCityPickups2D(ctx, world) {
@@ -1198,87 +1429,66 @@ function drawCityPickups2D(ctx, world) {
     const position = worldToScreen(world, pickup.x, pickup.y);
     const x = position.x;
     const y = position.y;
-    const size = position.scale * 0.18;
-    const color = pickup.legendary
-      ? LEGENDARY_GOLD
-      : pickupColor(pickup.type);
-
-    ctx.fillStyle = "rgba(15, 23, 42, 0.28)";
-    ctx.beginPath();
-    ctx.ellipse(
-      x,
-      y + size * 1.2,
-      size * 1.35,
-      size * 0.75,
-      0,
-      0,
-      Math.PI * 2,
-    );
-    ctx.fill();
-
-    ctx.fillStyle = color;
+    const size = position.scale * 0.22;
 
     if (pickup.type === "health") {
-      ctx.fillRect(
-        x - size * 0.38,
-        y - size * 0.12,
-        size * 0.76,
-        size * 0.24,
-      );
-      ctx.fillRect(
-        x - size * 0.12,
-        y - size * 0.38,
-        size * 0.24,
-        size * 0.76,
-      );
-    } else if (pickup.type === "ammo") {
-      ctx.beginPath();
-      ctx.arc(x, y, size * 0.48, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      ctx.beginPath();
-      ctx.moveTo(x, y - size * 0.62);
-      ctx.lineTo(x + size * 0.62, y);
-      ctx.lineTo(x, y + size * 0.62);
-      ctx.lineTo(x - size * 0.62, y);
-      ctx.closePath();
-      ctx.fill();
+      drawMedkitPickup(ctx, x, y, size);
+      continue;
     }
 
-    if (pickup.legendary) {
-      ctx.strokeStyle = LEGENDARY_WHITE;
-      ctx.lineWidth = Math.max(1, size * 0.12);
-      ctx.beginPath();
-      ctx.arc(x, y, size * 0.92, 0, Math.PI * 2);
-      ctx.stroke();
+    if (pickup.type === "ammo") {
+      drawAmmoPickup(ctx, x, y, size);
+      continue;
     }
+
+    if (pickup.type === "weapon") {
+      drawWeaponPickup(ctx, x, y, size);
+      continue;
+    }
+
+    if (pickup.type === "powerup") {
+      drawPowerUpPickup(ctx, world, pickup, x, y, size);
+      continue;
+    }
+
+    ctx.fillStyle = pickup.legendary
+      ? LEGENDARY_GOLD
+      : pickupColor(pickup.type);
+    ctx.beginPath();
+    ctx.arc(x, y, size * 0.45, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   ctx.restore();
 }
 
+
 function enemyPalette(kind) {
   switch (kind) {
     case "turret":
       return {
-        main: "#fb7185",
-        dark: "#9f1239",
+        core: "#fb7185",
+        shell: "#be123c",
+        glow: "rgba(251, 113, 133, 0.34)",
         eye: "#fff1f2",
       };
     case "melee":
       return {
-        main: "#f97316",
-        dark: "#9a3412",
+        core: "#f97316",
+        shell: "#9a3412",
+        glow: "rgba(249, 115, 22, 0.34)",
         eye: "#fff7ed",
       };
     default:
       return {
-        main: "#f59e0b",
-        dark: "#92400e",
+        core: "#f59e0b",
+        shell: "#92400e",
+        glow: "rgba(245, 158, 11, 0.34)",
         eye: "#fffbeb",
       };
   }
 }
+
 
 function drawCityEnemies2D(ctx, world) {
   if (
@@ -1300,56 +1510,100 @@ function drawCityEnemies2D(ctx, world) {
     );
     const palette = enemyPalette(enemy.kind);
 
-    ctx.fillStyle = "rgba(2, 6, 23, 0.35)";
+    const glow = ctx.createRadialGradient(
+      x,
+      y,
+      radius * 0.2,
+      x,
+      y,
+      radius * 1.8,
+    );
+    glow.addColorStop(0, palette.glow);
+    glow.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(x, y, radius * 1.8, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "rgba(2, 6, 23, 0.36)";
     ctx.beginPath();
     ctx.ellipse(
       x,
       y + radius * 1.1,
-      radius * 1.15,
-      radius * 0.72,
+      radius * 1.18,
+      radius * 0.7,
       0,
       0,
       Math.PI * 2,
     );
     ctx.fill();
 
-    ctx.fillStyle = palette.main;
-    ctx.strokeStyle = palette.dark;
-    ctx.lineWidth = Math.max(1, radius * 0.16);
+    ctx.fillStyle = palette.shell;
     ctx.beginPath();
     ctx.arc(x, y, radius, 0, Math.PI * 2);
     ctx.fill();
-    ctx.stroke();
+
+    ctx.fillStyle = palette.core;
+    ctx.beginPath();
+    ctx.arc(x, y, radius * 0.82, 0, Math.PI * 2);
+    ctx.fill();
 
     ctx.fillStyle = palette.eye;
     ctx.beginPath();
     ctx.arc(
-      x - radius * 0.28,
-      y - radius * 0.16,
-      radius * 0.13,
+      x - radius * 0.24,
+      y - radius * 0.12,
+      radius * 0.12,
       0,
       Math.PI * 2,
     );
     ctx.arc(
-      x + radius * 0.28,
-      y - radius * 0.16,
-      radius * 0.13,
+      x + radius * 0.24,
+      y - radius * 0.12,
+      radius * 0.12,
       0,
       Math.PI * 2,
     );
     ctx.fill();
 
-    ctx.strokeStyle = palette.dark;
+    ctx.strokeStyle = palette.eye;
     ctx.lineWidth = Math.max(1, radius * 0.1);
     ctx.beginPath();
-    ctx.arc(
-      x,
-      y + radius * 0.08,
-      radius * 0.38,
-      0.14,
-      Math.PI - 0.14,
-    );
+
+    if (enemy.kind === "turret") {
+      ctx.arc(
+        x,
+        y + radius * 0.06,
+        radius * 0.32,
+        Math.PI,
+        Math.PI * 2,
+      );
+    } else if (enemy.kind === "melee") {
+      ctx.moveTo(x - radius * 0.34, y + radius * 0.18);
+      ctx.lineTo(x, y + radius * 0.34);
+      ctx.lineTo(x + radius * 0.34, y + radius * 0.18);
+    } else {
+      ctx.arc(
+        x,
+        y + radius * 0.12,
+        radius * 0.32,
+        0.18,
+        Math.PI - 0.18,
+      );
+    }
+
     ctx.stroke();
+
+    if (enemy.kind === "turret") {
+      ctx.strokeStyle = palette.shell;
+      ctx.lineWidth = Math.max(1, radius * 0.16);
+      ctx.beginPath();
+      ctx.moveTo(x - radius * 0.68, y - radius * 0.68);
+      ctx.lineTo(x + radius * 0.68, y + radius * 0.68);
+      ctx.moveTo(x + radius * 0.68, y - radius * 0.68);
+      ctx.lineTo(x - radius * 0.68, y + radius * 0.68);
+      ctx.stroke();
+    }
   }
 
   ctx.restore();
@@ -1528,6 +1782,7 @@ function drawCityWallFacade3D(ctx, world) {
   ctx.restore();
 }
 
+
 function drawUrbanFog(ctx, world) {
   if (world.level?.themeKey !== "city") {
     return;
@@ -1537,32 +1792,37 @@ function drawUrbanFog(ctx, world) {
 
   if (world.viewMode === "3d") {
     const fog = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-    fog.addColorStop(0, "rgba(203, 213, 225, 0.06)");
-    fog.addColorStop(0.45, "rgba(226, 232, 240, 0.12)");
-    fog.addColorStop(0.85, "rgba(148, 163, 184, 0.08)");
-    fog.addColorStop(1, "rgba(100, 116, 139, 0.04)");
+    fog.addColorStop(0, "rgba(226, 232, 240, 0.08)");
+    fog.addColorStop(0.42, "rgba(226, 232, 240, 0.18)");
+    fog.addColorStop(0.8, "rgba(203, 213, 225, 0.14)");
+    fog.addColorStop(1, "rgba(100, 116, 139, 0.08)");
     ctx.fillStyle = fog;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
   } else {
-    for (let index = 0; index < 8; index += 1) {
+    for (let index = 0; index < 12; index += 1) {
       const x =
         (
-          index * 149 +
-          world.time * (10 + index)
+          index * 127 +
+          world.time * (7 + index * 0.65)
         ) %
-          (CANVAS_WIDTH + 380) -
-        190;
+          (CANVAS_WIDTH + 420) -
+        210;
       const y =
-        80 +
-        ((index * 91) % (CANVAS_HEIGHT - 150));
+        42 +
+        ((index * 71) % Math.max(120, CANVAS_HEIGHT - 100));
+      const width = 190 + (index % 4) * 52;
+      const height = 26 + (index % 3) * 10;
 
-      ctx.fillStyle = "rgba(226, 232, 240, 0.045)";
+      ctx.fillStyle =
+        index % 2 === 0
+          ? "rgba(226, 232, 240, 0.08)"
+          : "rgba(203, 213, 225, 0.06)";
       ctx.beginPath();
       ctx.ellipse(
         x,
         y,
-        210,
-        38,
+        width,
+        height,
         0,
         0,
         Math.PI * 2,
@@ -1648,9 +1908,9 @@ export function drawWorld(ctx, world) {
     } else {
       drawCityRoads2D(ctx, world);
       drawCityBuildingBlocks2D(ctx, world);
+      drawUrbanFog(ctx, world);
       drawCityPickups2D(ctx, world);
       drawCityEnemies2D(ctx, world);
-      drawUrbanFog(ctx, world);
       drawCityPlayer2D(ctx, world);
     }
   }

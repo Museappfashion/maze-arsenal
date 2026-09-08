@@ -4,6 +4,7 @@ import {
   CANVAS_WIDTH,
   DRAW_TILE,
   FLOOR,
+  PASSAGE_WIDTH,
   VIEW_3D_FOV,
   VIEW_3D_MAX_DISTANCE,
 } from "../config/constants.js";
@@ -23,9 +24,16 @@ import {
 import {
   getCamera,
   getWorldRenderZoom,
+  visibleStrengthAt,
 } from "./gameplay.js";
 import { hasLineOfSight } from "./maze.js";
 import {
+  drawEffects as drawEffectsCore,
+  drawEntityLabels as drawEntityLabelsCore,
+  drawExitPortal as drawExitPortalCore,
+  drawFog as drawFogCore,
+  drawPickups as drawPickupsCore,
+  drawProjectile as drawProjectileCore,
   drawWorld as drawWorldCore,
 } from "./rendering.js?core";
 import { angleDelta } from "../utils/math.js";
@@ -749,45 +757,188 @@ function getCityEnemyRole(enemy) {
 }
 
 
-function drawRoadMarks2D(ctx, world, x, y, sx, sy, size) {
-  const open = getOpenStreetDirections(world, x, y);
-  const half = size * 0.5;
-  const overlap = Math.max(1.2, size * 0.06);
 
-  const centerX = sx + half;
-  const centerY = sy + half;
-  const lineThickness = Math.max(2, size * 0.05);
+function logicalCityCellOrigin(cellX, cellY) {
+  const stride = PASSAGE_WIDTH + 1;
+
+  return {
+    x: 1 + cellX * stride,
+    y: 1 + cellY * stride,
+  };
+}
+
+function cityLogicalDimensions(world) {
+  const stride = PASSAGE_WIDTH + 1;
+
+  return {
+    cols: Math.max(1, Math.floor((world.width - 1) / stride)),
+    rows: Math.max(1, Math.floor((world.height - 1) / stride)),
+  };
+}
+
+function cityLogicalConnections(world, cellX, cellY) {
+  const origin = logicalCityCellOrigin(cellX, cellY);
+  const probe = Math.floor(PASSAGE_WIDTH / 2);
+
+  return {
+    north: isFloorTile(
+      world,
+      origin.x + probe,
+      origin.y - 1,
+    ),
+    east: isFloorTile(
+      world,
+      origin.x + PASSAGE_WIDTH,
+      origin.y + probe,
+    ),
+    south: isFloorTile(
+      world,
+      origin.x + probe,
+      origin.y + PASSAGE_WIDTH,
+    ),
+    west: isFloorTile(
+      world,
+      origin.x - 1,
+      origin.y + probe,
+    ),
+  };
+}
+
+function drawCityCenterLine2D(ctx, world) {
+  if (
+    world.level?.themeKey !== "city" ||
+    world.viewMode === "3d"
+  ) {
+    return;
+  }
+
+  const camera = getCamera(world);
+  const scale = DRAW_TILE * getWorldRenderZoom(world);
+  const { cols, rows } = cityLogicalDimensions(world);
+  const halfRoad = PASSAGE_WIDTH / 2;
+  const lineWidth = Math.max(2, scale * 0.055);
+
+  const screenPoint = (worldX, worldY) => ({
+    x: (worldX - camera.x) * scale,
+    y: (worldY - camera.y) * scale,
+  });
 
   ctx.save();
-  ctx.strokeStyle = "#e1bc22";
-  ctx.lineWidth = lineThickness;
-  ctx.lineCap = "square";
-
+  ctx.strokeStyle = "#e0bd24";
+  ctx.lineWidth = lineWidth;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
   ctx.beginPath();
 
-  if (open.left) {
-    ctx.moveTo(centerX, centerY);
-    ctx.lineTo(sx - overlap, centerY);
-  }
+  for (let cellY = 0; cellY < rows; cellY += 1) {
+    for (let cellX = 0; cellX < cols; cellX += 1) {
+      const origin = logicalCityCellOrigin(cellX, cellY);
+      const centerWorldX = origin.x + halfRoad;
+      const centerWorldY = origin.y + halfRoad;
+      const center = screenPoint(centerWorldX, centerWorldY);
+      const connections = cityLogicalConnections(
+        world,
+        cellX,
+        cellY,
+      );
 
-  if (open.right) {
-    ctx.moveTo(centerX, centerY);
-    ctx.lineTo(sx + size + overlap, centerY);
-  }
+      if (connections.east && cellX + 1 < cols) {
+        const neighbor = logicalCityCellOrigin(
+          cellX + 1,
+          cellY,
+        );
+        const end = screenPoint(
+          neighbor.x + halfRoad,
+          neighbor.y + halfRoad,
+        );
 
-  if (open.up) {
-    ctx.moveTo(centerX, centerY);
-    ctx.lineTo(centerX, sy - overlap);
-  }
+        ctx.moveTo(center.x, center.y);
+        ctx.lineTo(end.x, end.y);
+      }
 
-  if (open.down) {
-    ctx.moveTo(centerX, centerY);
-    ctx.lineTo(centerX, sy + size + overlap);
+      if (connections.south && cellY + 1 < rows) {
+        const neighbor = logicalCityCellOrigin(
+          cellX,
+          cellY + 1,
+        );
+        const end = screenPoint(
+          neighbor.x + halfRoad,
+          neighbor.y + halfRoad,
+        );
+
+        ctx.moveTo(center.x, center.y);
+        ctx.lineTo(end.x, end.y);
+      }
+
+      const openDirections = Object.entries(connections)
+        .filter(([, open]) => open)
+        .map(([direction]) => direction);
+
+      if (openDirections.length === 1) {
+        const direction = openDirections[0];
+        let deadEndX = centerWorldX;
+        let deadEndY = centerWorldY;
+
+        if (direction === "east") {
+          deadEndX = origin.x;
+        } else if (direction === "west") {
+          deadEndX = origin.x + PASSAGE_WIDTH;
+        } else if (direction === "south") {
+          deadEndY = origin.y;
+        } else if (direction === "north") {
+          deadEndY = origin.y + PASSAGE_WIDTH;
+        }
+
+        const deadEnd = screenPoint(deadEndX, deadEndY);
+        ctx.moveTo(center.x, center.y);
+        ctx.lineTo(deadEnd.x, deadEnd.y);
+      }
+    }
   }
 
   ctx.stroke();
   ctx.restore();
 }
+
+function drawCoreCityLayer2D(ctx, world) {
+  const zoom = getWorldRenderZoom(world);
+  const bounds = getVisibleTileBounds(world);
+  const camera = bounds.camera;
+
+  ctx.save();
+  ctx.scale(zoom, zoom);
+
+  drawFogCore(
+    ctx,
+    world,
+    camera,
+    bounds.minX,
+    bounds.maxX,
+    bounds.minY,
+    bounds.maxY,
+  );
+  drawExitPortalCore(ctx, world, camera);
+  drawPickupsCore(ctx, world, camera);
+
+  for (const projectile of world.projectiles ?? []) {
+    drawProjectileCore(ctx, projectile, camera);
+  }
+
+  drawEffectsCore(ctx, world, camera);
+  ctx.restore();
+}
+
+function drawCoreCityLabels2D(ctx, world) {
+  const zoom = getWorldRenderZoom(world);
+  const camera = getCamera(world);
+
+  ctx.save();
+  ctx.scale(zoom, zoom);
+  drawEntityLabelsCore(ctx, world, camera);
+  ctx.restore();
+}
+
+function drawRoadMarks2D(ctx, world, x, y, sx, sy, size) {}
 
 function drawStreetCracks(ctx, sx, sy, size, x, y) {
   if (citySeed(x, y, 18) < 0.52) {
@@ -816,6 +967,7 @@ function drawStreetCracks(ctx, sx, sy, size, x, y) {
 
 
 
+
 function drawCityRoads2D(ctx, world) {
   if (
     world.level?.themeKey !== "city" ||
@@ -836,16 +988,20 @@ function drawCityRoads2D(ctx, world) {
 
       const sx = (x - bounds.camera.x) * bounds.scale;
       const sy = (y - bounds.camera.y) * bounds.scale;
-      const tileShade = 0.3 + citySeed(x, y, 13) * 0.12;
+      const variation = citySeed(x, y, 1);
       const asphalt = ctx.createLinearGradient(
         sx,
         sy,
         sx + bounds.scale,
         sy + bounds.scale,
       );
-      asphalt.addColorStop(0, `rgba(30, 34, 38, ${0.94})`);
-      asphalt.addColorStop(0.45, `rgba(52, 57, 62, ${0.96})`);
-      asphalt.addColorStop(1, `rgba(37, 42, 47, ${0.98})`);
+
+      asphalt.addColorStop(
+        0,
+        variation > 0.5 ? "#3e4245" : "#393d40",
+      );
+      asphalt.addColorStop(0.55, "#35393c");
+      asphalt.addColorStop(1, "#303437");
 
       ctx.fillStyle = asphalt;
       ctx.fillRect(
@@ -855,36 +1011,19 @@ function drawCityRoads2D(ctx, world) {
         bounds.scale + 0.5,
       );
 
-      ctx.fillStyle = `rgba(255,255,255,${0.02 + citySeed(y, x, 22) * 0.018})`;
-      ctx.fillRect(
+      drawStreetCracks(
+        ctx,
         sx,
         sy,
         bounds.scale,
-        bounds.scale,
-      );
-
-      ctx.strokeStyle = `rgba(15, 23, 42, ${0.08 + tileShade * 0.04})`;
-      ctx.lineWidth = Math.max(1, bounds.scale * 0.018);
-      ctx.beginPath();
-      ctx.moveTo(sx + bounds.scale * 0.22, sy + bounds.scale * 0.18);
-      ctx.lineTo(sx + bounds.scale * 0.34, sy + bounds.scale * 0.4);
-      ctx.moveTo(sx + bounds.scale * 0.63, sy + bounds.scale * 0.28);
-      ctx.lineTo(sx + bounds.scale * 0.52, sy + bounds.scale * 0.56);
-      ctx.stroke();
-
-      drawRoadMarks2D(
-        ctx,
-        world,
         x,
         y,
-        sx,
-        sy,
-        bounds.scale,
       );
     }
   }
 
   ctx.restore();
+  drawCityCenterLine2D(ctx, world);
 }
 
 
@@ -1397,27 +1536,54 @@ function drawCityPickups2D(ctx, world) {
 
 
 
-function enemyPalette(role) {
-  switch (role) {
-    case "turret":
-      return {
-        body: "#c026d3",
-        shell: "#701a75",
-        detail: "#fdf4ff",
-        shadow: "rgba(15, 23, 42, 0.28)",
-        glow: "rgba(217, 70, 239, 0.22)",
-      };
-    case "chaser":
-    default:
-      return {
-        body: "#f97316",
-        shell: "#7c2d12",
-        detail: "#fff7ed",
-        shadow: "rgba(15, 23, 42, 0.28)",
-        glow: "rgba(249, 115, 22, 0.22)",
-      };
-  }
+
+function enemyPalette(kind) {
+  const palettes = {
+    skitter: {
+      main: "#facc15",
+      dark: "#3f3f46",
+      light: "#fef08a",
+    },
+    scout: {
+      main: "#fb923c",
+      dark: "#4b5563",
+      light: "#ffedd5",
+    },
+    crawler: {
+      main: "#ef4444",
+      dark: "#374151",
+      light: "#fecaca",
+    },
+    charger: {
+      main: "#fb7185",
+      dark: "#52525b",
+      light: "#ffe4e6",
+    },
+    brute: {
+      main: "#a855f7",
+      dark: "#27272a",
+      light: "#e9d5ff",
+    },
+    warden: {
+      main: "#8b5cf6",
+      dark: "#111827",
+      light: "#ede9fe",
+    },
+    spitter: {
+      main: "#34d399",
+      dark: "#334155",
+      light: "#d1fae5",
+    },
+    turret: {
+      main: "#10b981",
+      dark: "#1f2937",
+      light: "#d1fae5",
+    },
+  };
+
+  return palettes[kind] ?? palettes.scout;
 }
+
 
 
 
@@ -1434,104 +1600,284 @@ function drawCityEnemies2D(ctx, world) {
   ctx.save();
 
   for (const enemy of world.enemies ?? []) {
+    const visibility = visibleStrengthAt(
+      world,
+      Math.floor(enemy.x),
+      Math.floor(enemy.y),
+    );
+
+    if (visibility <= 0.12) {
+      continue;
+    }
+
     const position = worldToScreen(world, enemy.x, enemy.y);
     const x = position.x;
     const y = position.y;
     const radius = Math.max(
-      position.scale * 0.18,
-      (enemy.radius ?? 0.22) * position.scale * 1.2,
+      position.scale * 0.16,
+      (enemy.radius ?? 0.22) * position.scale,
     );
-    const role = getCityEnemyRole(enemy);
-    const palette = enemyPalette(role);
+    const palette = enemyPalette(enemy.kind);
 
-    const glow = ctx.createRadialGradient(
-      x,
-      y,
-      radius * 0.2,
-      x,
-      y,
-      radius * 1.45,
-    );
-    glow.addColorStop(0, palette.glow);
-    glow.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.arc(x, y, radius * 1.45, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.save();
+    ctx.translate(x, y);
 
-    ctx.fillStyle = palette.shadow;
+    ctx.fillStyle = "rgba(2, 6, 23, 0.32)";
     ctx.beginPath();
     ctx.ellipse(
-      x,
-      y + radius * 1.02,
-      radius * 0.98,
-      radius * 0.44,
+      0,
+      radius * 1.06,
+      radius * 0.95,
+      radius * 0.42,
       0,
       0,
       Math.PI * 2,
     );
     ctx.fill();
 
-    if (role === "turret") {
-      ctx.fillStyle = palette.shell;
+    ctx.strokeStyle = palette.light;
+    ctx.lineWidth = Math.max(1.2, radius * 0.1);
+    ctx.fillStyle = palette.dark;
+
+    if (enemy.kind === "skitter") {
+      for (const side of [-1, 1]) {
+        for (const direction of [-1, 1]) {
+          ctx.beginPath();
+          ctx.moveTo(
+            direction * radius * 0.18,
+            side * radius * 0.18,
+          );
+          ctx.lineTo(
+            direction * radius * 1.12,
+            side * radius * 0.76,
+          );
+          ctx.stroke();
+        }
+      }
+
+      ctx.fillStyle = palette.main;
       ctx.beginPath();
-      ctx.roundRect(
-        x - radius * 0.96,
-        y - radius * 0.96,
-        radius * 1.92,
-        radius * 1.92,
-        radius * 0.34,
+      ctx.ellipse(
+        0,
+        0,
+        radius * 0.72,
+        radius * 0.5,
+        0,
+        0,
+        Math.PI * 2,
       );
       ctx.fill();
-
-      ctx.fillStyle = palette.body;
+    } else if (enemy.kind === "scout") {
+      ctx.fillStyle = palette.main;
       ctx.beginPath();
-      ctx.roundRect(
-        x - radius * 0.62,
-        y - radius * 0.62,
-        radius * 1.24,
-        radius * 1.24,
-        radius * 0.24,
-      );
+      ctx.moveTo(0, -radius);
+      ctx.lineTo(radius * 0.9, 0);
+      ctx.lineTo(0, radius);
+      ctx.lineTo(-radius * 0.9, 0);
+      ctx.closePath();
       ctx.fill();
-
-      ctx.strokeStyle = palette.detail;
-      ctx.lineWidth = Math.max(1.5, radius * 0.12);
-      ctx.beginPath();
-      ctx.moveTo(x - radius * 0.34, y);
-      ctx.lineTo(x + radius * 0.34, y);
-      ctx.moveTo(x, y - radius * 0.34);
-      ctx.lineTo(x, y + radius * 0.34);
       ctx.stroke();
 
-      ctx.fillStyle = palette.detail;
+      ctx.fillStyle = palette.dark;
+      ctx.fillRect(
+        -radius * 0.42,
+        -radius * 0.12,
+        radius * 0.84,
+        radius * 0.24,
+      );
+    } else if (enemy.kind === "crawler") {
+      ctx.fillStyle = palette.dark;
+
+      for (const offset of [-0.5, 0, 0.5]) {
+        ctx.beginPath();
+        ctx.ellipse(
+          offset * radius,
+          0,
+          radius * 0.48,
+          radius * 0.62,
+          0,
+          0,
+          Math.PI * 2,
+        );
+        ctx.fill();
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = palette.main;
       ctx.beginPath();
-      ctx.arc(x, y, radius * 0.12, 0, Math.PI * 2);
+      ctx.ellipse(
+        radius * 0.52,
+        0,
+        radius * 0.34,
+        radius * 0.42,
+        0,
+        0,
+        Math.PI * 2,
+      );
       ctx.fill();
-      continue;
+    } else if (enemy.kind === "charger") {
+      ctx.fillStyle = palette.dark;
+      ctx.beginPath();
+      ctx.moveTo(radius * 1.22, 0);
+      ctx.lineTo(radius * 0.22, -radius * 0.84);
+      ctx.lineTo(-radius * 0.92, -radius * 0.58);
+      ctx.lineTo(-radius * 0.92, radius * 0.58);
+      ctx.lineTo(radius * 0.22, radius * 0.84);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = palette.main;
+      ctx.fillRect(
+        -radius * 0.45,
+        -radius * 0.13,
+        radius * 1.15,
+        radius * 0.26,
+      );
+    } else if (enemy.kind === "brute") {
+      ctx.fillStyle = palette.dark;
+      ctx.fillRect(
+        -radius * 0.92,
+        -radius * 0.8,
+        radius * 1.84,
+        radius * 1.6,
+      );
+      ctx.strokeRect(
+        -radius * 0.92,
+        -radius * 0.8,
+        radius * 1.84,
+        radius * 1.6,
+      );
+
+      ctx.fillStyle = palette.main;
+      ctx.fillRect(
+        -radius * 0.22,
+        -radius,
+        radius * 0.44,
+        radius * 2,
+      );
+    } else if (enemy.kind === "warden") {
+      ctx.fillStyle = palette.dark;
+      ctx.beginPath();
+
+      for (let point = 0; point < 8; point += 1) {
+        const angle =
+          -Math.PI / 2 + point * (Math.PI / 4);
+        const pointRadius =
+          point % 2 === 0 ? radius : radius * 0.76;
+        const px = Math.cos(angle) * pointRadius;
+        const py = Math.sin(angle) * pointRadius;
+
+        if (point === 0) {
+          ctx.moveTo(px, py);
+        } else {
+          ctx.lineTo(px, py);
+        }
+      }
+
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = palette.main;
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * 0.48, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (enemy.kind === "spitter") {
+      ctx.fillStyle = palette.dark;
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * 0.9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = palette.main;
+      ctx.beginPath();
+      ctx.arc(
+        radius * 0.42,
+        0,
+        radius * 0.32,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+
+      ctx.fillStyle = palette.light;
+      ctx.beginPath();
+      ctx.arc(
+        radius * 0.5,
+        0,
+        radius * 0.12,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+    } else {
+      ctx.fillStyle = palette.dark;
+      ctx.beginPath();
+      ctx.roundRect(
+        -radius * 0.86,
+        -radius * 0.86,
+        radius * 1.72,
+        radius * 1.72,
+        radius * 0.18,
+      );
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = palette.main;
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * 0.48, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = palette.light;
+      ctx.beginPath();
+      ctx.moveTo(-radius * 0.5, 0);
+      ctx.lineTo(radius * 0.5, 0);
+      ctx.moveTo(0, -radius * 0.5);
+      ctx.lineTo(0, radius * 0.5);
+      ctx.stroke();
     }
 
-    ctx.fillStyle = palette.shell;
+    ctx.fillStyle = palette.light;
     ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.arc(
+      radius * 0.2,
+      -radius * 0.12,
+      Math.max(1.5, radius * 0.1),
+      0,
+      Math.PI * 2,
+    );
     ctx.fill();
 
-    ctx.fillStyle = palette.body;
-    ctx.beginPath();
-    ctx.arc(x, y, radius * 0.82, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.restore();
 
-    ctx.fillStyle = palette.detail;
-    ctx.beginPath();
-    ctx.arc(x - radius * 0.22, y - radius * 0.12, radius * 0.1, 0, Math.PI * 2);
-    ctx.arc(x + radius * 0.22, y - radius * 0.12, radius * 0.1, 0, Math.PI * 2);
-    ctx.fill();
+    const maxHp = Math.max(1, Number(enemy.maxHp) || 1);
+    const hpRatio = Math.max(
+      0,
+      Math.min(1, Number(enemy.hp) / maxHp),
+    );
+    const barWidth = Math.max(24, radius * 1.8);
+    const barY = y - radius - 10;
 
-    ctx.strokeStyle = palette.detail;
-    ctx.lineWidth = Math.max(1.2, radius * 0.08);
-    ctx.beginPath();
-    ctx.arc(x, y + radius * 0.08, radius * 0.24, 0.18, Math.PI - 0.18);
-    ctx.stroke();
+    ctx.fillStyle = "rgba(2, 6, 23, 0.86)";
+    ctx.fillRect(
+      x - barWidth / 2 - 1,
+      barY - 1,
+      barWidth + 2,
+      5,
+    );
+    ctx.fillStyle =
+      hpRatio > 0.55
+        ? "#4ade80"
+        : hpRatio > 0.25
+          ? "#facc15"
+          : "#ef4444";
+    ctx.fillRect(
+      x - barWidth / 2,
+      barY,
+      barWidth * hpRatio,
+      3,
+    );
   }
 
   ctx.restore();
@@ -1845,6 +2191,7 @@ function drawCityPlayer3DAccent(ctx, world) {
   ctx.restore();
 }
 
+
 export function drawWorld(ctx, world) {
   drawWorldCore(ctx, world);
 
@@ -1852,15 +2199,14 @@ export function drawWorld(ctx, world) {
     if (world.viewMode === "3d") {
       drawCityRoadPerspective3D(ctx);
       drawCityWallFacade3D(ctx, world);
-      drawUrbanFog(ctx, world);
       drawCityPlayer3DAccent(ctx, world);
     } else {
       drawCityRoads2D(ctx, world);
       drawCityBuildingBlocks2D(ctx, world);
-      drawUrbanFog(ctx, world);
-      drawCityPickups2D(ctx, world);
+      drawCoreCityLayer2D(ctx, world);
       drawCityEnemies2D(ctx, world);
       drawCityPlayer2D(ctx, world);
+      drawCoreCityLabels2D(ctx, world);
     }
   }
 

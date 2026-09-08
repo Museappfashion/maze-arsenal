@@ -16,9 +16,33 @@ import { drawWorld as drawEnhancedWorld } from "./rendering-enhanced.js";
 
 export * from "./rendering-enhanced.js";
 
-const CITY_UNDISCOVERED_GRAY = "#74777b";
-const CITY_FULL_REVEAL_THRESHOLD = 0.99;
-const CITY_BUILDING_HEIGHTS = [0.66, 0.92, 0.48, 0.74];
+const CITY_MIST_COLOR = [170, 175, 181];
+const CITY_BUILDING_TEMPLATES = [
+  {
+    fill: "#d9d9d9",
+    roof: "#f3f4f6",
+    shadow: "#9ca3af",
+    height: 0.66,
+  },
+  {
+    fill: "#171717",
+    roof: "#404040",
+    shadow: "#0a0a0a",
+    height: 0.92,
+  },
+  {
+    fill: "#8a8a8a",
+    roof: "#b1b1b1",
+    shadow: "#5a5a5a",
+    height: 0.48,
+  },
+  {
+    fill: "#c7c7c7",
+    roof: "#e5e7eb",
+    shadow: "#8f8f8f",
+    height: 0.74,
+  },
+];
 
 function citySeed(x, y, offset = 0) {
   const value =
@@ -28,6 +52,10 @@ function citySeed(x, y, offset = 0) {
   return value - Math.floor(value);
 }
 
+function wallTileFacadeIndex(x, y) {
+  return Math.abs(x + y) % 4;
+}
+
 function isFloorTile(world, x, y) {
   return (
     x >= 0 &&
@@ -35,6 +63,16 @@ function isFloorTile(world, x, y) {
     x < world.width &&
     y < world.height &&
     world.grid[y][x] === FLOOR
+  );
+}
+
+function isWallTile(world, x, y) {
+  return (
+    x >= 0 &&
+    y >= 0 &&
+    x < world.width &&
+    y < world.height &&
+    !isFloorTile(world, x, y)
   );
 }
 
@@ -63,14 +101,22 @@ function tileIsDiscovered(world, x, y) {
   return world.discovered?.[tileIndex] === 1;
 }
 
-function tileIsInPlayerRevealArea(world, x, y) {
-  return (
-    visibleStrengthAt(world, x, y) >=
-    CITY_FULL_REVEAL_THRESHOLD
-  );
+function getCityMistAlpha(visibleStrength) {
+  if (visibleStrength >= 0.97) {
+    return 0;
+  }
+
+  if (visibleStrength > 0) {
+    return Math.max(
+      0,
+      0.92 - visibleStrength * 0.92,
+    );
+  }
+
+  return 0.92;
 }
 
-function drawCityUndiscoveredMask(ctx, world) {
+function drawCityUndiscoveredMist(ctx, world) {
   if (
     world.level?.themeKey !== "city" ||
     world.viewMode === "3d"
@@ -81,14 +127,17 @@ function drawCityUndiscoveredMask(ctx, world) {
   const bounds = getVisibleTileBounds(world);
 
   ctx.save();
-  ctx.fillStyle = CITY_UNDISCOVERED_GRAY;
 
   for (let y = bounds.minY; y <= bounds.maxY; y += 1) {
     for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
-      if (
-        tileIsDiscovered(world, x, y) ||
-        tileIsInPlayerRevealArea(world, x, y)
-      ) {
+      if (tileIsDiscovered(world, x, y)) {
+        continue;
+      }
+
+      const visibleStrength = visibleStrengthAt(world, x, y);
+      const alpha = getCityMistAlpha(visibleStrength);
+
+      if (alpha <= 0.01) {
         continue;
       }
 
@@ -96,12 +145,35 @@ function drawCityUndiscoveredMask(ctx, world) {
         (x - bounds.camera.x) * bounds.scale;
       const screenY =
         (y - bounds.camera.y) * bounds.scale;
+      const width = Math.ceil(bounds.scale) + 1;
+      const height = Math.ceil(bounds.scale) + 1;
 
+      const mist = ctx.createLinearGradient(
+        screenX,
+        screenY,
+        screenX,
+        screenY + bounds.scale,
+      );
+
+      mist.addColorStop(
+        0,
+        `rgba(${CITY_MIST_COLOR[0] + 8}, ${CITY_MIST_COLOR[1] + 8}, ${CITY_MIST_COLOR[2] + 8}, ${Math.min(1, alpha * 0.95)})`,
+      );
+      mist.addColorStop(
+        0.52,
+        `rgba(${CITY_MIST_COLOR[0]}, ${CITY_MIST_COLOR[1]}, ${CITY_MIST_COLOR[2]}, ${alpha})`,
+      );
+      mist.addColorStop(
+        1,
+        `rgba(${CITY_MIST_COLOR[0] - 12}, ${CITY_MIST_COLOR[1] - 12}, ${CITY_MIST_COLOR[2] - 12}, ${Math.min(1, alpha * 1.03)})`,
+      );
+
+      ctx.fillStyle = mist;
       ctx.fillRect(
         Math.floor(screenX),
         Math.floor(screenY),
-        Math.ceil(bounds.scale) + 1,
-        Math.ceil(bounds.scale) + 1,
+        width,
+        height,
       );
     }
   }
@@ -154,7 +226,7 @@ function drawAsphaltTile(ctx, x, y, sx, sy, size) {
   drawStreetCracks(ctx, sx, sy, size, x, y);
 }
 
-function drawShortBuildingFloorGaps(ctx, world) {
+function drawCityOutwardBuildingCaps(ctx, world) {
   if (
     world.level?.themeKey !== "city" ||
     world.viewMode === "3d"
@@ -168,7 +240,7 @@ function drawShortBuildingFloorGaps(ctx, world) {
 
   for (let y = bounds.minY; y <= bounds.maxY; y += 1) {
     for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
-      if (isFloorTile(world, x, y)) {
+      if (!isWallTile(world, x, y)) {
         continue;
       }
 
@@ -177,39 +249,67 @@ function drawShortBuildingFloorGaps(ctx, world) {
         (x - bounds.camera.x) * size;
       const screenY =
         (y - bounds.camera.y) * size;
-      const buildingHeight =
-        CITY_BUILDING_HEIGHTS[Math.abs(x + y) % 4];
+      const template =
+        CITY_BUILDING_TEMPLATES[
+          wallTileFacadeIndex(x, y)
+        ];
       const inset = size * 0.04;
-      const depth = size * buildingHeight;
-      const buildingTop =
-        screenY + size - depth - inset;
-      const gapHeight =
-        Math.max(0, buildingTop - screenY);
+      const width = size - inset * 2;
+      const depth = size * template.height;
+      const topY = screenY + size - depth - inset;
+      const roofHeight = Math.max(2, size * 0.085);
+      const hasWallAbove = isWallTile(world, x, y - 1);
 
-      if (gapHeight <= 0) {
+      if (hasWallAbove) {
+        ctx.fillStyle = template.fill;
+        ctx.fillRect(
+          screenX + inset,
+          screenY,
+          width,
+          Math.max(0, topY - screenY + roofHeight),
+        );
+
+        ctx.strokeStyle = "rgba(17, 24, 39, 0.22)";
+        ctx.lineWidth = Math.max(1, size * 0.016);
+        ctx.beginPath();
+        ctx.moveTo(screenX + inset, screenY + 0.5);
+        ctx.lineTo(screenX + inset, topY + depth);
+        ctx.moveTo(screenX + inset + width, screenY + 0.5);
+        ctx.lineTo(screenX + inset + width, topY + depth);
+        ctx.stroke();
         continue;
       }
 
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(
-        screenX,
-        screenY,
-        size + 0.5,
-        gapHeight,
-      );
-      ctx.clip();
+      if (topY > screenY) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(
+          screenX,
+          screenY,
+          size + 0.5,
+          Math.max(0, topY - screenY),
+        );
+        ctx.clip();
 
-      drawAsphaltTile(
-        ctx,
-        x,
-        y,
-        screenX,
-        screenY,
-        size,
-      );
+        drawAsphaltTile(
+          ctx,
+          x,
+          y,
+          screenX,
+          screenY,
+          size,
+        );
 
-      ctx.restore();
+        ctx.restore();
+      }
+
+      ctx.fillStyle = template.roof;
+      ctx.fillRect(
+        screenX + inset,
+        topY,
+        width,
+        roofHeight,
+      );
     }
   }
 
@@ -243,6 +343,8 @@ function drawCityPowerUpRing(ctx, world) {
 
   ctx.save();
   ctx.translate(playerX, playerY);
+  ctx.shadowBlur = 22 * zoom;
+  ctx.shadowColor = color;
   ctx.strokeStyle = color;
   ctx.lineWidth = 2.8 * zoom;
   ctx.beginPath();
@@ -281,8 +383,8 @@ export function drawWorld(ctx, world) {
   recordCityCompletion(world);
 
   if (world.viewMode !== "3d") {
-    drawShortBuildingFloorGaps(ctx, world);
-    drawCityUndiscoveredMask(ctx, world);
+    drawCityOutwardBuildingCaps(ctx, world);
+    drawCityUndiscoveredMist(ctx, world);
     drawCityPowerUpRing(ctx, world);
   }
 }

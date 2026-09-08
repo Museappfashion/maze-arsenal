@@ -54,6 +54,212 @@ const MATERIAL_PARTICLES = {
   labyrinth: ["#c4b5fd", "#64748b", "#94a3b8"],
 };
 
+const JOJO_NAME = "jojo";
+const JOJO_SPEED_MULTIPLIER = 3;
+
+function isJojoMode(world) {
+  return (
+    String(world.playerName ?? "")
+      .trim()
+      .toLowerCase() === JOJO_NAME
+  );
+}
+
+function enableJojoMode(world) {
+  if (!isJojoMode(world)) {
+    return false;
+  }
+
+  world.leaderboardEligible = false;
+  world.__jojoMode = true;
+  return true;
+}
+
+function normalizeMovement(x, y) {
+  const length = Math.hypot(x, y);
+
+  if (length <= 0.0001) {
+    return { x: 0, y: 0 };
+  }
+
+  return {
+    x: x / length,
+    y: y / length,
+  };
+}
+
+function clampJojoToWorld(world) {
+  const margin = Math.max(
+    0.02,
+    Math.min(0.2, world.player.radius * 0.25),
+  );
+
+  world.player.x = Math.max(
+    margin,
+    Math.min(world.width - margin, world.player.x),
+  );
+  world.player.y = Math.max(
+    margin,
+    Math.min(world.height - margin, world.player.y),
+  );
+}
+
+function markJojoPlayerTileChanged(world) {
+  const tileX = Math.floor(world.player.x);
+  const tileY = Math.floor(world.player.y);
+
+  if (
+    tileX === world.lastPlayerTile?.x &&
+    tileY === world.lastPlayerTile?.y
+  ) {
+    return;
+  }
+
+  world.lastPlayerTile = {
+    x: tileX,
+    y: tileY,
+  };
+  world.distanceTimer = 0;
+  world.distanceFieldDirty = true;
+}
+
+function stripJojoMovementKeys(world, keys) {
+  const safeKeys = {
+    ...keys,
+  };
+
+  safeKeys.w = false;
+  safeKeys.s = false;
+  safeKeys.a = false;
+  safeKeys.d = false;
+  safeKeys.ArrowUp = false;
+  safeKeys.ArrowDown = false;
+
+  if (world.viewMode !== "3d") {
+    safeKeys.ArrowLeft = false;
+    safeKeys.ArrowRight = false;
+  }
+
+  return safeKeys;
+}
+
+function getJojoMovement(world, keys) {
+  if (world.viewMode === "3d") {
+    const forwardInput =
+      Number(Boolean(keys.w || keys.ArrowUp)) -
+      Number(Boolean(keys.s || keys.ArrowDown));
+    const strafeInput =
+      Number(Boolean(keys.d)) -
+      Number(Boolean(keys.a));
+
+    if (forwardInput === 0 && strafeInput === 0) {
+      return { x: 0, y: 0 };
+    }
+
+    const forwardX = Math.cos(world.player.facing);
+    const forwardY = Math.sin(world.player.facing);
+    const rightX = -forwardY;
+    const rightY = forwardX;
+
+    return normalizeMovement(
+      forwardX * forwardInput +
+        rightX * strafeInput,
+      forwardY * forwardInput +
+        rightY * strafeInput,
+    );
+  }
+
+  const moveX =
+    Number(Boolean(keys.ArrowRight || keys.d)) -
+    Number(Boolean(keys.ArrowLeft || keys.a));
+  const moveY =
+    Number(Boolean(keys.ArrowDown || keys.s)) -
+    Number(Boolean(keys.ArrowUp || keys.w));
+
+  return normalizeMovement(moveX, moveY);
+}
+
+function moveJojoThroughWalls(world, keys, dt) {
+  const movement = getJojoMovement(world, keys);
+
+  if (movement.x === 0 && movement.y === 0) {
+    return;
+  }
+
+  const distance =
+    world.player.speed *
+    JOJO_SPEED_MULTIPLIER *
+    dt;
+
+  world.player.x += movement.x * distance;
+  world.player.y += movement.y * distance;
+  clampJojoToWorld(world);
+
+  if (
+    world.viewMode !== "3d" &&
+    !world.pointer.inside &&
+    !world.touchAimActive
+  ) {
+    world.player.facing = Math.atan2(
+      movement.y,
+      movement.x,
+    );
+  }
+
+  markJojoPlayerTileChanged(world);
+}
+
+function angleDifference(a, b) {
+  let difference = a - b;
+
+  while (difference > Math.PI) {
+    difference -= Math.PI * 2;
+  }
+
+  while (difference < -Math.PI) {
+    difference += Math.PI * 2;
+  }
+
+  return difference;
+}
+
+function finishJojoFistAttack(world) {
+  if (
+    !isJojoMode(world) ||
+    world.player.weapon !== "fists"
+  ) {
+    return;
+  }
+
+  const fists = WEAPONS.fists;
+  const arc = fists?.arc ?? 1.2;
+  const facing = world.player.facing;
+
+  for (const enemy of world.enemies ?? []) {
+    if (enemy.hp <= 0) {
+      continue;
+    }
+
+    const angleToEnemy = Math.atan2(
+      enemy.y - world.player.y,
+      enemy.x - world.player.x,
+    );
+
+    if (
+      Math.abs(
+        angleDifference(angleToEnemy, facing),
+      ) >
+      arc / 2
+    ) {
+      continue;
+    }
+
+    enemy.hp = 0;
+    enemy.awake = true;
+    enemy.lastHitAt = world.time;
+  }
+}
+
 function ensureCinematic(world) {
   if (world.__cinematic) {
     return world.__cinematic;
@@ -436,6 +642,8 @@ function tickCinematic(world, dt) {
 }
 
 export function attack(world) {
+  enableJojoMode(world);
+
   const weaponKey = world.player.weapon;
   const beforeNextAttackAt =
     world.player.nextAttackAt;
@@ -444,6 +652,16 @@ export function attack(world) {
   const beforeEnemies = snapshotEnemies(world);
 
   enhanced.attack(world);
+
+  const attackStarted =
+    world.player.nextAttackAt > beforeNextAttackAt;
+
+  if (
+    attackStarted &&
+    weaponKey === "fists"
+  ) {
+    finishJojoFistAttack(world);
+  }
 
   detectFiredAttack(
     world,
@@ -456,6 +674,7 @@ export function attack(world) {
 
 export function updatePlayer(world, keys, dt) {
   const cinematic = ensureCinematic(world);
+  const jojoMode = enableJojoMode(world);
   const beforeHp = world.player.hp;
   const weaponKey = world.player.weapon;
   const beforeNextAttackAt =
@@ -464,7 +683,27 @@ export function updatePlayer(world, keys, dt) {
     world.projectiles.length;
   const beforeEnemies = snapshotEnemies(world);
 
-  enhanced.updatePlayer(world, keys, dt);
+  if (jojoMode) {
+    enhanced.updatePlayer(
+      world,
+      stripJojoMovementKeys(world, keys),
+      dt,
+    );
+    moveJojoThroughWalls(world, keys, dt);
+  } else {
+    enhanced.updatePlayer(world, keys, dt);
+  }
+
+  const attackStarted =
+    world.player.nextAttackAt > beforeNextAttackAt;
+
+  if (
+    jojoMode &&
+    attackStarted &&
+    weaponKey === "fists"
+  ) {
+    finishJojoFistAttack(world);
+  }
 
   detectFiredAttack(
     world,

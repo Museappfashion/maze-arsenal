@@ -2,6 +2,10 @@
 import {
   installRuntimeEnhancements as installCoreRuntimeEnhancements,
 } from "./runtimeEnhancements.js?core";
+import {
+  getHighestUnlockedLevel,
+  unlockAllLevels,
+} from "../services/progression.js";
 
 const LEVEL_ORDER = [
   "level0",
@@ -23,34 +27,6 @@ const PATCH_INTERVAL_MS = 50;
 
 const SKIP_BUTTON_ID =
   "mist-maze-skip-progression-button";
-const LEVEL_PROGRESS_STORAGE_KEY =
-  "mist-maze-level-progress-v1";
-
-function unlockAllLevels() {
-  try {
-    window.localStorage.setItem(
-      LEVEL_PROGRESS_STORAGE_KEY,
-      "3",
-    );
-  } catch {
-    return false;
-  }
-
-  window.dispatchEvent(
-    new CustomEvent(
-      "mist-maze-progression-changed",
-      {
-        detail: {
-          highestUnlocked: 3,
-          source: "skip-button",
-        },
-      },
-    ),
-  );
-
-  return true;
-}
-
 function styleSkipButton(button) {
   button.style.border =
     "1px solid rgba(250,204,21,.72)";
@@ -70,18 +46,8 @@ function styleSkipButton(button) {
 }
 
 function updateSkipButtonState(button) {
-  let fullyUnlocked = false;
-
-  try {
-    fullyUnlocked =
-      Number(
-        window.localStorage.getItem(
-          LEVEL_PROGRESS_STORAGE_KEY,
-        ),
-      ) >= 3;
-  } catch {
-    fullyUnlocked = false;
-  }
+  const fullyUnlocked =
+    getHighestUnlockedLevel() >= 3;
 
   if (fullyUnlocked) {
     button.textContent =
@@ -163,41 +129,51 @@ function ensureSkipProgressionButton() {
 
     button.addEventListener(
       "click",
-      () => {
-        if (!unlockAllLevels()) {
+      (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const highestUnlocked =
+          unlockAllLevels();
+
+        if (highestUnlocked < 3) {
+          button.textContent =
+            "UNLOCK FAILED — TRY AGAIN";
           return;
         }
 
         updateSkipButtonState(button);
 
-        /*
-         * The base runtime re-checks cards every 50 ms,
-         * so using the game's progression event/storage
-         * keeps the unlock behavior consistent.
-         */
-        window.setTimeout(
-          () => {
-            for (
-              const card of
-              document.querySelectorAll(
-                ".level-choice",
+        const refreshCards = () => {
+          for (
+            const card of
+            document.querySelectorAll(
+              ".level-choice",
+            )
+          ) {
+            card.classList.remove(
+              "mist-locked-level",
+            );
+            card.setAttribute(
+              "aria-disabled",
+              "false",
+            );
+            card
+              .querySelector(
+                ".mist-lock-overlay",
               )
-            ) {
-              card.classList.remove(
-                "mist-locked-level",
-              );
-              card.setAttribute(
-                "aria-disabled",
-                "false",
-              );
-              card
-                .querySelector(
-                  ".mist-lock-overlay",
-                )
-                ?.remove();
-            }
-          },
-          0,
+              ?.remove();
+          }
+        };
+
+        refreshCards();
+        window.setTimeout(
+          refreshCards,
+          80,
+        );
+        window.setTimeout(
+          refreshCards,
+          220,
         );
       },
     );

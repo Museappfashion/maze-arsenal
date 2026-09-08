@@ -17,6 +17,8 @@ export default defineConfig({
       { find: /^(?:.*\/)?audio\/MazeAudioEngine\.js$/, replacement: sourcePath("./src/audio/MazeAudioEngine-enhanced.js") },
       { find: /^(?:.*\/)?components\/GameUi\.jsx$/, replacement: sourcePath("./src/components/GameUiEnhanced.jsx") },
       { find: /^(?:.*\/)?services\/leaderboard\.js$/, replacement: sourcePath("./src/services/leaderboard-enhanced.js") },
+      { find: /^(?:.*\/)?services\/progression\.js$/, replacement: sourcePath("./src/services/progression-open.js") },
+      { find: /^(?:.*\/)?features\/runtimeEnhancements\.js$/, replacement: sourcePath("./src/features/runtimeEnhancements-celebration.js") },
       { find: /^(?:.*\/)?game\/gameplay\.js$/, replacement: sourcePath("./src/game/gameplay-enhanced.js") },
       { find: /^(?:.*\/)?game\/labyrinth\.js$/, replacement: sourcePath("./src/game/labyrinth-enhanced.js") },
       { find: /^(?:.*\/)?game\/world\.js$/, replacement: sourcePath("./src/game/world-enhanced.js") },

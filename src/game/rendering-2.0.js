@@ -467,11 +467,223 @@ function drawRunEscalationOverlay(ctx, world) {
   }
 }
 
+function drawVictoryCelebration(ctx, world) {
+  const centerX = CANVAS_WIDTH * 0.5;
+  const centerY = CANVAS_HEIGHT * 0.31;
+  const time =
+    typeof performance !== "undefined"
+      ? performance.now() / 1000
+      : 0;
+  const explored = getDiscoveredPercent(world);
+  const enemiesDefeated =
+    world.__cinematic?.enemiesDefeated ?? 0;
+
+  ctx.save();
+
+  const wash = ctx.createRadialGradient(
+    centerX,
+    centerY,
+    20,
+    centerX,
+    centerY,
+    CANVAS_HEIGHT * 0.7,
+  );
+  wash.addColorStop(
+    0,
+    "rgba(250,204,21,0.16)",
+  );
+  wash.addColorStop(
+    0.38,
+    "rgba(34,211,238,0.08)",
+  );
+  wash.addColorStop(
+    1,
+    "rgba(2,6,23,0.54)",
+  );
+  ctx.fillStyle = wash;
+  ctx.fillRect(
+    0,
+    0,
+    CANVAS_WIDTH,
+    CANVAS_HEIGHT,
+  );
+
+  ctx.save();
+  ctx.translate(centerX, centerY - 8);
+  ctx.rotate(time * 0.08);
+  ctx.globalCompositeOperation = "lighter";
+
+  for (let ray = 0; ray < 24; ray += 1) {
+    const angle =
+      ray * (Math.PI * 2 / 24);
+    const inner = 82;
+    const outer =
+      165 +
+      18 *
+        Math.sin(
+          time * 2.1 + ray * 0.73,
+        );
+
+    ctx.globalAlpha =
+      0.035 +
+      0.035 *
+        (
+          0.5 +
+          0.5 *
+            Math.sin(
+              time * 2.8 + ray,
+            )
+        );
+    ctx.strokeStyle =
+      ray % 2 === 0
+        ? "#fde047"
+        : "#67e8f9";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(
+      Math.cos(angle) * inner,
+      Math.sin(angle) * inner,
+    );
+    ctx.lineTo(
+      Math.cos(angle) * outer,
+      Math.sin(angle) * outer,
+    );
+    ctx.stroke();
+  }
+
+  ctx.restore();
+
+  for (let index = 0; index < 72; index += 1) {
+    const seedX = fxNoise(index, 201);
+    const seedY = fxNoise(index, 202);
+    const speed =
+      42 + fxNoise(index, 203) * 78;
+    const drift =
+      (
+        seedY * CANVAS_HEIGHT +
+        time * speed
+      ) %
+      (CANVAS_HEIGHT + 70);
+    const x =
+      (
+        seedX * CANVAS_WIDTH +
+        Math.sin(
+          time *
+            (
+              0.7 +
+              fxNoise(index, 204)
+            ) +
+            index,
+        ) *
+          18
+      );
+    const y = drift - 35;
+    const size =
+      3 + fxNoise(index, 205) * 5;
+    const rotation =
+      time *
+        (
+          1.2 +
+          fxNoise(index, 206) * 4
+        ) +
+      index;
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rotation);
+    ctx.globalAlpha =
+      0.42 +
+      fxNoise(index, 207) * 0.42;
+    ctx.fillStyle =
+      index % 4 === 0
+        ? "#fde047"
+        : index % 4 === 1
+          ? "#67e8f9"
+          : index % 4 === 2
+            ? "#f8fafc"
+            : "#f59e0b";
+    ctx.fillRect(
+      -size * 0.5,
+      -size * 0.25,
+      size,
+      size * 0.5,
+    );
+    ctx.restore();
+  }
+
+  const pulse =
+    0.5 +
+    0.5 *
+      Math.sin(time * 3.2);
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  ctx.shadowColor =
+    "rgba(250,204,21,0.68)";
+  ctx.shadowBlur =
+    18 + pulse * 12;
+  ctx.fillStyle = "#fff7cc";
+  ctx.font =
+    "950 42px system-ui, sans-serif";
+  ctx.fillText(
+    "LEVEL COMPLETE!",
+    centerX,
+    centerY - 22,
+  );
+
+  ctx.shadowColor =
+    "rgba(34,211,238,0.5)";
+  ctx.shadowBlur = 12;
+  ctx.fillStyle = "#a5f3fc";
+  ctx.font =
+    "850 18px system-ui, sans-serif";
+  ctx.fillText(
+    world.level?.subtitle ??
+      world.level?.label ??
+      "Maze cleared",
+    centerX,
+    centerY + 22,
+  );
+
+  ctx.shadowBlur = 5;
+  ctx.fillStyle = "#f8fafc";
+  ctx.font =
+    "800 16px system-ui, sans-serif";
+  ctx.fillText(
+    `${explored}% explored`,
+    centerX,
+    centerY + 58,
+  );
+  ctx.fillText(
+    `${enemiesDefeated} enemies defeated`,
+    centerX,
+    centerY + 82,
+  );
+
+  ctx.fillStyle =
+    "rgba(226,232,240,0.86)";
+  ctx.font =
+    "750 12px system-ui, sans-serif";
+  ctx.fillText(
+    "EXIT SECURED",
+    centerX,
+    centerY + 112,
+  );
+
+  ctx.restore();
+}
+
 function drawResultOverlay(ctx, world) {
   if (
     !world.victory &&
     !world.gameOver
   ) {
+    return;
+  }
+
+  if (world.victory) {
+    drawVictoryCelebration(ctx, world);
     return;
   }
 
@@ -484,7 +696,6 @@ function drawResultOverlay(ctx, world) {
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-
   ctx.shadowColor = "rgba(0, 0, 0, 0.72)";
   ctx.shadowBlur = 8;
   ctx.fillStyle = "#f8fafc";
@@ -507,7 +718,6 @@ function drawResultOverlay(ctx, world) {
 
   ctx.restore();
 }
-
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));

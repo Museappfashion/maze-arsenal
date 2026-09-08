@@ -718,6 +718,7 @@ function drawSidewalkEdges(ctx, edges, sx, sy, size) {}
 
 
 
+
 function drawRoadMarks2D(ctx, world, x, y, sx, sy, size) {
   const left = scanStreetDistance(world, x, y, -1, 0);
   const right = scanStreetDistance(world, x, y, 1, 0);
@@ -725,36 +726,28 @@ function drawRoadMarks2D(ctx, world, x, y, sx, sy, size) {
   const down = scanStreetDistance(world, x, y, 0, 1);
   const corridorWidth = left + right + 1;
   const corridorHeight = up + down + 1;
-  const yellow = "#e7c62c";
-  const thickness = Math.max(2, size * 0.055);
+  const lineThickness = Math.max(2, size * 0.052);
+  const overlap = Math.max(1, size * 0.04);
 
   ctx.save();
-  ctx.strokeStyle = yellow;
-  ctx.lineWidth = thickness;
-  ctx.lineCap = "round";
+  ctx.fillStyle = "#e0be24";
 
-  const shouldDrawHorizontal =
-    corridorHeight >= 4 &&
-    up === 1 &&
-    (left > 0 || right > 0);
-
-  if (shouldDrawHorizontal) {
-    ctx.beginPath();
-    ctx.moveTo(sx, sy + size);
-    ctx.lineTo(sx + size, sy + size);
-    ctx.stroke();
+  if (corridorHeight >= 4 && up === 1) {
+    ctx.fillRect(
+      sx - overlap,
+      sy + size - lineThickness * 0.5,
+      size + overlap * 2,
+      lineThickness,
+    );
   }
 
-  const shouldDrawVertical =
-    corridorWidth >= 4 &&
-    left === 1 &&
-    (up > 0 || down > 0);
-
-  if (shouldDrawVertical) {
-    ctx.beginPath();
-    ctx.moveTo(sx + size, sy);
-    ctx.lineTo(sx + size, sy + size);
-    ctx.stroke();
+  if (corridorWidth >= 4 && left === 1) {
+    ctx.fillRect(
+      sx + size - lineThickness * 0.5,
+      sy - overlap,
+      lineThickness,
+      size + overlap * 2,
+    );
   }
 
   ctx.restore();
@@ -991,6 +984,36 @@ function drawCityBuildingBlocks2D(ctx, world) {
 
 
 
+
+function normalizeCityPickupType(type, pickup) {
+  if (type === "health" || type === "medkit") {
+    return "health";
+  }
+  if (type === "ammo") {
+    return "ammo";
+  }
+  if (type === "weapon" || type === "gun") {
+    return "weapon";
+  }
+  if (
+    type === "power" ||
+    type === "powerup" ||
+    type === "power-up" ||
+    pickup?.powerUp
+  ) {
+    return "power";
+  }
+  return type ?? "unknown";
+}
+
+function cityWeaponPickupLabel(pickup) {
+  return (
+    pickup?.label ??
+    pickup?.name ??
+    "Gun"
+  );
+}
+
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));
 }
@@ -1030,14 +1053,17 @@ function pickupColor(type) {
 }
 
 
+
 function drawMedkitPickup(ctx, x, y, size) {
-  ctx.fillStyle = "rgba(2, 6, 23, 0.28)";
+  ctx.save();
+
+  ctx.fillStyle = "rgba(15, 23, 42, 0.24)";
   ctx.beginPath();
   ctx.ellipse(
     x,
-    y + size * 1.05,
-    size * 1.15,
-    size * 0.62,
+    y + size * 1.02,
+    size * 0.86,
+    size * 0.4,
     0,
     0,
     Math.PI * 2,
@@ -1045,91 +1071,98 @@ function drawMedkitPickup(ctx, x, y, size) {
   ctx.fill();
 
   ctx.fillStyle = "#f8fafc";
-  ctx.strokeStyle = "#cbd5e1";
-  ctx.lineWidth = Math.max(1, size * 0.08);
+  ctx.strokeStyle = "#94a3b8";
+  ctx.lineWidth = Math.max(1, size * 0.06);
   ctx.beginPath();
   ctx.roundRect(
-    x - size * 0.7,
-    y - size * 0.46,
-    size * 1.4,
-    size * 0.98,
-    size * 0.2,
+    x - size * 0.52,
+    y - size * 0.34,
+    size * 1.04,
+    size * 0.74,
+    size * 0.12,
   );
   ctx.fill();
   ctx.stroke();
 
-  ctx.fillStyle = "#ef4444";
+  ctx.fillStyle = "#dc2626";
   ctx.fillRect(
-    x - size * 0.14,
-    y - size * 0.3,
-    size * 0.28,
-    size * 0.66,
+    x - size * 0.11,
+    y - size * 0.18,
+    size * 0.22,
+    size * 0.42,
   );
   ctx.fillRect(
-    x - size * 0.33,
-    y - size * 0.11,
-    size * 0.66,
-    size * 0.28,
+    x - size * 0.32,
+    y - size * 0.0,
+    size * 0.64,
+    size * 0.14,
   );
 
-  ctx.strokeStyle = "#94a3b8";
-  ctx.lineWidth = Math.max(1, size * 0.06);
+  ctx.strokeStyle = "#cbd5e1";
+  ctx.lineWidth = Math.max(1, size * 0.05);
   ctx.beginPath();
-  ctx.moveTo(x - size * 0.25, y - size * 0.54);
-  ctx.lineTo(x + size * 0.25, y - size * 0.54);
+  ctx.moveTo(x - size * 0.16, y - size * 0.34);
+  ctx.lineTo(x - size * 0.04, y - size * 0.46);
+  ctx.lineTo(x + size * 0.04, y - size * 0.46);
+  ctx.lineTo(x + size * 0.16, y - size * 0.34);
   ctx.stroke();
+
+  ctx.restore();
 }
 
 
+
 function drawAmmoPickup(ctx, x, y, size) {
-  ctx.fillStyle = "rgba(15, 23, 42, 0.24)";
+  ctx.save();
+
+  ctx.fillStyle = "rgba(15, 23, 42, 0.26)";
   ctx.beginPath();
   ctx.ellipse(
     x,
-    y + size * 1.02,
-    size * 0.92,
-    size * 0.46,
+    y + size * 0.98,
+    size * 0.88,
+    size * 0.42,
     0,
     0,
     Math.PI * 2,
   );
   ctx.fill();
 
-  ctx.fillStyle = "#4b5563";
-  ctx.strokeStyle = "#111827";
+  ctx.fillStyle = "#475569";
+  ctx.strokeStyle = "#0f172a";
   ctx.lineWidth = Math.max(1, size * 0.06);
   ctx.beginPath();
   ctx.roundRect(
-    x - size * 0.54,
-    y - size * 0.26,
-    size * 1.08,
-    size * 0.6,
-    size * 0.12,
+    x - size * 0.52,
+    y - size * 0.2,
+    size * 1.04,
+    size * 0.5,
+    size * 0.1,
   );
   ctx.fill();
   ctx.stroke();
 
   ctx.fillStyle = "#f59e0b";
   ctx.fillRect(
-    x - size * 0.36,
-    y - size * 0.07,
-    size * 0.72,
-    size * 0.14,
+    x - size * 0.34,
+    y - size * 0.06,
+    size * 0.68,
+    size * 0.12,
   );
 
-  ctx.strokeStyle = "#7c2d12";
-  for (const offset of [-size * 0.2, 0, size * 0.2]) {
+  for (const offset of [-0.2, 0, 0.2]) {
+    const bx = x + size * offset;
     ctx.fillStyle = "#b45309";
     ctx.fillRect(
-      x + offset - size * 0.045,
+      bx - size * 0.045,
       y - size * 0.42,
       size * 0.09,
-      size * 0.34,
+      size * 0.3,
     );
     ctx.fillStyle = "#fde68a";
     ctx.beginPath();
     ctx.arc(
-      x + offset,
+      bx,
       y - size * 0.42,
       size * 0.045,
       Math.PI,
@@ -1137,7 +1170,10 @@ function drawAmmoPickup(ctx, x, y, size) {
     );
     ctx.fill();
   }
+
+  ctx.restore();
 }
+
 
 
 
@@ -1147,50 +1183,55 @@ function drawPowerUpPickup(ctx, world, pickup, x, y, size) {
     : "#8b5cf6";
   const label = formatPowerUpLabel(pickup);
 
-  ctx.fillStyle = "rgba(15, 23, 42, 0.26)";
+  ctx.save();
+
+  ctx.fillStyle = "rgba(15, 23, 42, 0.24)";
   ctx.beginPath();
   ctx.ellipse(
     x,
-    y + size * 1.08,
+    y + size * 1.04,
     size * 0.9,
-    size * 0.46,
+    size * 0.44,
     0,
     0,
     Math.PI * 2,
   );
   ctx.fill();
 
-  const halo = ctx.createRadialGradient(
+  const glow = ctx.createRadialGradient(
     x,
     y,
     size * 0.12,
     x,
     y,
-    size * 1.08,
+    size * 0.98,
   );
-  halo.addColorStop(0, "rgba(255,255,255,0.7)");
-  halo.addColorStop(
+  glow.addColorStop(
+    0,
+    pickup.legendary
+      ? "rgba(255, 249, 196, 0.9)"
+      : "rgba(255,255,255,0.72)",
+  );
+  glow.addColorStop(
     0.55,
     pickup.legendary
-      ? "rgba(250, 204, 21, 0.46)"
-      : "rgba(139, 92, 246, 0.36)",
+      ? "rgba(250, 204, 21, 0.42)"
+      : "rgba(139, 92, 246, 0.34)",
   );
-  halo.addColorStop(1, "rgba(0,0,0,0)");
-
-  ctx.fillStyle = halo;
+  glow.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = glow;
   ctx.beginPath();
-  ctx.arc(x, y, size * 1.08, 0, Math.PI * 2);
+  ctx.arc(x, y, size * 0.98, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.fillStyle = color;
   ctx.strokeStyle = "#f8fafc";
   ctx.lineWidth = Math.max(1, size * 0.07);
   ctx.beginPath();
-  ctx.moveTo(x, y - size * 0.62);
-  ctx.lineTo(x + size * 0.38, y - size * 0.14);
-  ctx.lineTo(x + size * 0.22, y + size * 0.5);
-  ctx.lineTo(x - size * 0.22, y + size * 0.5);
-  ctx.lineTo(x - size * 0.38, y - size * 0.14);
+  ctx.moveTo(x, y - size * 0.56);
+  ctx.lineTo(x + size * 0.34, y);
+  ctx.lineTo(x, y + size * 0.56);
+  ctx.lineTo(x - size * 0.34, y);
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
@@ -1201,53 +1242,69 @@ function drawPowerUpPickup(ctx, world, pickup, x, y, size) {
   ctx.lineWidth = Math.max(2, size * 0.12);
   ctx.strokeStyle = "rgba(15, 23, 42, 0.92)";
   ctx.fillStyle = pickup.legendary ? "#fde68a" : "#f5f3ff";
-  ctx.strokeText(label, x, y - size * 0.86);
-  ctx.fillText(label, x, y - size * 0.86);
+  ctx.strokeText(label, x, y - size * 0.78);
+  ctx.fillText(label, x, y - size * 0.78);
+
+  ctx.restore();
 }
 
 
+
 function drawWeaponPickup(ctx, x, y, size) {
+  ctx.save();
+
   ctx.fillStyle = "rgba(15, 23, 42, 0.24)";
   ctx.beginPath();
   ctx.ellipse(
     x,
-    y + size * 1.05,
-    size * 0.94,
-    size * 0.46,
+    y + size * 1.02,
+    size * 0.92,
+    size * 0.42,
     0,
     0,
     Math.PI * 2,
   );
   ctx.fill();
 
-  ctx.fillStyle = "#1f2937";
-  ctx.strokeStyle = "#e5e7eb";
-  ctx.lineWidth = Math.max(1, size * 0.06);
+  ctx.translate(x, y);
+
+  ctx.fillStyle = "#111827";
+  ctx.strokeStyle = "#dbeafe";
+  ctx.lineWidth = Math.max(1, size * 0.05);
+
   ctx.beginPath();
   ctx.roundRect(
-    x - size * 0.58,
-    y - size * 0.18,
-    size * 1.16,
-    size * 0.48,
-    size * 0.1,
+    -size * 0.42,
+    -size * 0.09,
+    size * 0.68,
+    size * 0.18,
+    size * 0.06,
   );
   ctx.fill();
   ctx.stroke();
 
-  ctx.fillStyle = "#9ca3af";
-  ctx.fillRect(
-    x - size * 0.36,
-    y - size * 0.02,
-    size * 0.72,
+  ctx.beginPath();
+  ctx.roundRect(
     size * 0.12,
+    -size * 0.28,
+    size * 0.18,
+    size * 0.22,
+    size * 0.05,
   );
-  ctx.fillRect(
-    x + size * 0.12,
-    y - size * 0.33,
-    size * 0.16,
-    size * 0.36,
-  );
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(-size * 0.06, size * 0.02);
+  ctx.lineTo(size * 0.04, size * 0.42);
+  ctx.lineTo(-size * 0.12, size * 0.42);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.restore();
 }
+
 
 function drawCityPickups2D(ctx, world) {
   if (
@@ -1263,34 +1320,38 @@ function drawCityPickups2D(ctx, world) {
     const position = worldToScreen(world, pickup.x, pickup.y);
     const x = position.x;
     const y = position.y;
-    const size = position.scale * 0.22;
+    const size = Math.max(10, position.scale * 0.28);
+    const type = normalizeCityPickupType(pickup.type, pickup);
 
-    if (pickup.type === "health") {
+    if (type === "health") {
       drawMedkitPickup(ctx, x, y, size);
       continue;
     }
 
-    if (pickup.type === "ammo") {
+    if (type === "ammo") {
       drawAmmoPickup(ctx, x, y, size);
       continue;
     }
 
-    if (pickup.type === "weapon") {
+    if (type === "weapon") {
       drawWeaponPickup(ctx, x, y, size);
+
+      const label = cityWeaponPickupLabel(pickup);
+      ctx.font = `700 ${Math.max(10, size * 0.4)}px system-ui`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.lineWidth = Math.max(2, size * 0.12);
+      ctx.strokeStyle = "rgba(15, 23, 42, 0.94)";
+      ctx.fillStyle = "#f8fafc";
+      ctx.strokeText(label, x, y - size * 0.76);
+      ctx.fillText(label, x, y - size * 0.76);
       continue;
     }
 
-    if (pickup.type === "powerup") {
+    if (type === "power") {
       drawPowerUpPickup(ctx, world, pickup, x, y, size);
       continue;
     }
-
-    ctx.fillStyle = pickup.legendary
-      ? LEGENDARY_GOLD
-      : pickupColor(pickup.type);
-    ctx.beginPath();
-    ctx.arc(x, y, size * 0.45, 0, Math.PI * 2);
-    ctx.fill();
   }
 
   ctx.restore();
@@ -1298,31 +1359,36 @@ function drawCityPickups2D(ctx, world) {
 
 
 
+
 function enemyPalette(kind) {
   switch (kind) {
     case "turret":
       return {
-        core: "#ef476f",
-        shell: "#7f1d3f",
-        glow: "rgba(239, 71, 111, 0.26)",
-        eye: "#ffe4ec",
+        outer: "#4b5563",
+        main: "#fb7185",
+        eye: "#fee2e2",
+        accent: "#1f2937",
+        glow: "rgba(251, 113, 133, 0.22)",
       };
     case "melee":
       return {
-        core: "#f97316",
-        shell: "#7c2d12",
-        glow: "rgba(249, 115, 22, 0.28)",
+        outer: "#7c2d12",
+        main: "#f97316",
         eye: "#fff7ed",
+        accent: "#431407",
+        glow: "rgba(249, 115, 22, 0.22)",
       };
     default:
       return {
-        core: "#f59e0b",
-        shell: "#78350f",
-        glow: "rgba(245, 158, 11, 0.28)",
+        outer: "#78350f",
+        main: "#f59e0b",
         eye: "#fffbeb",
+        accent: "#451a03",
+        glow: "rgba(245, 158, 11, 0.22)",
       };
   }
 }
+
 
 
 
@@ -1341,84 +1407,99 @@ function drawCityEnemies2D(ctx, world) {
     const x = position.x;
     const y = position.y;
     const radius = Math.max(
-      position.scale * 0.14,
-      (enemy.radius ?? 0.22) * position.scale,
+      position.scale * 0.17,
+      (enemy.radius ?? 0.22) * position.scale * 1.02,
     );
     const palette = enemyPalette(enemy.kind);
 
-    const halo = ctx.createRadialGradient(
+    const glow = ctx.createRadialGradient(
       x,
       y,
-      radius * 0.1,
+      radius * 0.15,
       x,
       y,
-      radius * 1.55,
+      radius * 1.5,
     );
-    halo.addColorStop(0, palette.glow);
-    halo.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = halo;
+    glow.addColorStop(0, palette.glow);
+    glow.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = glow;
     ctx.beginPath();
-    ctx.arc(x, y, radius * 1.55, 0, Math.PI * 2);
+    ctx.arc(x, y, radius * 1.5, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.fillStyle = "rgba(15, 23, 42, 0.26)";
     ctx.beginPath();
     ctx.ellipse(
       x,
-      y + radius * 1.05,
-      radius * 0.98,
-      radius * 0.46,
+      y + radius * 1.02,
+      radius * 0.94,
+      radius * 0.4,
       0,
       0,
       Math.PI * 2,
     );
     ctx.fill();
 
-    if (enemy.kind === "melee") {
-      ctx.fillStyle = palette.shell;
+    if (enemy.kind === "turret") {
+      ctx.fillStyle = palette.outer;
       ctx.beginPath();
-      ctx.moveTo(x, y - radius);
-      ctx.lineTo(x + radius * 0.92, y - radius * 0.18);
-      ctx.lineTo(x + radius * 0.58, y + radius * 0.92);
-      ctx.lineTo(x - radius * 0.58, y + radius * 0.92);
-      ctx.lineTo(x - radius * 0.92, y - radius * 0.18);
-      ctx.closePath();
+      ctx.roundRect(
+        x - radius * 0.9,
+        y - radius * 0.9,
+        radius * 1.8,
+        radius * 1.8,
+        radius * 0.35,
+      );
       ctx.fill();
 
-      ctx.fillStyle = palette.core;
+      ctx.fillStyle = palette.main;
       ctx.beginPath();
-      ctx.moveTo(x, y - radius * 0.76);
-      ctx.lineTo(x + radius * 0.66, y - radius * 0.1);
-      ctx.lineTo(x + radius * 0.42, y + radius * 0.68);
-      ctx.lineTo(x - radius * 0.42, y + radius * 0.68);
-      ctx.lineTo(x - radius * 0.66, y - radius * 0.1);
-      ctx.closePath();
+      ctx.roundRect(
+        x - radius * 0.58,
+        y - radius * 0.58,
+        radius * 1.16,
+        radius * 1.16,
+        radius * 0.28,
+      );
       ctx.fill();
-    } else if (enemy.kind === "turret") {
-      ctx.fillStyle = palette.shell;
-      ctx.beginPath();
-      ctx.arc(x, y, radius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = palette.core;
-      ctx.beginPath();
-      ctx.arc(x, y, radius * 0.72, 0, Math.PI * 2);
-      ctx.fill();
+
       ctx.strokeStyle = palette.eye;
       ctx.lineWidth = Math.max(1, radius * 0.12);
       ctx.beginPath();
-      ctx.moveTo(x - radius * 0.52, y);
-      ctx.lineTo(x + radius * 0.52, y);
-      ctx.moveTo(x, y - radius * 0.52);
-      ctx.lineTo(x, y + radius * 0.52);
+      ctx.moveTo(x - radius * 0.36, y);
+      ctx.lineTo(x + radius * 0.36, y);
+      ctx.moveTo(x, y - radius * 0.36);
+      ctx.lineTo(x, y + radius * 0.36);
       ctx.stroke();
+    } else if (enemy.kind === "melee") {
+      ctx.fillStyle = palette.outer;
+      ctx.beginPath();
+      ctx.moveTo(x, y - radius);
+      ctx.lineTo(x + radius * 0.86, y - radius * 0.16);
+      ctx.lineTo(x + radius * 0.42, y + radius * 0.9);
+      ctx.lineTo(x - radius * 0.42, y + radius * 0.9);
+      ctx.lineTo(x - radius * 0.86, y - radius * 0.16);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = palette.main;
+      ctx.beginPath();
+      ctx.moveTo(x, y - radius * 0.72);
+      ctx.lineTo(x + radius * 0.58, y - radius * 0.08);
+      ctx.lineTo(x + radius * 0.28, y + radius * 0.62);
+      ctx.lineTo(x - radius * 0.28, y + radius * 0.62);
+      ctx.lineTo(x - radius * 0.58, y - radius * 0.08);
+      ctx.closePath();
+      ctx.fill();
     } else {
-      ctx.fillStyle = palette.shell;
+      ctx.fillStyle = palette.outer;
       ctx.beginPath();
       ctx.arc(x, y, radius, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = palette.core;
+
+      ctx.fillStyle = palette.main;
       ctx.beginPath();
-      ctx.arc(x, y, radius * 0.82, 0, Math.PI * 2);
+      ctx.arc(x, y, radius * 0.8, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -1428,10 +1509,10 @@ function drawCityEnemies2D(ctx, world) {
     ctx.arc(x + radius * 0.22, y - radius * 0.12, radius * 0.1, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.strokeStyle = palette.eye;
-    ctx.lineWidth = Math.max(1, radius * 0.08);
+    ctx.strokeStyle = palette.accent;
+    ctx.lineWidth = Math.max(1, radius * 0.1);
     ctx.beginPath();
-    ctx.arc(x, y + radius * 0.12, radius * 0.24, 0.2, Math.PI - 0.2);
+    ctx.arc(x, y + radius * 0.1, radius * 0.25, 0.2, Math.PI - 0.2);
     ctx.stroke();
   }
 
@@ -1614,6 +1695,7 @@ function drawCityWallFacade3D(ctx, world) {
 
 
 
+
 function drawUrbanFog(ctx, world) {
   if (world.level?.themeKey !== "city") {
     return;
@@ -1621,26 +1703,26 @@ function drawUrbanFog(ctx, world) {
 
   ctx.save();
 
-  for (let index = 0; index < 18; index += 1) {
-    const drift = world.time * (4 + index * 0.22);
-    const x = ((index * 97 + drift) % (CANVAS_WIDTH + 420)) - 210;
-    const y = 28 + ((index * 61) % Math.max(120, CANVAS_HEIGHT - 56));
-    const width = 140 + (index % 5) * 52;
-    const height = 18 + (index % 4) * 10;
+  for (let index = 0; index < 24; index += 1) {
+    const drift = world.time * (5 + index * 0.16);
+    const x = ((index * 91 + drift) % (CANVAS_WIDTH + 520)) - 260;
+    const y = 22 + ((index * 59) % Math.max(140, CANVAS_HEIGHT - 44));
+    const width = 120 + (index % 6) * 46;
+    const height = 18 + (index % 5) * 9;
 
     ctx.fillStyle =
       index % 2 === 0
-        ? "rgba(200, 205, 210, 0.05)"
-        : "rgba(160, 166, 172, 0.045)";
+        ? "rgba(214, 219, 223, 0.08)"
+        : "rgba(167, 173, 179, 0.07)";
     ctx.beginPath();
     ctx.ellipse(x, y, width, height, 0, 0, Math.PI * 2);
     ctx.fill();
   }
 
   const wash = ctx.createLinearGradient(0, 0, 0, CANVAS_HEIGHT);
-  wash.addColorStop(0, "rgba(226, 232, 240, 0.03)");
-  wash.addColorStop(0.4, "rgba(148, 163, 184, 0.04)");
-  wash.addColorStop(1, "rgba(100, 116, 139, 0.03)");
+  wash.addColorStop(0, "rgba(226, 232, 240, 0.045)");
+  wash.addColorStop(0.45, "rgba(148, 163, 184, 0.06)");
+  wash.addColorStop(1, "rgba(100, 116, 139, 0.05)");
   ctx.fillStyle = wash;
   ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 

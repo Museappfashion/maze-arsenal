@@ -674,32 +674,48 @@ function getStreetEdges(world, x, y) {
   };
 }
 
-function getStreetOrientation(world, x, y) {
-  const left = isFloorTile(world, x - 1, y);
-  const right = isFloorTile(world, x + 1, y);
-  const up = isFloorTile(world, x, y - 1);
-  const down = isFloorTile(world, x, y + 1);
-  const horizontal = Number(left) + Number(right);
-  const vertical = Number(up) + Number(down);
+function scanStreetDistance(world, x, y, dx, dy, maxDistance = 8) {
+  let distance = 0;
 
-  if (horizontal >= 1 && vertical >= 1) {
+  for (let step = 1; step <= maxDistance; step += 1) {
+    if (!isFloorTile(world, x + dx * step, y + dy * step)) {
+      break;
+    }
+
+    distance += 1;
+  }
+
+  return distance;
+}
+
+function getStreetOrientation(world, x, y) {
+  const left = scanStreetDistance(world, x, y, -1, 0);
+  const right = scanStreetDistance(world, x, y, 1, 0);
+  const up = scanStreetDistance(world, x, y, 0, -1);
+  const down = scanStreetDistance(world, x, y, 0, 1);
+  const horizontal = left + right;
+  const vertical = up + down;
+
+  if (
+    horizontal >= 5 &&
+    vertical >= 5 &&
+    Math.abs(horizontal - vertical) <= 2
+  ) {
     return "intersection";
   }
 
-  if (horizontal > vertical) {
+  if (horizontal >= vertical) {
     return "horizontal";
   }
 
-  if (vertical > horizontal) {
-    return "vertical";
-  }
-
-  return "deadend";
+  return "vertical";
 }
 
+
 function drawSidewalkEdges(ctx, edges, sx, sy, size) {
-  ctx.fillStyle = "#6b7280";
-  const band = size * 0.14;
+  const band = size * 0.12;
+
+  ctx.fillStyle = "#777b7e";
 
   if (edges.left) {
     ctx.fillRect(sx, sy, band, size);
@@ -717,8 +733,8 @@ function drawSidewalkEdges(ctx, edges, sx, sy, size) {
     ctx.fillRect(sx, sy + size - band, size, band);
   }
 
-  ctx.strokeStyle = "rgba(226, 232, 240, 0.2)";
-  ctx.lineWidth = Math.max(1, size * 0.02);
+  ctx.strokeStyle = "rgba(238, 241, 243, 0.3)";
+  ctx.lineWidth = Math.max(1, size * 0.018);
 
   if (edges.left) {
     ctx.beginPath();
@@ -749,73 +765,69 @@ function drawSidewalkEdges(ctx, edges, sx, sy, size) {
   }
 }
 
+
 function drawRoadMarks2D(ctx, world, x, y, sx, sy, size) {
   const orientation = getStreetOrientation(world, x, y);
+  const left = scanStreetDistance(world, x, y, -1, 0);
+  const right = scanStreetDistance(world, x, y, 1, 0);
+  const up = scanStreetDistance(world, x, y, 0, -1);
+  const down = scanStreetDistance(world, x, y, 0, 1);
+  const dashPhase = (x + y) % 3;
 
   ctx.save();
-  ctx.lineCap = "round";
+  ctx.strokeStyle = "#f4c430";
+  ctx.lineCap = "butt";
 
   if (orientation === "horizontal") {
-    ctx.strokeStyle = "#facc15";
-    ctx.lineWidth = Math.max(2, size * 0.045);
+    const centerTile = Math.abs(up - down) <= 1;
 
-    for (let dash = 0; dash < 2; dash += 1) {
-      const x1 = sx + size * (0.12 + dash * 0.38);
-      const x2 = x1 + size * 0.18;
+    if (centerTile && dashPhase !== 1) {
+      const centerY =
+        down > up
+          ? sy + size * 0.93
+          : sy + size * 0.07;
+
+      ctx.lineWidth = Math.max(1.5, size * 0.026);
 
       ctx.beginPath();
-      ctx.moveTo(x1, sy + size * 0.5);
-      ctx.lineTo(x2, sy + size * 0.5);
+      ctx.moveTo(sx + size * 0.08, centerY - size * 0.035);
+      ctx.lineTo(sx + size * 0.92, centerY - size * 0.035);
+      ctx.moveTo(sx + size * 0.08, centerY + size * 0.035);
+      ctx.lineTo(sx + size * 0.92, centerY + size * 0.035);
       ctx.stroke();
     }
   } else if (orientation === "vertical") {
-    ctx.strokeStyle = "#facc15";
-    ctx.lineWidth = Math.max(2, size * 0.045);
+    const centerTile = Math.abs(left - right) <= 1;
 
-    for (let dash = 0; dash < 2; dash += 1) {
-      const y1 = sy + size * (0.12 + dash * 0.38);
-      const y2 = y1 + size * 0.18;
+    if (centerTile && dashPhase !== 1) {
+      const centerX =
+        right > left
+          ? sx + size * 0.93
+          : sx + size * 0.07;
+
+      ctx.lineWidth = Math.max(1.5, size * 0.026);
 
       ctx.beginPath();
-      ctx.moveTo(sx + size * 0.5, y1);
-      ctx.lineTo(sx + size * 0.5, y2);
+      ctx.moveTo(centerX - size * 0.035, sy + size * 0.08);
+      ctx.lineTo(centerX - size * 0.035, sy + size * 0.92);
+      ctx.moveTo(centerX + size * 0.035, sy + size * 0.08);
+      ctx.lineTo(centerX + size * 0.035, sy + size * 0.92);
       ctx.stroke();
     }
-  } else if (
-    orientation === "intersection" &&
-    citySeed(x, y, 7) > 0.45
-  ) {
-    ctx.fillStyle = "rgba(241, 245, 249, 0.76)";
-    const stripeThickness = size * 0.05;
+  } else {
+    ctx.strokeStyle = "rgba(241, 245, 249, 0.38)";
+    ctx.lineWidth = Math.max(1, size * 0.018);
 
-    for (let step = 0; step < 3; step += 1) {
-      const offset = size * (0.16 + step * 0.16);
-
-      ctx.fillRect(
-        sx + offset,
-        sy + size * 0.08,
-        stripeThickness,
-        size * 0.14,
-      );
-      ctx.fillRect(
-        sx + offset,
-        sy + size * 0.78,
-        stripeThickness,
-        size * 0.14,
-      );
-      ctx.fillRect(
-        sx + size * 0.08,
-        sy + offset,
-        size * 0.14,
-        stripeThickness,
-      );
-      ctx.fillRect(
-        sx + size * 0.78,
-        sy + offset,
-        size * 0.14,
-        stripeThickness,
-      );
-    }
+    ctx.beginPath();
+    ctx.moveTo(sx + size * 0.08, sy + size * 0.08);
+    ctx.lineTo(sx + size * 0.92, sy + size * 0.08);
+    ctx.moveTo(sx + size * 0.08, sy + size * 0.92);
+    ctx.lineTo(sx + size * 0.92, sy + size * 0.92);
+    ctx.moveTo(sx + size * 0.08, sy + size * 0.08);
+    ctx.lineTo(sx + size * 0.08, sy + size * 0.92);
+    ctx.moveTo(sx + size * 0.92, sy + size * 0.08);
+    ctx.lineTo(sx + size * 0.92, sy + size * 0.92);
+    ctx.stroke();
   }
 
   ctx.restore();
@@ -845,6 +857,7 @@ function drawStreetCracks(ctx, sx, sy, size, x, y) {
   ctx.stroke();
 }
 
+
 function drawCityRoads2D(ctx, world) {
   if (
     world.level?.themeKey !== "city" ||
@@ -865,7 +878,7 @@ function drawCityRoads2D(ctx, world) {
 
       const sx = (x - bounds.camera.x) * bounds.scale;
       const sy = (y - bounds.camera.y) * bounds.scale;
-      const seed = citySeed(x, y, 1);
+      const variation = citySeed(x, y, 1);
       const asphalt = ctx.createLinearGradient(
         sx,
         sy,
@@ -873,92 +886,252 @@ function drawCityRoads2D(ctx, world) {
         sy + bounds.scale,
       );
 
-      asphalt.addColorStop(0, "#3f454a");
-      asphalt.addColorStop(0.5, seed > 0.5 ? "#454b50" : "#3b4045");
-      asphalt.addColorStop(1, "#2c3135");
+      asphalt.addColorStop(
+        0,
+        variation > 0.58 ? "#35383a" : "#303335",
+      );
+      asphalt.addColorStop(0.55, "#373a3c");
+      asphalt.addColorStop(1, "#292c2e");
 
       ctx.fillStyle = asphalt;
-      ctx.fillRect(sx, sy, bounds.scale, bounds.scale);
+      ctx.fillRect(
+        sx,
+        sy,
+        bounds.scale + 0.5,
+        bounds.scale + 0.5,
+      );
 
-      const edges = getStreetEdges(world, x, y);
-      drawSidewalkEdges(ctx, edges, sx, sy, bounds.scale);
-      drawRoadMarks2D(ctx, world, x, y, sx, sy, bounds.scale);
-      drawStreetCracks(ctx, sx, sy, bounds.scale, x, y);
+      ctx.fillStyle = "rgba(255,255,255,0.018)";
+      for (let speck = 0; speck < 3; speck += 1) {
+        ctx.fillRect(
+          sx + bounds.scale * citySeed(x, y, 70 + speck),
+          sy + bounds.scale * citySeed(y, x, 80 + speck),
+          Math.max(1, bounds.scale * 0.012),
+          Math.max(1, bounds.scale * 0.012),
+        );
+      }
+
+      drawSidewalkEdges(
+        ctx,
+        getStreetEdges(world, x, y),
+        sx,
+        sy,
+        bounds.scale,
+      );
+      drawRoadMarks2D(
+        ctx,
+        world,
+        x,
+        y,
+        sx,
+        sy,
+        bounds.scale,
+      );
+      drawStreetCracks(
+        ctx,
+        sx,
+        sy,
+        bounds.scale,
+        x,
+        y,
+      );
     }
   }
 
   ctx.restore();
 }
 
+
 function drawSkyscraperTile2D(ctx, world, x, y, sx, sy, size) {
   const seed = citySeed(x, y, 2);
-  const body = seed > 0.66
-    ? "#1e293b"
-    : seed > 0.33
-      ? "#253244"
-      : "#192430";
+  const heightClass = 0.72 + citySeed(x, y, 3) * 0.28;
+  const roadLeft = isFloorTile(world, x - 1, y);
+  const roadRight = isFloorTile(world, x + 1, y);
+  const roadUp = isFloorTile(world, x, y - 1);
+  const roadDown = isFloorTile(world, x, y + 1);
+  const roofColor =
+    seed > 0.72
+      ? "#26313c"
+      : seed > 0.4
+        ? "#1d2833"
+        : "#17212a";
 
-  ctx.fillStyle = body;
-  ctx.fillRect(sx, sy, size, size);
+  ctx.save();
 
-  ctx.fillStyle = "rgba(0, 0, 0, 0.12)";
+  ctx.fillStyle = "rgba(0, 0, 0, 0.36)";
   ctx.fillRect(
-    sx + size * 0.74,
-    sy,
-    size * 0.26,
-    size,
+    sx + size * 0.07,
+    sy + size * 0.09,
+    size * 0.93,
+    size * 0.91,
   );
 
-  ctx.fillStyle = "rgba(203, 213, 225, 0.08)";
-  ctx.fillRect(
+  const roof = ctx.createLinearGradient(
     sx,
-    sy + size * 0.04,
-    size,
-    size * 0.08,
+    sy,
+    sx + size,
+    sy + size,
+  );
+  roof.addColorStop(0, "#3b4650");
+  roof.addColorStop(0.18, roofColor);
+  roof.addColorStop(1, "#111820");
+
+  ctx.fillStyle = roof;
+  ctx.fillRect(
+    sx + size * 0.035,
+    sy + size * 0.035,
+    size * 0.91,
+    size * 0.91,
   );
 
-  const columns = 2 + Math.floor(citySeed(x, y, 3) * 2);
-  const rows = 4 + Math.floor(citySeed(x, y, 4) * 2);
-  const marginX = size * 0.12;
-  const marginY = size * 0.16;
-  const windowW = size * 0.11;
-  const windowH = size * 0.06;
-  const stepX = (size - marginX * 2 - windowW) / Math.max(1, columns - 1);
-  const stepY = (size - marginY * 2 - windowH) / Math.max(1, rows - 1);
-
-  for (let row = 0; row < rows; row += 1) {
-    for (let col = 0; col < columns; col += 1) {
-      const lit = citySeed(x + col, y + row, 5) > 0.76;
-      ctx.fillStyle = lit
-        ? "rgba(250, 204, 21, 0.34)"
-        : "rgba(226, 232, 240, 0.15)";
-      ctx.fillRect(
-        sx + marginX + col * stepX,
-        sy + marginY + row * stepY,
-        windowW,
-        windowH,
-      );
-    }
-  }
-
-  ctx.strokeStyle = "rgba(226, 232, 240, 0.08)";
-  ctx.lineWidth = Math.max(1, size * 0.02);
+  ctx.strokeStyle = "rgba(203, 213, 225, 0.26)";
+  ctx.lineWidth = Math.max(1, size * 0.022);
   ctx.strokeRect(
-    sx + size * 0.02,
-    sy + size * 0.02,
-    size * 0.96,
-    size * 0.96,
+    sx + size * 0.055,
+    sy + size * 0.055,
+    size * 0.87,
+    size * 0.87,
   );
 
-  if (!isFloorTile(world, x, y + 1)) {
-    ctx.fillStyle = "rgba(0, 0, 0, 0.16)";
-    ctx.fillRect(
-      sx,
-      sy + size * 0.88,
-      size,
-      size * 0.12,
+  const unitWidth = size * (0.2 + citySeed(x, y, 10) * 0.12);
+  const unitHeight = size * (0.16 + citySeed(x, y, 11) * 0.09);
+  const unitX =
+    sx + size * (0.18 + citySeed(x, y, 12) * 0.42);
+  const unitY =
+    sy + size * (0.2 + citySeed(x, y, 13) * 0.38);
+
+  ctx.fillStyle = "#59636d";
+  ctx.fillRect(unitX, unitY, unitWidth, unitHeight);
+  ctx.fillStyle = "#242c34";
+  ctx.fillRect(
+    unitX + unitWidth * 0.16,
+    unitY + unitHeight * 0.18,
+    unitWidth * 0.68,
+    unitHeight * 0.56,
+  );
+
+  if (citySeed(x, y, 14) > 0.67) {
+    ctx.strokeStyle = "rgba(148, 163, 184, 0.7)";
+    ctx.lineWidth = Math.max(1, size * 0.016);
+    ctx.beginPath();
+    ctx.moveTo(
+      sx + size * 0.7,
+      sy + size * 0.58,
     );
+    ctx.lineTo(
+      sx + size * 0.7,
+      sy + size * (0.25 - heightClass * 0.04),
+    );
+    ctx.stroke();
+
+    ctx.fillStyle = "#ef4444";
+    ctx.beginPath();
+    ctx.arc(
+      sx + size * 0.7,
+      sy + size * (0.24 - heightClass * 0.04),
+      Math.max(1, size * 0.025),
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
   }
+
+  const drawFacade = (side) => {
+    const band = size * 0.19;
+    const windowColor = "rgba(241, 245, 249, 0.28)";
+    const litColor = "rgba(250, 204, 21, 0.42)";
+
+    if (side === "left") {
+      ctx.fillStyle = "#101820";
+      ctx.fillRect(sx, sy + size * 0.08, band, size * 0.84);
+
+      for (let row = 0; row < 4; row += 1) {
+        ctx.fillStyle =
+          citySeed(x, y + row, 30) > 0.76
+            ? litColor
+            : windowColor;
+        ctx.fillRect(
+          sx + band * 0.28,
+          sy + size * (0.18 + row * 0.17),
+          band * 0.34,
+          size * 0.055,
+        );
+      }
+    } else if (side === "right") {
+      ctx.fillStyle = "#0d151d";
+      ctx.fillRect(
+        sx + size - band,
+        sy + size * 0.08,
+        band,
+        size * 0.84,
+      );
+
+      for (let row = 0; row < 4; row += 1) {
+        ctx.fillStyle =
+          citySeed(x + row, y, 31) > 0.76
+            ? litColor
+            : windowColor;
+        ctx.fillRect(
+          sx + size - band * 0.62,
+          sy + size * (0.18 + row * 0.17),
+          band * 0.34,
+          size * 0.055,
+        );
+      }
+    } else if (side === "up") {
+      ctx.fillStyle = "#111a22";
+      ctx.fillRect(sx + size * 0.08, sy, size * 0.84, band);
+
+      for (let col = 0; col < 4; col += 1) {
+        ctx.fillStyle =
+          citySeed(x + col, y, 32) > 0.76
+            ? litColor
+            : windowColor;
+        ctx.fillRect(
+          sx + size * (0.17 + col * 0.17),
+          sy + band * 0.28,
+          size * 0.055,
+          band * 0.34,
+        );
+      }
+    } else if (side === "down") {
+      ctx.fillStyle = "#0c141b";
+      ctx.fillRect(
+        sx + size * 0.08,
+        sy + size - band,
+        size * 0.84,
+        band,
+      );
+
+      for (let col = 0; col < 4; col += 1) {
+        ctx.fillStyle =
+          citySeed(x, y + col, 33) > 0.76
+            ? litColor
+            : windowColor;
+        ctx.fillRect(
+          sx + size * (0.17 + col * 0.17),
+          sy + size - band * 0.62,
+          size * 0.055,
+          band * 0.34,
+        );
+      }
+    }
+  };
+
+  if (roadLeft) {
+    drawFacade("left");
+  }
+  if (roadRight) {
+    drawFacade("right");
+  }
+  if (roadUp) {
+    drawFacade("up");
+  }
+  if (roadDown) {
+    drawFacade("down");
+  }
+
+  ctx.restore();
 }
 
 function drawCityBuildingBlocks2D(ctx, world) {

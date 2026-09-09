@@ -467,263 +467,11 @@ function drawRunEscalationOverlay(ctx, world) {
   }
 }
 
-function drawVictoryCelebration(ctx, world) {
-  const centerX = CANVAS_WIDTH * 0.5;
-  const centerY = CANVAS_HEIGHT * 0.31;
-  const time =
-    typeof performance !== "undefined"
-      ? performance.now() / 1000
-      : 0;
-  const explored = getDiscoveredPercent(world);
-  const enemiesDefeated =
-    world.__cinematic?.enemiesDefeated ?? 0;
-
-  ctx.save();
-
-  const wash = ctx.createRadialGradient(
-    centerX,
-    centerY,
-    20,
-    centerX,
-    centerY,
-    CANVAS_HEIGHT * 0.7,
-  );
-  wash.addColorStop(
-    0,
-    "rgba(250,204,21,0.16)",
-  );
-  wash.addColorStop(
-    0.38,
-    "rgba(34,211,238,0.08)",
-  );
-  wash.addColorStop(
-    1,
-    "rgba(2,6,23,0.54)",
-  );
-  ctx.fillStyle = wash;
-  ctx.fillRect(
-    0,
-    0,
-    CANVAS_WIDTH,
-    CANVAS_HEIGHT,
-  );
-
-  ctx.save();
-  ctx.translate(centerX, centerY - 8);
-  ctx.rotate(time * 0.08);
-  ctx.globalCompositeOperation = "lighter";
-
-  for (let ray = 0; ray < 24; ray += 1) {
-    const angle =
-      ray * (Math.PI * 2 / 24);
-    const inner = 82;
-    const outer =
-      165 +
-      18 *
-        Math.sin(
-          time * 2.1 + ray * 0.73,
-        );
-
-    ctx.globalAlpha =
-      0.035 +
-      0.035 *
-        (
-          0.5 +
-          0.5 *
-            Math.sin(
-              time * 2.8 + ray,
-            )
-        );
-    ctx.strokeStyle =
-      ray % 2 === 0
-        ? "#fde047"
-        : "#67e8f9";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(
-      Math.cos(angle) * inner,
-      Math.sin(angle) * inner,
-    );
-    ctx.lineTo(
-      Math.cos(angle) * outer,
-      Math.sin(angle) * outer,
-    );
-    ctx.stroke();
-  }
-
-  ctx.restore();
-
-  for (let index = 0; index < 72; index += 1) {
-    const seedX = fxNoise(index, 201);
-    const seedY = fxNoise(index, 202);
-    const speed =
-      42 + fxNoise(index, 203) * 78;
-    const drift =
-      (
-        seedY * CANVAS_HEIGHT +
-        time * speed
-      ) %
-      (CANVAS_HEIGHT + 70);
-    const x =
-      (
-        seedX * CANVAS_WIDTH +
-        Math.sin(
-          time *
-            (
-              0.7 +
-              fxNoise(index, 204)
-            ) +
-            index,
-        ) *
-          18
-      );
-    const y = drift - 35;
-    const size =
-      3 + fxNoise(index, 205) * 5;
-    const rotation =
-      time *
-        (
-          1.2 +
-          fxNoise(index, 206) * 4
-        ) +
-      index;
-
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(rotation);
-    ctx.globalAlpha =
-      0.42 +
-      fxNoise(index, 207) * 0.42;
-    ctx.fillStyle =
-      index % 4 === 0
-        ? "#fde047"
-        : index % 4 === 1
-          ? "#67e8f9"
-          : index % 4 === 2
-            ? "#f8fafc"
-            : "#f59e0b";
-    ctx.fillRect(
-      -size * 0.5,
-      -size * 0.25,
-      size,
-      size * 0.5,
-    );
-    ctx.restore();
-  }
-
-  const pulse =
-    0.5 +
-    0.5 *
-      Math.sin(time * 3.2);
-
-  const panelWidth =
-    Math.min(640, CANVAS_WIDTH * 0.76);
-  const panelHeight = 238;
-  const panelX =
-    centerX - panelWidth * 0.5;
-  const panelY =
-    centerY - 74;
-
-  ctx.fillStyle =
-    "rgba(2,6,23,0.84)";
-  ctx.strokeStyle =
-    "rgba(103,232,249,0.24)";
-  ctx.lineWidth = 1.5;
-
-  if (typeof ctx.roundRect === "function") {
-    ctx.beginPath();
-    ctx.roundRect(
-      panelX,
-      panelY,
-      panelWidth,
-      panelHeight,
-      22,
-    );
-    ctx.fill();
-    ctx.stroke();
-  } else {
-    ctx.fillRect(
-      panelX,
-      panelY,
-      panelWidth,
-      panelHeight,
-    );
-    ctx.strokeRect(
-      panelX,
-      panelY,
-      panelWidth,
-      panelHeight,
-    );
-  }
-
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-
-  ctx.shadowColor =
-    "rgba(250,204,21,0.68)";
-  ctx.shadowBlur =
-    18 + pulse * 12;
-  ctx.fillStyle = "#fff7cc";
-  ctx.font =
-    "950 42px system-ui, sans-serif";
-  ctx.fillText(
-    "LEVEL COMPLETE!",
-    centerX,
-    centerY - 22,
-  );
-
-  ctx.shadowColor =
-    "rgba(34,211,238,0.5)";
-  ctx.shadowBlur = 12;
-  ctx.fillStyle = "#a5f3fc";
-  ctx.font =
-    "850 18px system-ui, sans-serif";
-  ctx.fillText(
-    world.level?.subtitle ??
-      world.level?.label ??
-      "Maze cleared",
-    centerX,
-    centerY + 22,
-  );
-
-  ctx.shadowBlur = 5;
-  ctx.fillStyle = "#f8fafc";
-  ctx.font =
-    "800 16px system-ui, sans-serif";
-  ctx.fillText(
-    `${explored}% explored`,
-    centerX,
-    centerY + 58,
-  );
-  ctx.fillText(
-    `${enemiesDefeated} enemies defeated`,
-    centerX,
-    centerY + 82,
-  );
-
-  ctx.fillStyle =
-    "rgba(226,232,240,0.86)";
-  ctx.font =
-    "750 12px system-ui, sans-serif";
-  ctx.fillText(
-    "EXIT SECURED",
-    centerX,
-    centerY + 112,
-  );
-
-  ctx.restore();
-}
-
 function drawResultOverlay(ctx, world) {
   if (
     !world.victory &&
     !world.gameOver
   ) {
-    return;
-  }
-
-  if (world.victory) {
-    drawVictoryCelebration(ctx, world);
     return;
   }
 
@@ -736,6 +484,7 @@ function drawResultOverlay(ctx, world) {
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
+
   ctx.shadowColor = "rgba(0, 0, 0, 0.72)";
   ctx.shadowBlur = 8;
   ctx.fillStyle = "#f8fafc";
@@ -758,6 +507,7 @@ function drawResultOverlay(ctx, world) {
 
   ctx.restore();
 }
+
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));
@@ -3032,7 +2782,7 @@ function drawWorldIdentityEffects(ctx, world) {
   }
 
   if (themeKey === "space") {
-    drawOrbitalRuinsIdentity(
+    drawOrbitalRuinsIdentityGuaranteed(
       ctx,
       world,
     );
@@ -3040,7 +2790,7 @@ function drawWorldIdentityEffects(ctx, world) {
   }
 
   if (themeKey === "jungle") {
-    drawEmeraldWildsIdentity(
+    drawEmeraldWildsIdentityGuaranteed(
       ctx,
       world,
     );
@@ -3048,11 +2798,1069 @@ function drawWorldIdentityEffects(ctx, world) {
   }
 
   if (themeKey === "medieval") {
-    drawFallenKeepIdentity(
+    drawFallenKeepIdentityGuaranteed(
       ctx,
       world,
     );
   }
+}
+
+
+function getThemePropCache(world, themeKey) {
+  const cacheKey =
+    `${themeKey}:${world.width}x${world.height}`;
+  const current =
+    world.__themePropCache ?? null;
+
+  if (current?.key === cacheKey) {
+    return current;
+  }
+
+  const floorNearWalls = [];
+  const openFloors = [];
+
+  for (let y = 1; y < world.height - 1; y += 1) {
+    for (let x = 1; x < world.width - 1; x += 1) {
+      if (!fxTileIsFloor(world, x, y)) {
+        continue;
+      }
+
+      const walls = {
+        north: isWallTile(world, x, y - 1),
+        south: isWallTile(world, x, y + 1),
+        west: isWallTile(world, x - 1, y),
+        east: isWallTile(world, x + 1, y),
+      };
+      const wallCount =
+        Number(walls.north) +
+        Number(walls.south) +
+        Number(walls.west) +
+        Number(walls.east);
+
+      const candidate = {
+        tileX: x,
+        tileY: y,
+        x: x + 0.5,
+        y: y + 0.5,
+        walls,
+        wallCount,
+      };
+
+      openFloors.push(candidate);
+
+      if (wallCount >= 1) {
+        floorNearWalls.push(candidate);
+      }
+    }
+  }
+
+  const cache = {
+    key: cacheKey,
+    floorNearWalls,
+    openFloors,
+    keepStatues: selectSpreadCandidates(
+      floorNearWalls.filter(
+        (candidate) => candidate.wallCount >= 1,
+      ),
+      10,
+      501,
+      2.5,
+    ),
+    keepTorches: selectSpreadCandidates(
+      floorNearWalls,
+      12,
+      502,
+      2.2,
+    ),
+    keepBanners: selectSpreadCandidates(
+      floorNearWalls,
+      9,
+      503,
+      2.4,
+    ),
+    keepDoors: selectSpreadCandidates(
+      floorNearWalls,
+      8,
+      504,
+      2.1,
+    ),
+    emeraldGrowth: selectSpreadCandidates(
+      floorNearWalls,
+      16,
+      601,
+      1.8,
+    ),
+    emeraldWater: selectSpreadCandidates(
+      openFloors.filter(
+        (candidate) => candidate.wallCount <= 2,
+      ),
+      12,
+      602,
+      2.2,
+    ),
+    orbitalWrecks: selectSpreadCandidates(
+      openFloors.filter(
+        (candidate) => candidate.wallCount <= 2,
+      ),
+      8,
+      701,
+      2.5,
+    ),
+  };
+
+  world.__themePropCache = cache;
+
+  return cache;
+}
+
+function selectSpreadCandidates(
+  candidates,
+  count,
+  salt,
+  minDistance,
+) {
+  const ordered = [...candidates].sort(
+    (left, right) =>
+      fxNoise(
+        right.tileX,
+        right.tileY,
+        salt,
+      ) -
+      fxNoise(
+        left.tileX,
+        left.tileY,
+        salt,
+      ),
+  );
+  const chosen = [];
+
+  for (const candidate of ordered) {
+    if (chosen.length >= count) {
+      break;
+    }
+
+    const tooClose = chosen.some(
+      (placed) =>
+        Math.hypot(
+          candidate.x - placed.x,
+          candidate.y - placed.y,
+        ) < minDistance,
+    );
+
+    if (tooClose) {
+      continue;
+    }
+
+    chosen.push(candidate);
+  }
+
+  return chosen;
+}
+
+function getFacingAngle(candidate) {
+  if (candidate.walls.north && !candidate.walls.south) {
+    return Math.PI / 2;
+  }
+
+  if (candidate.walls.south && !candidate.walls.north) {
+    return -Math.PI / 2;
+  }
+
+  if (candidate.walls.west && !candidate.walls.east) {
+    return 0;
+  }
+
+  if (candidate.walls.east && !candidate.walls.west) {
+    return Math.PI;
+  }
+
+  return 0;
+}
+
+function drawProjectedWorldProps(
+  ctx,
+  world,
+  items,
+  maxDistance,
+  drawFn,
+) {
+  const projectionPlane =
+    CANVAS_WIDTH /
+    2 /
+    Math.tan(VIEW_3D_FOV / 2);
+  const projected = [];
+
+  for (const item of items) {
+    if (
+      visibleStrengthAt(
+        world,
+        item.tileX,
+        item.tileY,
+      ) <= 0.08
+    ) {
+      continue;
+    }
+
+    const distance = Math.hypot(
+      item.x - world.player.x,
+      item.y - world.player.y,
+    );
+
+    if (distance > maxDistance) {
+      continue;
+    }
+
+    const projection = project3DSprite(
+      world,
+      item.x,
+      item.y,
+      projectionPlane,
+    );
+
+    if (!projection) {
+      continue;
+    }
+
+    projected.push({
+      item,
+      distance,
+      projection,
+    });
+  }
+
+  projected.sort(
+    (left, right) =>
+      right.distance - left.distance,
+  );
+
+  for (const entry of projected) {
+    drawFn(
+      ctx,
+      world,
+      entry.item,
+      entry.projection,
+      entry.distance,
+    );
+  }
+}
+
+function drawKeepStatueShape2D(
+  ctx,
+  x,
+  y,
+  size,
+  angle = 0,
+) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+
+  ctx.fillStyle = "#6b7280";
+  ctx.strokeStyle = "#d1d5db";
+  ctx.lineWidth = Math.max(1, size * 0.05);
+
+  ctx.fillRect(
+    -size * 0.26,
+    size * 0.2,
+    size * 0.52,
+    size * 0.12,
+  );
+
+  ctx.fillRect(
+    -size * 0.07,
+    size * 0.02,
+    size * 0.14,
+    size * 0.2,
+  );
+  ctx.fillRect(
+    -size * 0.17,
+    -size * 0.16,
+    size * 0.34,
+    size * 0.22,
+  );
+
+  ctx.beginPath();
+  ctx.arc(
+    0,
+    -size * 0.27,
+    size * 0.09,
+    0,
+    Math.PI * 2,
+  );
+  ctx.fill();
+
+  ctx.strokeRect(
+    -size * 0.17,
+    -size * 0.16,
+    size * 0.34,
+    size * 0.22,
+  );
+
+  ctx.strokeStyle = "#9ca3af";
+  ctx.beginPath();
+  ctx.moveTo(size * 0.18, -size * 0.04);
+  ctx.lineTo(size * 0.18, size * 0.18);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(size * 0.18, -size * 0.08);
+  ctx.lineTo(size * 0.28, -size * 0.18);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawKeepGuaranteedStatues2D(
+  ctx,
+  world,
+  props,
+) {
+  for (const statue of props.keepStatues) {
+    if (
+      visibleStrengthAt(
+        world,
+        statue.tileX,
+        statue.tileY,
+      ) <= 0.1
+    ) {
+      continue;
+    }
+
+    const screen =
+      getWorldScreenPosition(
+        world,
+        statue.x,
+        statue.y,
+      );
+    const size = screen.scale * 0.64;
+
+    drawKeepStatueShape2D(
+      ctx,
+      screen.x,
+      screen.y + screen.scale * 0.02,
+      size,
+      getFacingAngle(statue),
+    );
+  }
+}
+
+function drawKeepProjectedStatues3D(
+  ctx,
+  world,
+  props,
+) {
+  drawProjectedWorldProps(
+    ctx,
+    world,
+    props.keepStatues,
+    13,
+    (
+      localCtx,
+      localWorld,
+      statue,
+      projection,
+      distance,
+    ) => {
+      const height = Math.max(
+        40,
+        Math.min(
+          CANVAS_HEIGHT * 0.7,
+          projection.scale * 0.95,
+        ),
+      );
+      const width = height * 0.42;
+      const baseY =
+        CANVAS_HEIGHT * 0.66 +
+        Math.min(
+          CANVAS_HEIGHT * 0.12,
+          projection.scale * 0.04,
+        );
+
+      localCtx.save();
+      localCtx.translate(
+        projection.screenX,
+        baseY,
+      );
+      localCtx.globalAlpha =
+        0.9 - Math.min(0.45, distance * 0.025);
+
+      localCtx.fillStyle = "#5b6472";
+      localCtx.strokeStyle = "#d1d5db";
+      localCtx.lineWidth = Math.max(
+        1,
+        width * 0.04,
+      );
+
+      localCtx.fillRect(
+        -width * 0.32,
+        -height * 0.04,
+        width * 0.64,
+        height * 0.1,
+      );
+      localCtx.fillRect(
+        -width * 0.1,
+        -height * 0.28,
+        width * 0.2,
+        height * 0.24,
+      );
+      localCtx.fillRect(
+        -width * 0.24,
+        -height * 0.54,
+        width * 0.48,
+        height * 0.28,
+      );
+      localCtx.beginPath();
+      localCtx.arc(
+        0,
+        -height * 0.66,
+        width * 0.14,
+        0,
+        Math.PI * 2,
+      );
+      localCtx.fill();
+
+      localCtx.strokeRect(
+        -width * 0.24,
+        -height * 0.54,
+        width * 0.48,
+        height * 0.28,
+      );
+
+      localCtx.strokeStyle = "#94a3b8";
+      localCtx.beginPath();
+      localCtx.moveTo(
+        width * 0.26,
+        -height * 0.52,
+      );
+      localCtx.lineTo(
+        width * 0.26,
+        -height * 0.08,
+      );
+      localCtx.stroke();
+
+      localCtx.beginPath();
+      localCtx.moveTo(
+        width * 0.26,
+        -height * 0.56,
+      );
+      localCtx.lineTo(
+        width * 0.38,
+        -height * 0.74,
+      );
+      localCtx.stroke();
+
+      localCtx.restore();
+    },
+  );
+}
+
+function drawKeepProjectedTorches3D(
+  ctx,
+  world,
+  props,
+) {
+  drawProjectedWorldProps(
+    ctx,
+    world,
+    props.keepTorches,
+    13,
+    (
+      localCtx,
+      localWorld,
+      torch,
+      projection,
+      distance,
+    ) => {
+      const height = Math.max(
+        26,
+        Math.min(
+          CANVAS_HEIGHT * 0.34,
+          projection.scale * 0.55,
+        ),
+      );
+      const baseY =
+        CANVAS_HEIGHT * 0.57 +
+        Math.min(
+          CANVAS_HEIGHT * 0.08,
+          projection.scale * 0.03,
+        );
+      const flicker =
+        0.75 +
+        0.25 *
+          Math.sin(
+            (localWorld.time ?? 0) * 7 +
+              torch.tileX +
+              torch.tileY,
+          );
+
+      localCtx.save();
+      localCtx.translate(
+        projection.screenX,
+        baseY,
+      );
+      localCtx.globalCompositeOperation =
+        "lighter";
+
+      const glow =
+        localCtx.createRadialGradient(
+          0,
+          -height * 0.8,
+          0,
+          0,
+          -height * 0.8,
+          height * 1.2,
+        );
+      glow.addColorStop(
+        0,
+        `rgba(251,191,36,${0.2 * flicker})`,
+      );
+      glow.addColorStop(
+        0.4,
+        `rgba(249,115,22,${0.12 * flicker})`,
+      );
+      glow.addColorStop(
+        1,
+        "rgba(0,0,0,0)",
+      );
+
+      localCtx.fillStyle = glow;
+      localCtx.beginPath();
+      localCtx.arc(
+        0,
+        -height * 0.8,
+        height * 1.2,
+        0,
+        Math.PI * 2,
+      );
+      localCtx.fill();
+
+      localCtx.globalCompositeOperation =
+        "source-over";
+      localCtx.strokeStyle = "#78350f";
+      localCtx.lineWidth = Math.max(
+        1,
+        height * 0.08,
+      );
+      localCtx.beginPath();
+      localCtx.moveTo(0, -height * 0.2);
+      localCtx.lineTo(0, -height * 0.72);
+      localCtx.stroke();
+
+      localCtx.fillStyle = "#f97316";
+      localCtx.beginPath();
+      localCtx.moveTo(0, -height * 1.02);
+      localCtx.quadraticCurveTo(
+        height * 0.1,
+        -height * 0.84,
+        0,
+        -height * 0.7,
+      );
+      localCtx.quadraticCurveTo(
+        -height * 0.1,
+        -height * 0.84,
+        0,
+        -height * 1.02,
+      );
+      localCtx.fill();
+
+      localCtx.restore();
+    },
+  );
+}
+
+function drawKeepProjectedBanners3D(
+  ctx,
+  world,
+  props,
+) {
+  drawProjectedWorldProps(
+    ctx,
+    world,
+    props.keepBanners,
+    12,
+    (
+      localCtx,
+      localWorld,
+      banner,
+      projection,
+      distance,
+    ) => {
+      const height = Math.max(
+        34,
+        Math.min(
+          CANVAS_HEIGHT * 0.42,
+          projection.scale * 0.62,
+        ),
+      );
+      const width = height * 0.32;
+      const baseY =
+        CANVAS_HEIGHT * 0.56 +
+        Math.min(
+          CANVAS_HEIGHT * 0.1,
+          projection.scale * 0.03,
+        );
+      const sway =
+        Math.sin(
+          (localWorld.time ?? 0) * 1.3 +
+            banner.tileX,
+        ) *
+        width *
+        0.12;
+
+      localCtx.save();
+      localCtx.translate(
+        projection.screenX,
+        baseY,
+      );
+      localCtx.globalAlpha =
+        0.72 - Math.min(0.3, distance * 0.02);
+      localCtx.fillStyle = "#7f1d1d";
+      localCtx.beginPath();
+      localCtx.moveTo(-width * 0.5, -height);
+      localCtx.lineTo(width * 0.5, -height);
+      localCtx.lineTo(
+        width * 0.36 + sway,
+        -height * 0.35,
+      );
+      localCtx.lineTo(
+        sway,
+        -height * 0.52,
+      );
+      localCtx.lineTo(
+        -width * 0.36 + sway,
+        -height * 0.35,
+      );
+      localCtx.closePath();
+      localCtx.fill();
+      localCtx.restore();
+    },
+  );
+}
+
+function drawOrbitalProjectedWeaponPickups3D(
+  ctx,
+  world,
+) {
+  const weaponPickups =
+    (world.pickups ?? []).filter(
+      (pickup) => pickup.type === "weapon",
+    );
+
+  drawProjectedWorldProps(
+    ctx,
+    world,
+    weaponPickups.map((pickup) => ({
+      ...pickup,
+      tileX: Math.floor(pickup.x),
+      tileY: Math.floor(pickup.y),
+    })),
+    14,
+    (
+      localCtx,
+      localWorld,
+      pickup,
+      projection,
+      distance,
+    ) => {
+      const radius = Math.max(
+        12,
+        Math.min(
+          CANVAS_HEIGHT * 0.12,
+          projection.scale * 0.16,
+        ),
+      );
+      const centerY =
+        CANVAS_HEIGHT * 0.58 -
+        radius * 0.2 +
+        Math.sin(
+          (localWorld.time ?? 0) * 3 +
+            pickup.x,
+        ) *
+          radius *
+          0.08;
+
+      localCtx.save();
+      localCtx.translate(
+        projection.screenX,
+        centerY,
+      );
+      localCtx.globalCompositeOperation =
+        "lighter";
+      localCtx.strokeStyle =
+        "rgba(103,232,249,0.9)";
+      localCtx.lineWidth = Math.max(
+        1.4,
+        radius * 0.08,
+      );
+      localCtx.rotate(
+        (localWorld.time ?? 0) * 1.1,
+      );
+
+      localCtx.beginPath();
+      for (let side = 0; side < 6; side += 1) {
+        const angle =
+          side * (Math.PI / 3);
+        const x =
+          Math.cos(angle) * radius;
+        const y =
+          Math.sin(angle) * radius;
+
+        if (side === 0) {
+          localCtx.moveTo(x, y);
+        } else {
+          localCtx.lineTo(x, y);
+        }
+      }
+      localCtx.closePath();
+      localCtx.stroke();
+
+      localCtx.rotate(
+        -(localWorld.time ?? 0) * 1.1,
+      );
+      localCtx.globalAlpha = 0.5;
+
+      for (let line = -2; line <= 2; line += 1) {
+        localCtx.fillStyle =
+          "rgba(207,250,254,0.7)";
+        localCtx.fillRect(
+          -radius * 0.6,
+          line * radius * 0.2,
+          radius * 1.2,
+          1,
+        );
+      }
+
+      localCtx.restore();
+    },
+  );
+}
+
+function drawOrbitalWreckPanels2D(
+  ctx,
+  world,
+  props,
+) {
+  for (const wreck of props.orbitalWrecks) {
+    if (
+      visibleStrengthAt(
+        world,
+        wreck.tileX,
+        wreck.tileY,
+      ) <= 0.08
+    ) {
+      continue;
+    }
+
+    const screen =
+      getWorldScreenPosition(
+        world,
+        wreck.x,
+        wreck.y,
+      );
+    const size = screen.scale * 0.32;
+    const angle =
+      (world.time ?? 0) * 0.24 +
+      wreck.tileX;
+
+    ctx.save();
+    ctx.translate(screen.x, screen.y);
+    ctx.rotate(angle);
+    ctx.globalAlpha = 0.4;
+    ctx.fillStyle = "#64748b";
+    ctx.fillRect(
+      -size,
+      -size * 0.22,
+      size * 2,
+      size * 0.44,
+    );
+    ctx.strokeStyle = "#cbd5e1";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(
+      -size,
+      -size * 0.22,
+      size * 2,
+      size * 0.44,
+    );
+    ctx.restore();
+  }
+}
+
+function drawEmeraldProjectedGrowth3D(
+  ctx,
+  world,
+  props,
+) {
+  drawProjectedWorldProps(
+    ctx,
+    world,
+    props.emeraldGrowth,
+    13,
+    (
+      localCtx,
+      localWorld,
+      growth,
+      projection,
+      distance,
+    ) => {
+      const height = Math.max(
+        34,
+        Math.min(
+          CANVAS_HEIGHT * 0.42,
+          projection.scale * 0.62,
+        ),
+      );
+      const width = height * 0.54;
+      const baseY =
+        CANVAS_HEIGHT * 0.69 +
+        Math.min(
+          CANVAS_HEIGHT * 0.08,
+          projection.scale * 0.025,
+        );
+      const sway =
+        Math.sin(
+          (localWorld.time ?? 0) * 0.9 +
+            growth.tileX,
+        ) *
+        width *
+        0.08;
+
+      localCtx.save();
+      localCtx.translate(
+        projection.screenX,
+        baseY,
+      );
+      localCtx.globalAlpha =
+        0.68 - Math.min(0.3, distance * 0.02);
+      localCtx.strokeStyle = "#166534";
+      localCtx.lineWidth = Math.max(
+        1,
+        width * 0.06,
+      );
+      localCtx.beginPath();
+      localCtx.moveTo(0, 0);
+      localCtx.bezierCurveTo(
+        -width * 0.15,
+        -height * 0.2,
+        width * 0.12 + sway,
+        -height * 0.55,
+        sway,
+        -height,
+      );
+      localCtx.stroke();
+
+      localCtx.fillStyle = "#84cc16";
+      for (let index = 0; index < 5; index += 1) {
+        const py =
+          -height *
+          (0.24 + index * 0.16);
+        const px =
+          Math.sin(index + growth.tileY) *
+          width *
+          0.18;
+        localCtx.beginPath();
+        localCtx.ellipse(
+          px,
+          py,
+          width * 0.18,
+          width * 0.07,
+          index % 2 ? -0.75 : 0.75,
+          0,
+          Math.PI * 2,
+        );
+        localCtx.fill();
+      }
+
+      localCtx.restore();
+    },
+  );
+}
+
+function drawEmeraldProjectedWater3D(
+  ctx,
+  world,
+  props,
+) {
+  drawProjectedWorldProps(
+    ctx,
+    world,
+    props.emeraldWater,
+    11,
+    (
+      localCtx,
+      localWorld,
+      patch,
+      projection,
+      distance,
+    ) => {
+      const width = Math.max(
+        16,
+        Math.min(
+          CANVAS_WIDTH * 0.12,
+          projection.scale * 0.22,
+        ),
+      );
+      const centerY =
+        CANVAS_HEIGHT * 0.82 -
+        Math.min(
+          CANVAS_HEIGHT * 0.12,
+          projection.scale * 0.02,
+        );
+      const ripple =
+        Math.sin(
+          (localWorld.time ?? 0) * 2 +
+            patch.tileX +
+            patch.tileY,
+        );
+
+      localCtx.save();
+      localCtx.translate(
+        projection.screenX,
+        centerY,
+      );
+      localCtx.globalAlpha =
+        0.16 - Math.min(0.06, distance * 0.005);
+      localCtx.strokeStyle = "#bfdbfe";
+      localCtx.lineWidth = 1.1;
+
+      for (let line = 0; line < 3; line += 1) {
+        const y = line * 4;
+        localCtx.beginPath();
+        localCtx.moveTo(
+          -width * 0.6 + ripple * 1.4,
+          y,
+        );
+        localCtx.lineTo(
+          width * 0.6 + ripple * 1.4,
+          y,
+        );
+        localCtx.stroke();
+      }
+
+      localCtx.restore();
+    },
+  );
+}
+
+function drawEmeraldInsects3D(ctx, world) {
+  const time = world.time ?? 0;
+
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+
+  for (let index = 0; index < 12; index += 1) {
+    const angle =
+      index * 2.1 + time * 1.4;
+    const radius =
+      34 + (index % 4) * 11;
+    const x =
+      CANVAS_WIDTH * 0.5 +
+      Math.cos(angle) * radius;
+    const y =
+      CANVAS_HEIGHT * 0.78 +
+      Math.sin(angle * 1.2) * radius * 0.22;
+    ctx.globalAlpha =
+      0.08 +
+      (index % 3) * 0.03;
+    ctx.fillStyle =
+      index % 4 === 0
+        ? "#d9f99d"
+        : "#111827";
+    ctx.beginPath();
+    ctx.arc(x, y, 1.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+function drawOrbitalRuinsIdentityGuaranteed(
+  ctx,
+  world,
+) {
+  drawOrbitalRuinsIdentity(ctx, world);
+
+  const props = getThemePropCache(
+    world,
+    "space",
+  );
+
+  if (world.viewMode === "3d") {
+    drawOrbitalProjectedWeaponPickups3D(
+      ctx,
+      world,
+    );
+    return;
+  }
+
+  drawOrbitalWreckPanels2D(
+    ctx,
+    world,
+    props,
+  );
+}
+
+function drawEmeraldWildsIdentityGuaranteed(
+  ctx,
+  world,
+) {
+  drawEmeraldWildsIdentity(ctx, world);
+
+  if (world.viewMode !== "3d") {
+    return;
+  }
+
+  const props = getThemePropCache(
+    world,
+    "jungle",
+  );
+  drawEmeraldProjectedGrowth3D(
+    ctx,
+    world,
+    props,
+  );
+  drawEmeraldProjectedWater3D(
+    ctx,
+    world,
+    props,
+  );
+  drawEmeraldInsects3D(ctx, world);
+}
+
+function drawFallenKeepIdentityGuaranteed(
+  ctx,
+  world,
+) {
+  drawFallenKeepIdentity(ctx, world);
+
+  const props = getThemePropCache(
+    world,
+    "medieval",
+  );
+
+  if (world.viewMode === "3d") {
+    drawKeepProjectedStatues3D(
+      ctx,
+      world,
+      props,
+    );
+    drawKeepProjectedTorches3D(
+      ctx,
+      world,
+      props,
+    );
+    drawKeepProjectedBanners3D(
+      ctx,
+      world,
+      props,
+    );
+    return;
+  }
+
+  drawKeepGuaranteedStatues2D(
+    ctx,
+    world,
+    props,
+  );
 }
 
 export function drawWorld(ctx, world) {

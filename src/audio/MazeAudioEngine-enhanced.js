@@ -5,7 +5,7 @@ import {
 
 export * from "./MazeAudioEngine.js?core";
 
-const MUSIC_VOLUME_BOOST = 1.3;
+const MUSIC_VOLUME_BOOST = 3;
 
 export class MazeAudioEngine extends BaseMazeAudioEngine {
   constructor() {
@@ -16,13 +16,22 @@ export class MazeAudioEngine extends BaseMazeAudioEngine {
   setMusicVolume(volume) {
     const requested = Number(volume);
     const boosted = Number.isFinite(requested)
-      ? Math.max(
-          0,
-          Math.min(1, requested * MUSIC_VOLUME_BOOST),
-        )
+      ? Math.max(0, Math.min(3, requested * MUSIC_VOLUME_BOOST))
       : 0;
 
-    super.setMusicVolume(boosted);
+    this.musicVolume = boosted;
+
+    if (!this.musicVolumeGain || !this.context) {
+      return;
+    }
+
+    const now = this.context.currentTime;
+    this.musicVolumeGain.gain.cancelScheduledValues(now);
+    this.musicVolumeGain.gain.setTargetAtTime(
+      boosted,
+      now,
+      0.025,
+    );
   }
 
   startPendingMusic() {

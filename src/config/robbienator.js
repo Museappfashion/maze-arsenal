@@ -1,6 +1,8 @@
 // src/config/robbienator.js
+
 export const ROBBIENATOR_PLAYER_NAME = "robbie";
 export const ROBBIENATOR_WEAPON_KEY = "dmr";
+export const ROBBIENATOR_START_WEAPON_KEY = "smg";
 export const ROBBIENATOR_AMMO = 200;
 export const ROBBIENATOR_LABEL = "Robbienator";
 
@@ -36,10 +38,11 @@ export function applyRobbienatorLoadout(world) {
 
   world.player.robbienator = true;
   world.player.ownedWeapons[ROBBIENATOR_WEAPON_KEY] = true;
-  world.player.weapon = ROBBIENATOR_WEAPON_KEY;
+  world.player.ownedWeapons[ROBBIENATOR_START_WEAPON_KEY] = true;
+  world.player.weapon = ROBBIENATOR_START_WEAPON_KEY;
   world.player.ammo = ROBBIENATOR_AMMO;
   world.leaderboardEligible = false;
-  world.message = "ROBBIENATOR UNLOCKED — 200 AMMO";
+  world.message = "ROBBIENATOR + PULSAR UNLOCKED — 200 AMMO";
   world.messageTtl = 3.2;
 
   return true;

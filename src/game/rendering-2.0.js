@@ -89,6 +89,14 @@ function drawAnimatedPickupEffects(ctx, world) {
   const time = world.time ?? 0;
 
   for (const pickup of world.pickups ?? []) {
+    if (
+      pickup.type === "ammo" ||
+      pickup.type === "medkit" ||
+      pickup.type === "health"
+    ) {
+      continue;
+    }
+
     const tileX = Math.floor(pickup.x);
     const tileY = Math.floor(pickup.y);
 
@@ -459,11 +467,263 @@ function drawRunEscalationOverlay(ctx, world) {
   }
 }
 
+function drawVictoryCelebration(ctx, world) {
+  const centerX = CANVAS_WIDTH * 0.5;
+  const centerY = CANVAS_HEIGHT * 0.31;
+  const time =
+    typeof performance !== "undefined"
+      ? performance.now() / 1000
+      : 0;
+  const explored = getDiscoveredPercent(world);
+  const enemiesDefeated =
+    world.__cinematic?.enemiesDefeated ?? 0;
+
+  ctx.save();
+
+  const wash = ctx.createRadialGradient(
+    centerX,
+    centerY,
+    20,
+    centerX,
+    centerY,
+    CANVAS_HEIGHT * 0.7,
+  );
+  wash.addColorStop(
+    0,
+    "rgba(250,204,21,0.16)",
+  );
+  wash.addColorStop(
+    0.38,
+    "rgba(34,211,238,0.08)",
+  );
+  wash.addColorStop(
+    1,
+    "rgba(2,6,23,0.54)",
+  );
+  ctx.fillStyle = wash;
+  ctx.fillRect(
+    0,
+    0,
+    CANVAS_WIDTH,
+    CANVAS_HEIGHT,
+  );
+
+  ctx.save();
+  ctx.translate(centerX, centerY - 8);
+  ctx.rotate(time * 0.08);
+  ctx.globalCompositeOperation = "lighter";
+
+  for (let ray = 0; ray < 24; ray += 1) {
+    const angle =
+      ray * (Math.PI * 2 / 24);
+    const inner = 82;
+    const outer =
+      165 +
+      18 *
+        Math.sin(
+          time * 2.1 + ray * 0.73,
+        );
+
+    ctx.globalAlpha =
+      0.035 +
+      0.035 *
+        (
+          0.5 +
+          0.5 *
+            Math.sin(
+              time * 2.8 + ray,
+            )
+        );
+    ctx.strokeStyle =
+      ray % 2 === 0
+        ? "#fde047"
+        : "#67e8f9";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(
+      Math.cos(angle) * inner,
+      Math.sin(angle) * inner,
+    );
+    ctx.lineTo(
+      Math.cos(angle) * outer,
+      Math.sin(angle) * outer,
+    );
+    ctx.stroke();
+  }
+
+  ctx.restore();
+
+  for (let index = 0; index < 72; index += 1) {
+    const seedX = fxNoise(index, 201);
+    const seedY = fxNoise(index, 202);
+    const speed =
+      42 + fxNoise(index, 203) * 78;
+    const drift =
+      (
+        seedY * CANVAS_HEIGHT +
+        time * speed
+      ) %
+      (CANVAS_HEIGHT + 70);
+    const x =
+      (
+        seedX * CANVAS_WIDTH +
+        Math.sin(
+          time *
+            (
+              0.7 +
+              fxNoise(index, 204)
+            ) +
+            index,
+        ) *
+          18
+      );
+    const y = drift - 35;
+    const size =
+      3 + fxNoise(index, 205) * 5;
+    const rotation =
+      time *
+        (
+          1.2 +
+          fxNoise(index, 206) * 4
+        ) +
+      index;
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rotation);
+    ctx.globalAlpha =
+      0.42 +
+      fxNoise(index, 207) * 0.42;
+    ctx.fillStyle =
+      index % 4 === 0
+        ? "#fde047"
+        : index % 4 === 1
+          ? "#67e8f9"
+          : index % 4 === 2
+            ? "#f8fafc"
+            : "#f59e0b";
+    ctx.fillRect(
+      -size * 0.5,
+      -size * 0.25,
+      size,
+      size * 0.5,
+    );
+    ctx.restore();
+  }
+
+  const pulse =
+    0.5 +
+    0.5 *
+      Math.sin(time * 3.2);
+
+  const panelWidth =
+    Math.min(640, CANVAS_WIDTH * 0.76);
+  const panelHeight = 238;
+  const panelX =
+    centerX - panelWidth * 0.5;
+  const panelY =
+    centerY - 74;
+
+  ctx.fillStyle =
+    "rgba(2,6,23,0.84)";
+  ctx.strokeStyle =
+    "rgba(103,232,249,0.24)";
+  ctx.lineWidth = 1.5;
+
+  if (typeof ctx.roundRect === "function") {
+    ctx.beginPath();
+    ctx.roundRect(
+      panelX,
+      panelY,
+      panelWidth,
+      panelHeight,
+      22,
+    );
+    ctx.fill();
+    ctx.stroke();
+  } else {
+    ctx.fillRect(
+      panelX,
+      panelY,
+      panelWidth,
+      panelHeight,
+    );
+    ctx.strokeRect(
+      panelX,
+      panelY,
+      panelWidth,
+      panelHeight,
+    );
+  }
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  ctx.shadowColor =
+    "rgba(250,204,21,0.68)";
+  ctx.shadowBlur =
+    18 + pulse * 12;
+  ctx.fillStyle = "#fff7cc";
+  ctx.font =
+    "950 42px system-ui, sans-serif";
+  ctx.fillText(
+    "LEVEL COMPLETE!",
+    centerX,
+    centerY - 22,
+  );
+
+  ctx.shadowColor =
+    "rgba(34,211,238,0.5)";
+  ctx.shadowBlur = 12;
+  ctx.fillStyle = "#a5f3fc";
+  ctx.font =
+    "850 18px system-ui, sans-serif";
+  ctx.fillText(
+    world.level?.subtitle ??
+      world.level?.label ??
+      "Maze cleared",
+    centerX,
+    centerY + 22,
+  );
+
+  ctx.shadowBlur = 5;
+  ctx.fillStyle = "#f8fafc";
+  ctx.font =
+    "800 16px system-ui, sans-serif";
+  ctx.fillText(
+    `${explored}% explored`,
+    centerX,
+    centerY + 58,
+  );
+  ctx.fillText(
+    `${enemiesDefeated} enemies defeated`,
+    centerX,
+    centerY + 82,
+  );
+
+  ctx.fillStyle =
+    "rgba(226,232,240,0.86)";
+  ctx.font =
+    "750 12px system-ui, sans-serif";
+  ctx.fillText(
+    "EXIT SECURED",
+    centerX,
+    centerY + 112,
+  );
+
+  ctx.restore();
+}
+
 function drawResultOverlay(ctx, world) {
   if (
     !world.victory &&
     !world.gameOver
   ) {
+    return;
+  }
+
+  if (world.victory) {
+    drawVictoryCelebration(ctx, world);
     return;
   }
 
@@ -476,7 +736,6 @@ function drawResultOverlay(ctx, world) {
   ctx.save();
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-
   ctx.shadowColor = "rgba(0, 0, 0, 0.72)";
   ctx.shadowBlur = 8;
   ctx.fillStyle = "#f8fafc";
@@ -499,7 +758,6 @@ function drawResultOverlay(ctx, world) {
 
   ctx.restore();
 }
-
 
 function clamp01(value) {
   return Math.max(0, Math.min(1, value));
@@ -579,118 +837,54 @@ function drawPursuitVisuals2D(ctx, world) {
       );
     const color =
       getPursuitColor(state.progress);
-    const late =
-      clamp01(
-        (state.progress - 0.45) / 0.55,
-      );
     const pulse =
       0.5 +
       0.5 *
         Math.sin(
           (world.time ?? 0) *
-            (5 + state.progress * 5) +
+            (4 + state.progress * 4) +
             enemy.x * 1.7,
         );
 
     ctx.save();
 
-    if (state.progress > 0.22) {
-      const playerDx =
-        world.player.x - enemy.x;
-      const playerDy =
-        world.player.y - enemy.y;
-      const length =
-        Math.max(
-          0.001,
-          Math.hypot(playerDx, playerDy),
-        );
-      const trailLength =
-        radius *
-        (
-          0.35 +
-          state.progress * 1.35
-        );
-
-      ctx.globalAlpha =
-        0.08 +
-        late * 0.22;
-      ctx.strokeStyle = color;
-      ctx.lineWidth =
-        Math.max(
-          2,
-          radius *
-            (
-              0.1 +
-              state.progress * 0.06
-            ),
-        );
-      ctx.lineCap = "round";
-      ctx.beginPath();
-      ctx.moveTo(
-        x -
-          (playerDx / length) *
-            radius *
-            0.25,
-        y -
-          (playerDy / length) *
-            radius *
-            0.25,
-      );
-      ctx.lineTo(
-        x -
-          (playerDx / length) *
-            trailLength,
-        y -
-          (playerDy / length) *
-            trailLength,
-      );
-      ctx.stroke();
-    }
-
-    ctx.globalCompositeOperation =
-      "lighter";
-    ctx.shadowColor = color;
-    ctx.shadowBlur =
-      5 + state.progress * 18;
-
+    /*
+     * Keep the ramp visual on the enemy itself.
+     * The overlay stays inside the normal body radius,
+     * so it cannot read as an external aura or halo.
+     */
     ctx.globalAlpha =
-      0.1 +
+      0.04 +
       state.progress * 0.28 +
-      pulse * late * 0.1;
-    ctx.strokeStyle = color;
-    ctx.lineWidth =
-      1.2 + state.progress * 2.4;
+      pulse * state.progress * 0.05;
+    ctx.fillStyle = color;
     ctx.beginPath();
     ctx.arc(
       x,
       y,
-      radius *
-        (
-          1.08 +
-          pulse * 0.08 * late
-        ),
+      radius * 0.72,
       0,
       Math.PI * 2,
     );
-    ctx.stroke();
+    ctx.fill();
 
     const eyeOffset =
-      radius * 0.26;
+      radius * 0.24;
     const eyeY =
       y - radius * 0.12;
     const eyeRadius =
       Math.max(
-        1.5,
+        1.25,
         radius *
           (
-            0.07 +
+            0.055 +
             state.progress * 0.035
           ),
       );
 
     ctx.globalAlpha =
-      0.35 +
-      state.progress * 0.65;
+      0.3 +
+      state.progress * 0.7;
     ctx.fillStyle = color;
 
     for (const side of [-1, 1]) {
@@ -703,6 +897,36 @@ function drawPursuitVisuals2D(ctx, world) {
         Math.PI * 2,
       );
       ctx.fill();
+    }
+
+    if (state.progress >= 0.65) {
+      const stripeAlpha =
+        (state.progress - 0.65) /
+        0.35;
+
+      ctx.globalAlpha =
+        0.12 +
+        stripeAlpha * 0.26;
+      ctx.strokeStyle = color;
+      ctx.lineWidth =
+        Math.max(
+          1,
+          radius * 0.055,
+        );
+      ctx.lineCap = "round";
+
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(
+          x + side * radius * 0.18,
+          y - radius * 0.48,
+        );
+        ctx.lineTo(
+          x + side * radius * 0.3,
+          y + radius * 0.44,
+        );
+        ctx.stroke();
+      }
     }
 
     ctx.restore();
@@ -757,88 +981,115 @@ function drawPursuitVisuals3D(ctx, world) {
             ),
         ),
       );
+    const bodyWidth =
+      bodyHeight *
+      (
+        enemy.kind === "warden"
+          ? 0.72
+          : enemy.kind === "brute"
+            ? 0.66
+            : 0.56
+      );
+    const centerX =
+      projection.screenX;
     const centerY =
       CANVAS_HEIGHT * 0.46 -
       bodyHeight * 0.05;
     const color =
       getPursuitColor(state.progress);
-    const late =
-      clamp01(
-        (state.progress - 0.45) / 0.55,
-      );
     const pulse =
       0.5 +
       0.5 *
         Math.sin(
           (world.time ?? 0) *
-            (5 + state.progress * 5),
+            (4 + state.progress * 4),
         );
-    const radius =
-      Math.max(
-        10,
-        bodyHeight * 0.28,
-      );
 
     ctx.save();
-    ctx.globalCompositeOperation =
-      "lighter";
-    ctx.strokeStyle = color;
-    ctx.fillStyle = color;
-    ctx.shadowColor = color;
-    ctx.shadowBlur =
-      7 + state.progress * 22;
 
+    /*
+     * Tint only the inner projected enemy body.
+     * No shadowBlur, outer ellipse, aura, or pursuit halo.
+     */
     ctx.globalAlpha =
-      0.06 +
-      state.progress * 0.2 +
-      pulse * late * 0.08;
-    ctx.lineWidth =
-      1.2 + state.progress * 2.6;
+      0.035 +
+      state.progress * 0.23 +
+      pulse * state.progress * 0.045;
+    ctx.fillStyle = color;
+
     ctx.beginPath();
     ctx.ellipse(
-      projection.screenX,
+      centerX,
       centerY,
-      radius *
-        (
-          1.05 +
-          pulse * late * 0.09
-        ),
-      radius * 1.22,
+      bodyWidth * 0.28,
+      bodyHeight * 0.33,
       0,
       0,
       Math.PI * 2,
     );
-    ctx.stroke();
+    ctx.fill();
 
     const eyeY =
-      centerY - bodyHeight * 0.07;
+      centerY - bodyHeight * 0.075;
     const eyeOffset =
-      radius * 0.28;
+      bodyWidth * 0.13;
     const eyeRadius =
       Math.max(
-        1.5,
+        1.4,
         bodyHeight *
           (
-            0.018 +
+            0.014 +
             state.progress * 0.009
           ),
       );
 
     ctx.globalAlpha =
       0.28 +
-      state.progress * 0.7;
+      state.progress * 0.72;
+    ctx.fillStyle = color;
 
     for (const side of [-1, 1]) {
       ctx.beginPath();
       ctx.arc(
-        projection.screenX +
-          side * eyeOffset,
+        centerX + side * eyeOffset,
         eyeY,
         eyeRadius,
         0,
         Math.PI * 2,
       );
       ctx.fill();
+    }
+
+    if (state.progress >= 0.65) {
+      const stripeAlpha =
+        (state.progress - 0.65) /
+        0.35;
+
+      ctx.globalAlpha =
+        0.1 +
+        stripeAlpha * 0.22;
+      ctx.strokeStyle = color;
+      ctx.lineWidth =
+        Math.max(
+          1,
+          bodyWidth * 0.035,
+        );
+      ctx.lineCap = "round";
+
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(
+          centerX +
+            side * bodyWidth * 0.12,
+          centerY - bodyHeight * 0.25,
+        );
+        ctx.lineTo(
+          centerX +
+            side * bodyWidth * 0.18,
+          centerY + bodyHeight * 0.24,
+        );
+        ctx.stroke();
+      }
     }
 
     ctx.restore();

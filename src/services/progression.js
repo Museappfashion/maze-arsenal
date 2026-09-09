@@ -2,6 +2,8 @@
 export const LEVEL_PROGRESS_STORAGE_KEY =
   "mist-maze-level-progress-v1";
 
+const MAX_UNLOCKED_LEVEL = 3;
+
 const LEVEL_NUMBER = {
   level0: 0,
   level1: 1,
@@ -16,15 +18,63 @@ function readHighestUnlocked() {
 
   try {
     const value = Number(
-      window.localStorage.getItem(LEVEL_PROGRESS_STORAGE_KEY),
+      window.localStorage.getItem(
+        LEVEL_PROGRESS_STORAGE_KEY,
+      ),
     );
 
     return Number.isFinite(value)
-      ? Math.max(0, Math.min(3, Math.floor(value)))
+      ? Math.max(
+          0,
+          Math.min(
+            MAX_UNLOCKED_LEVEL,
+            Math.floor(value),
+          ),
+        )
       : 0;
   } catch {
     return 0;
   }
+}
+
+function writeHighestUnlocked(
+  highestUnlocked,
+  source,
+) {
+  if (typeof window === "undefined") {
+    return readHighestUnlocked();
+  }
+
+  const normalized = Math.max(
+    0,
+    Math.min(
+      MAX_UNLOCKED_LEVEL,
+      Math.floor(highestUnlocked),
+    ),
+  );
+
+  try {
+    window.localStorage.setItem(
+      LEVEL_PROGRESS_STORAGE_KEY,
+      String(normalized),
+    );
+  } catch {
+    return readHighestUnlocked();
+  }
+
+  window.dispatchEvent(
+    new CustomEvent(
+      "mist-maze-progression-changed",
+      {
+        detail: {
+          highestUnlocked: normalized,
+          source,
+        },
+      },
+    ),
+  );
+
+  return normalized;
 }
 
 export function getHighestUnlockedLevel() {
@@ -36,7 +86,8 @@ export function isLevelUnlocked(levelKey) {
     return true;
   }
 
-  const levelNumber = LEVEL_NUMBER[levelKey];
+  const levelNumber =
+    LEVEL_NUMBER[levelKey];
 
   return (
     Number.isInteger(levelNumber) &&
@@ -44,34 +95,34 @@ export function isLevelUnlocked(levelKey) {
   );
 }
 
+export function unlockAllLevels() {
+  return writeHighestUnlocked(
+    MAX_UNLOCKED_LEVEL,
+    "skip-button",
+  );
+}
+
 export function recordLevelCompletion(levelKey) {
-  const completed = LEVEL_NUMBER[levelKey];
+  const completed =
+    LEVEL_NUMBER[levelKey];
 
   if (!Number.isInteger(completed)) {
     return readHighestUnlocked();
   }
 
-  const nextHighest = Math.min(3, completed + 1);
-  const previousHighest = readHighestUnlocked();
+  const nextHighest = Math.min(
+    MAX_UNLOCKED_LEVEL,
+    completed + 1,
+  );
+  const previousHighest =
+    readHighestUnlocked();
 
   if (nextHighest <= previousHighest) {
     return previousHighest;
   }
 
-  try {
-    window.localStorage.setItem(
-      LEVEL_PROGRESS_STORAGE_KEY,
-      String(nextHighest),
-    );
-  } catch {
-    return previousHighest;
-  }
-
-  window.dispatchEvent(
-    new CustomEvent("mist-maze-progression-changed", {
-      detail: { highestUnlocked: nextHighest },
-    }),
+  return writeHighestUnlocked(
+    nextHighest,
+    "level-completion",
   );
-
-  return nextHighest;
 }

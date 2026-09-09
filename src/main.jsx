@@ -4,6 +4,7 @@ import { SpeedInsights } from "@vercel/speed-insights/react";
 import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
 import { DeveloperAnalytics } from "./components/DeveloperAnalytics.jsx";
+import { installNextLevelEnhancement } from "./features/nextLevelEnhancement.js";
 import { installRuntimeEnhancements } from "./features/runtimeEnhancements.js";
 
 const rootElement = document.getElementById("root");
@@ -17,6 +18,7 @@ const developerDashboard =
 
 if (!developerDashboard) {
   installRuntimeEnhancements();
+  installNextLevelEnhancement();
 }
 
 createRoot(rootElement).render(

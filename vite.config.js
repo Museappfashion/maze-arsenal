@@ -39,9 +39,7 @@ export default defineConfig({
       },
       {
         find: /^(?:.*\/)?services\/leaderboard\.js$/,
-        replacement: sourcePath(
-          "./src/services/leaderboard-enhanced.js",
-        ),
+        replacement: sourcePath("./src/services/leaderboard-enhanced.js"),
       },
       {
         find: /^(?:.*\/)?game\/gameplay\.js$/,

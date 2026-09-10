@@ -6,8 +6,16 @@ import {
 import {
   isLegendaryPowerUpActive,
 } from "../config/legendaryPowerUps.js";
-import { WEAPONS } from "../config/weapons-enhanced.js";
-import { hasRobbienatorLoadout } from "../config/robbienator.js";
+import {
+  BLACK_SWORD_KEY,
+  PORTAL_GUN_KEY,
+  WEAPONS,
+} from "../config/weapons-enhanced.js";
+import {
+  SPECIAL_PLAYER_IDS,
+  hasRobbienatorLoadout,
+  isSpecialPlayerWorld,
+} from "../config/specialPlayers.js";
 import {
   getDiscoveredPercent,
   hasLineOfSight,
@@ -54,6 +62,16 @@ const RECOIL = {
   rifle: { kick: 1.8, shake: 2.2, roll: 0.003 },
   dmr: { kick: 5.2, shake: 3.8, roll: 0.007 },
   swordGun: { kick: 4.2, shake: 3.4, roll: 0.007 },
+  [BLACK_SWORD_KEY]: {
+    kick: 2.4,
+    shake: 1.8,
+    roll: 0.004,
+  },
+  [PORTAL_GUN_KEY]: {
+    kick: 2.8,
+    shake: 2.4,
+    roll: 0.005,
+  },
 };
 
 const MATERIAL_PARTICLES = {
@@ -64,14 +82,12 @@ const MATERIAL_PARTICLES = {
   labyrinth: ["#c4b5fd", "#64748b", "#94a3b8"],
 };
 
-const JOJO_NAME = "jojo";
 const JOJO_SPEED_MULTIPLIER = 3;
 
 function isJojoMode(world) {
-  return (
-    String(world.playerName ?? "")
-      .trim()
-      .toLowerCase() === JOJO_NAME
+  return isSpecialPlayerWorld(
+    world,
+    SPECIAL_PLAYER_IDS.JOJO,
   );
 }
 
@@ -1569,6 +1585,43 @@ export function activateStoredPowerUp(
 }
 
 
+
+function styleSpecialWeaponProjectiles(
+  world,
+  weaponKey,
+  beforeProjectileCount,
+) {
+  if (weaponKey !== PORTAL_GUN_KEY) {
+    return;
+  }
+
+  const useOrange =
+    Boolean(world.__portalGunOrangeShot);
+  const color =
+    useOrange ? "#fb923c" : "#22d3ee";
+
+  world.__portalGunOrangeShot =
+    !useOrange;
+
+  for (
+    const projectile of
+    world.projectiles.slice(
+      beforeProjectileCount,
+    )
+  ) {
+    if (projectile.owner !== "player") {
+      continue;
+    }
+
+    projectile.color = color;
+    projectile.portalProjectile = true;
+    projectile.radius = Math.max(
+      0.09,
+      Number(projectile.radius) || 0,
+    );
+  }
+}
+
 export function attack(world) {
   enableJojoMode(world);
 
@@ -1601,6 +1654,12 @@ export function attack(world) {
   const attackStarted =
     world.player.nextAttackAt >
     beforeNextAttackAt;
+
+  styleSpecialWeaponProjectiles(
+    world,
+    weaponKey,
+    beforeProjectileCount,
+  );
 
   if (
     attackStarted &&

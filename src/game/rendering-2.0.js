@@ -11,8 +11,14 @@ import {
   ENEMY_PURSUIT_RAMP_SECONDS,
 } from "../config/enemies.js";
 import {
+  BLACK_SWORD_KEY,
+  PORTAL_GUN_KEY,
   WEAPONS as WEAPON_DEFINITIONS,
 } from "../config/weapons-enhanced.js";
+import {
+  hasDavidChLoadout,
+  hasFeivelLoadout,
+} from "../config/specialPlayers.js";
 import {
   getCamera,
   getWorldRenderZoom,
@@ -4835,12 +4841,430 @@ function drawCityStorefrontEdges2D(
   ctx.restore();
 }
 
+
+function drawBlackSwordShape(ctx, size) {
+  ctx.save();
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+
+  const blade =
+    ctx.createLinearGradient(
+      -size * 0.2,
+      0,
+      size,
+      0,
+    );
+  blade.addColorStop(0, "#020617");
+  blade.addColorStop(0.58, "#111827");
+  blade.addColorStop(1, "#000000");
+
+  ctx.fillStyle = blade;
+  ctx.strokeStyle = "#818cf8";
+  ctx.lineWidth = Math.max(
+    1.5,
+    size * 0.045,
+  );
+  ctx.shadowBlur = size * 0.18;
+  ctx.shadowColor = "#4f46e5";
+
+  ctx.beginPath();
+  ctx.moveTo(-size * 0.12, -size * 0.09);
+  ctx.lineTo(size * 0.8, -size * 0.12);
+  ctx.lineTo(size, 0);
+  ctx.lineTo(size * 0.8, size * 0.12);
+  ctx.lineTo(-size * 0.12, size * 0.09);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = "#312e81";
+  ctx.lineWidth = Math.max(
+    2,
+    size * 0.09,
+  );
+  ctx.beginPath();
+  ctx.moveTo(-size * 0.2, -size * 0.24);
+  ctx.lineTo(-size * 0.2, size * 0.24);
+  ctx.stroke();
+
+  ctx.strokeStyle = "#0f172a";
+  ctx.lineWidth = Math.max(
+    3,
+    size * 0.12,
+  );
+  ctx.beginPath();
+  ctx.moveTo(-size * 0.22, 0);
+  ctx.lineTo(-size * 0.62, 0);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawPortalGunShape(ctx, size) {
+  ctx.save();
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+
+  ctx.fillStyle = "#e2e8f0";
+  ctx.strokeStyle = "#334155";
+  ctx.lineWidth = Math.max(
+    1.5,
+    size * 0.04,
+  );
+
+  ctx.beginPath();
+  ctx.roundRect(
+    -size * 0.48,
+    -size * 0.2,
+    size * 0.82,
+    size * 0.4,
+    size * 0.13,
+  );
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "#1e293b";
+  ctx.beginPath();
+  ctx.roundRect(
+    -size * 0.1,
+    size * 0.12,
+    size * 0.2,
+    size * 0.42,
+    size * 0.07,
+  );
+  ctx.fill();
+
+  ctx.fillStyle = "#0f172a";
+  ctx.beginPath();
+  ctx.arc(
+    size * 0.12,
+    0,
+    size * 0.12,
+    0,
+    Math.PI * 2,
+  );
+  ctx.fill();
+
+  ctx.strokeStyle = "#22d3ee";
+  ctx.shadowBlur = size * 0.16;
+  ctx.shadowColor = "#22d3ee";
+  ctx.lineWidth = Math.max(
+    2,
+    size * 0.055,
+  );
+  ctx.beginPath();
+  ctx.moveTo(size * 0.28, -size * 0.11);
+  ctx.lineTo(size * 0.72, -size * 0.25);
+  ctx.stroke();
+
+  ctx.strokeStyle = "#fb923c";
+  ctx.shadowColor = "#fb923c";
+  ctx.beginPath();
+  ctx.moveTo(size * 0.28, size * 0.11);
+  ctx.lineTo(size * 0.72, size * 0.25);
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = "#f8fafc";
+  ctx.beginPath();
+  ctx.arc(
+    size * 0.34,
+    0,
+    size * 0.08,
+    0,
+    Math.PI * 2,
+  );
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawNewSpecialHeldWeapon2D(
+  ctx,
+  world,
+) {
+  if (world.viewMode === "3d") {
+    return;
+  }
+
+  const weaponKey =
+    world.player?.weapon;
+  const feivel =
+    hasFeivelLoadout(world) &&
+    weaponKey === BLACK_SWORD_KEY;
+  const david =
+    hasDavidChLoadout(world) &&
+    weaponKey === PORTAL_GUN_KEY;
+
+  if (!feivel && !david) {
+    return;
+  }
+
+  const screen = getWorldScreenPosition(
+    world,
+    world.player.x,
+    world.player.y,
+  );
+  let angle =
+    world.player.facing ?? 0;
+  let reach = screen.scale * 0.34;
+
+  if (feivel) {
+    const swing =
+      world.player.meleeSwing;
+    const active =
+      swing?.weaponKey ===
+        BLACK_SWORD_KEY &&
+      world.time - swing.startedAt >= 0 &&
+      world.time - swing.startedAt <
+        swing.duration;
+
+    if (active) {
+      const progress =
+        Math.max(
+          0,
+          Math.min(
+            1,
+            (world.time -
+              swing.startedAt) /
+              swing.duration,
+          ),
+        );
+      const eased =
+        0.5 -
+        Math.cos(progress * Math.PI) *
+          0.5;
+      angle +=
+        -1.15 + eased * 2.2;
+      reach = screen.scale * 0.3;
+    }
+  } else {
+    const shotAt =
+      world.__cinematic
+        ?.lastRegisteredShotAt ??
+      -Infinity;
+    const recoil =
+      Math.max(
+        0,
+        1 -
+          (world.time - shotAt) * 8,
+      );
+    reach -=
+      recoil * screen.scale * 0.05;
+  }
+
+  ctx.save();
+  ctx.translate(
+    screen.x + Math.cos(angle) * reach,
+    screen.y + Math.sin(angle) * reach,
+  );
+  ctx.rotate(angle);
+
+  if (feivel) {
+    drawBlackSwordShape(
+      ctx,
+      screen.scale * 0.62,
+    );
+  } else {
+    drawPortalGunShape(
+      ctx,
+      screen.scale * 0.5,
+    );
+  }
+
+  ctx.restore();
+}
+
+function drawNewSpecialHeldWeapon3D(
+  ctx,
+  world,
+) {
+  const weaponKey =
+    world.player?.weapon;
+  const feivel =
+    hasFeivelLoadout(world) &&
+    weaponKey === BLACK_SWORD_KEY;
+  const david =
+    hasDavidChLoadout(world) &&
+    weaponKey === PORTAL_GUN_KEY;
+
+  if (!feivel && !david) {
+    return;
+  }
+
+  const width = ctx.canvas.width;
+  const height = ctx.canvas.height;
+  let rotation = -0.12;
+  let x = width * 0.55;
+  let y = height - 72;
+
+  if (feivel) {
+    const swing =
+      world.player.meleeSwing;
+    const active =
+      swing?.weaponKey ===
+        BLACK_SWORD_KEY &&
+      world.time - swing.startedAt >= 0 &&
+      world.time - swing.startedAt <
+        swing.duration;
+
+    if (active) {
+      const progress =
+        Math.max(
+          0,
+          Math.min(
+            1,
+            (world.time -
+              swing.startedAt) /
+              swing.duration,
+          ),
+        );
+      const eased =
+        0.5 -
+        Math.cos(progress * Math.PI) *
+          0.5;
+      rotation =
+        -0.95 + eased * 1.5;
+    }
+  } else {
+    const shotAt =
+      world.__cinematic
+        ?.lastRegisteredShotAt ??
+      -Infinity;
+    const recoil =
+      Math.max(
+        0,
+        1 -
+          (world.time - shotAt) * 8,
+      );
+    x -= recoil * 20;
+    rotation -= recoil * 0.05;
+  }
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rotation);
+
+  if (feivel) {
+    drawBlackSwordShape(ctx, 220);
+  } else {
+    drawPortalGunShape(ctx, 190);
+  }
+
+  ctx.restore();
+}
+
+function drawPortalProjectileAccents(
+  ctx,
+  world,
+) {
+  for (
+    const projectile of
+    world.projectiles ?? []
+  ) {
+    if (!projectile.portalProjectile) {
+      continue;
+    }
+
+    if (world.viewMode === "3d") {
+      if (
+        !hasLineOfSight(
+          world,
+          world.player.x,
+          world.player.y,
+          projectile.x,
+          projectile.y,
+        )
+      ) {
+        continue;
+      }
+
+      const projection =
+        project3DSprite(
+          world,
+          projectile.x,
+          projectile.y,
+          CANVAS_WIDTH /
+            2 /
+            Math.tan(
+              VIEW_3D_FOV / 2,
+            ),
+        );
+
+      if (!projection) {
+        continue;
+      }
+
+      const radius =
+        Math.max(
+          5,
+          Math.min(
+            24,
+            projection.scale * 0.09,
+          ),
+        );
+
+      ctx.save();
+      ctx.globalCompositeOperation =
+        "lighter";
+      ctx.strokeStyle =
+        projectile.color ??
+        "#22d3ee";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(
+        projection.screenX,
+        CANVAS_HEIGHT * 0.46,
+        radius,
+        0,
+        Math.PI * 2,
+      );
+      ctx.stroke();
+      ctx.restore();
+      continue;
+    }
+
+    const screen =
+      getWorldScreenPosition(
+        world,
+        projectile.x,
+        projectile.y,
+      );
+
+    ctx.save();
+    ctx.globalCompositeOperation =
+      "lighter";
+    ctx.strokeStyle =
+      projectile.color ??
+      "#22d3ee";
+    ctx.lineWidth = Math.max(
+      1.5,
+      screen.scale * 0.025,
+    );
+    ctx.beginPath();
+    ctx.arc(
+      screen.x,
+      screen.y,
+      screen.scale * 0.12,
+      0,
+      Math.PI * 2,
+    );
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
 function drawWeaponAnimationOverlay(ctx, world) {
   const weaponKey = world.player?.weapon;
   const definition =
     WEAPON_DEFINITIONS?.[weaponKey];
 
-  if (!definition) {
+  if (
+    !definition ||
+    weaponKey === BLACK_SWORD_KEY ||
+    weaponKey === PORTAL_GUN_KEY
+  ) {
     return;
   }
 
@@ -5021,7 +5445,15 @@ export function drawWorld(ctx, world) {
   drawWorldIdentityEffects(ctx, world);
   drawEnemyPursuitVisuals(ctx, world);
   drawAnimatedPickupEffects(ctx, world);
+  drawPortalProjectileAccents(ctx, world);
   drawWeaponAnimationOverlay(ctx, world);
+  drawNewSpecialHeldWeapon2D(ctx, world);
+  if (world.viewMode === "3d") {
+    drawNewSpecialHeldWeapon3D(
+      ctx,
+      world,
+    );
+  }
   drawCinematicParticles(ctx, world);
   drawEnemyHitReactions(ctx, world);
 

@@ -1,9 +1,6 @@
 // src/game/world-enhanced.js
 import {
-  applyRobbienatorLoadout,
-} from "../config/robbienator.js";
-import {
-  applyAsherLoadout,
+  applySpecialPlayerLoadout,
 } from "../config/specialPlayers.js";
 import {
   markLegendaryPowerUps,
@@ -20,47 +17,70 @@ function exposeWorld(world) {
   return world;
 }
 
+function applyEnhancedControls(world) {
+  if (world.labyrinthMode) {
+    return;
+  }
+
+  world.controls = (world.controls ?? []).map(
+    (control) =>
+      String(control)
+        .replace("Z / X", "Z / X / C")
+        .replace("maximum 2", "maximum 3"),
+  );
+}
+
 export function createWorld(...args) {
   const world = createWorldCore(...args);
 
-  world.leaderboardEligible = !world.labyrinthMode;
+  world.leaderboardEligible =
+    !world.labyrinthMode;
   world.__leaderboardRunStarted = false;
   world.__leaderboardRunFinished = false;
   world.__leaderboardRunPromise = null;
 
   if (!world.labyrinthMode) {
-    world.controls = (world.controls ?? []).map((control) =>
-      String(control)
-        .replace("Z / X", "Z / X / C")
-        .replace("maximum 2", "maximum 3"),
-    );
+    applyEnhancedControls(world);
 
     world.player.powerUpSlots = [
       ...(world.player.powerUpSlots ?? []),
       null,
     ].slice(0, 3);
 
-    while (world.player.powerUpSlots.length < 3) {
+    while (
+      world.player.powerUpSlots.length < 3
+    ) {
       world.player.powerUpSlots.push(null);
     }
 
-    world.player.legendaryPowerUpSlots = [false, false, false];
+    world.player.legendaryPowerUpSlots = [
+      false,
+      false,
+      false,
+    ];
+
     markLegendaryPowerUps(world);
   }
 
-  applyRobbienatorLoadout(world);
-  applyAsherLoadout(world);
+  applySpecialPlayerLoadout(world);
 
   return exposeWorld(world);
 }
 
-export function setWorldViewMode(world, nextViewMode) {
-  const normalized = nextViewMode === "3d" ? "3d" : "2d";
+export function setWorldViewMode(
+  world,
+  nextViewMode,
+) {
+  const normalized =
+    nextViewMode === "3d" ? "3d" : "2d";
   const changed =
     world?.viewMode &&
     world.viewMode !== normalized;
 
-  if (changed && !world.labyrinthMode) {
+  if (
+    changed &&
+    !world.labyrinthMode
+  ) {
     world.leaderboardEligible = false;
     world.__leaderboardRunPromise = null;
     world.__leaderboardRunFinished = true;
@@ -69,16 +89,14 @@ export function setWorldViewMode(world, nextViewMode) {
     world.messageTtl = 2.3;
   }
 
-  const result = setWorldViewModeCore(world, normalized);
-
-  if (!world.labyrinthMode) {
-    world.controls = (world.controls ?? []).map((control) =>
-      String(control)
-        .replace("Z / X", "Z / X / C")
-        .replace("maximum 2", "maximum 3"),
+  const result =
+    setWorldViewModeCore(
+      world,
+      normalized,
     );
-  }
 
+  applyEnhancedControls(world);
   exposeWorld(world);
+
   return result;
 }

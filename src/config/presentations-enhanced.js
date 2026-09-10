@@ -1,20 +1,28 @@
 // src/config/presentations-enhanced.js
 import * as core from "./presentations.js?core";
 import {
+  ROBBIENATOR_LABEL,
+  hasDavidChLoadout,
   hasRobbienatorLoadout,
   isRobbienatorWeapon,
-  ROBBIENATOR_LABEL,
-} from "./robbienator.js";
-import { SWORD_GUN_KEY } from "./weapons-enhanced.js";
+} from "./specialPlayers.js";
+import {
+  BLACK_SWORD_KEY,
+  PORTAL_GUN_KEY,
+  SWORD_GUN_KEY,
+} from "./weapons-enhanced.js";
 
 export * from "./presentations.js?core";
 
 export function getWeaponPresentation(world, weaponKey) {
-  if (hasRobbienatorLoadout(world) && weaponKey === "machete") {
+  if (
+    hasRobbienatorLoadout(world) &&
+    weaponKey === "machete"
+  ) {
     return {
       label: "Plunger",
       description:
-        "Robbie's smiley plunger. It keeps the machete's normal combat stats.",
+        "A smiley plunger with the machete's normal combat stats.",
     };
   }
 
@@ -34,14 +42,43 @@ export function getWeaponPresentation(world, weaponKey) {
     };
   }
 
-  return core.getWeaponPresentation(world, weaponKey);
+  if (weaponKey === BLACK_SWORD_KEY) {
+    return {
+      label: "Black Sword",
+      description:
+        "A fast, long-reaching obsidian blade with heavy melee damage.",
+    };
+  }
+
+  if (weaponKey === PORTAL_GUN_KEY) {
+    return {
+      label: "Portal Gun",
+      description:
+        "Fires accurate portal-energy bolts that alternate blue and orange.",
+    };
+  }
+
+  return core.getWeaponPresentation(
+    world,
+    weaponKey,
+  );
 }
 
 export function getWeaponLabel(world, weaponKey) {
-  return getWeaponPresentation(world, weaponKey).label;
+  return getWeaponPresentation(
+    world,
+    weaponKey,
+  ).label;
 }
 
 export function getAmmoLabel(world) {
+  if (
+    hasDavidChLoadout(world) &&
+    world?.player?.weapon === PORTAL_GUN_KEY
+  ) {
+    return "Portal Charge";
+  }
+
   if (hasRobbienatorLoadout(world)) {
     return "Ammo";
   }

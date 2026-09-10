@@ -9,6 +9,13 @@ export * from "./constants.js?core";
 
 export const LEVEL_THEMES = {
   ...CORE_LEVEL_THEMES,
+  space: {
+    ...CORE_LEVEL_THEMES.space,
+    backdrop: "#01040d",
+    floorA: "#030814",
+    floorB: "#06101d",
+    floorLine: "rgba(96, 165, 250, 0.1)",
+  },
   city: {
     label: "City",
     backdrop: "#101214",

@@ -34,7 +34,11 @@ export function getPowerUpDuration(key) {
 }
 
 export const POWER_UPS = {
-  juggernaut: { label: "Double Health", color: "#fb7185", short: "HP x2.2" },
+  juggernaut: {
+    label: "Double Health",
+    color: "#fb7185",
+    short: "Max HP 220 • +100 HP",
+  },
   breaker: { label: "Wall Breaker", color: "#f97316", short: "12 wall breaks" },
   berserk: { label: "Berserk", color: "#ef4444", short: "Damage x2" },
   haste: { label: "Haste", color: "#22c55e", short: "Speed x1.75" },
@@ -56,4 +60,25 @@ export const POWER_UPS = {
   bounty: { label: "Bounty", color: "#f472b6", short: "+7 HP +10 ammo/kill" },
 };
 
-export const POWER_UP_SPAWN_ORDER = [ "juggernaut", "breaker", "berserk", "haste", "rapidFire", "shield", "regen", "magnet", "overcharge", "pierce", "vampirism", "frost", "longArms", "scattershot", "precision", "ammoSurge", "sonar", "phaseWalk", "demolition", "bounty", ];
+export const POWER_UP_SPAWN_ORDER = [
+  "juggernaut",
+  "breaker",
+  "berserk",
+  "haste",
+  "rapidFire",
+  "shield",
+  "regen",
+  "magnet",
+  "overcharge",
+  "pierce",
+  "vampirism",
+  "frost",
+  "longArms",
+  "scattershot",
+  "precision",
+  "ammoSurge",
+  "sonar",
+  "phaseWalk",
+  "demolition",
+  "bounty",
+];

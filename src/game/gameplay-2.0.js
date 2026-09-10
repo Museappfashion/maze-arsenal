@@ -1,7 +1,17 @@
 // src/game/gameplay-2.0.js
+import {
+  VIEW_3D_FOV,
+  VIEW_3D_MAX_DISTANCE,
+} from "../config/constants-enhanced.js";
+import {
+  isLegendaryPowerUpActive,
+} from "../config/legendaryPowerUps.js";
 import { WEAPONS } from "../config/weapons-enhanced.js";
 import { hasRobbienatorLoadout } from "../config/robbienator.js";
-import { getDiscoveredPercent } from "./maze.js";
+import {
+  getDiscoveredPercent,
+  hasLineOfSight,
+} from "./maze.js";
 import * as enhanced from "./gameplay-enhanced.js";
 
 export * from "./gameplay-enhanced.js";
@@ -641,19 +651,890 @@ function tickCinematic(world, dt) {
   updateRunPhase(world);
 }
 
-export function activateStoredPowerUp(world, slotIndex) {
-  const key = world.player.powerUpSlots[slotIndex];
 
-  if (key !== "juggernaut") {
-    return enhanced.activateStoredPowerUp(
-      world,
-      slotIndex,
+const LEGENDARY_DESCRIPTIONS = {
+  juggernaut: "Max HP 220 • fill to 220",
+  breaker: "12 wall breaks • no timer",
+  berserk: "Speed x2 • damage x2",
+  haste: "Speed x14",
+  rapidFire: "Faster fire • same sustained ammo use",
+  shield: "Damage -90%",
+  regen: "151 HP healing pool • no timer",
+  magnet: "Collect every visible non-weapon pickup",
+  overcharge: "300+ ammo • map-range projectiles",
+  pierce: "Unlimited pierce • ranged damage x1.5",
+  vampirism: "Heal 100% of actual damage",
+  frost: "Pursuit removed • base speed x0.5",
+  longArms: "Melee x2 • reach x5 • 360°",
+  scattershot: "Extra projectiles keep full damage",
+  precision: "Damage x1.5 • speed x1.5 • zero spread",
+  ammoSurge: "Fill ammo • +10/s • overflow kept",
+  sonar: "Full-maze sight",
+  phaseWalk: "Damage immune • reflect 100%",
+  demolition: "10 wall-breaking shots • no timer",
+  bounty: "+7 HP +10 ammo per hit • overflow",
+};
+
+const SHIELD_SOURCE_SCALE = 0.2;
+const DEMOLITION_CHARGE_SENTINEL = 1_000_000;
+
+function getLegendaryState(world, key) {
+  if (!isLegendaryPowerUpActive(world, key)) {
+    return null;
+  }
+
+  return world.player.powerUps[key] ?? null;
+}
+
+function powerUpIsActive(world, key) {
+  const state = world.player?.powerUps?.[key];
+
+  return Boolean(
+    state &&
+      (state.endsAt ?? -Infinity) > world.time,
+  );
+}
+
+function snapshotEnemyHealth(world) {
+  return new Map(
+    (world.enemies ?? []).map((enemy) => [
+      enemy.id,
+      enemy.hp,
+    ]),
+  );
+}
+
+function totalActualEnemyDamage(world, beforeHpById) {
+  let total = 0;
+
+  for (const enemy of world.enemies ?? []) {
+    const before = beforeHpById.get(enemy.id);
+
+    if (!Number.isFinite(before)) {
+      continue;
+    }
+
+    total += Math.max(
+      0,
+      Math.max(0, before) -
+        Math.max(0, enemy.hp),
     );
   }
 
-  const legendary = Boolean(
-    world.player.legendaryPowerUpSlots?.[slotIndex],
+  return total;
+}
+
+function countDamagedEnemies(world, beforeHpById) {
+  let count = 0;
+
+  for (const enemy of world.enemies ?? []) {
+    const before = beforeHpById.get(enemy.id);
+
+    if (
+      Number.isFinite(before) &&
+      enemy.hp < before
+    ) {
+      count += 1;
+    }
+  }
+
+  return count;
+}
+
+function suspendLegendaryPowerUp(world, key) {
+  const state = getLegendaryState(world, key);
+
+  if (!state) {
+    return {
+      active: false,
+      restore() {},
+    };
+  }
+
+  const endsAt = state.endsAt;
+  state.endsAt = -Infinity;
+
+  return {
+    active: true,
+    restore() {
+      state.endsAt = endsAt;
+    },
+  };
+}
+
+function suspendLegendaryRewards(world) {
+  const vampirism =
+    suspendLegendaryPowerUp(
+      world,
+      "vampirism",
+    );
+  const bounty =
+    suspendLegendaryPowerUp(
+      world,
+      "bounty",
+    );
+
+  return {
+    vampirism: vampirism.active,
+    bounty: bounty.active,
+    restore() {
+      bounty.restore();
+      vampirism.restore();
+    },
+  };
+}
+
+function applyLegendaryCombatRewards(
+  world,
+  damage,
+  hitCount,
+  rewardState,
+) {
+  if (
+    rewardState.vampirism &&
+    damage > 0
+  ) {
+    const currentHp =
+      Math.max(
+        0,
+        Number(world.player.hp) || 0,
+      );
+    const maxHp =
+      Math.max(
+        0,
+        Number(world.player.maxHp) || 0,
+      );
+
+    /*
+     * Preserve Bounty overflow instead of forcing HP
+     * back down to max HP.
+     */
+    if (currentHp < maxHp) {
+      world.player.hp = Math.min(
+        maxHp,
+        currentHp + damage,
+      );
+    }
+  }
+
+  if (
+    rewardState.bounty &&
+    hitCount > 0
+  ) {
+    world.player.hp =
+      Math.max(
+        0,
+        Number(world.player.hp) || 0,
+      ) +
+      7 * hitCount;
+    world.player.ammo =
+      Math.max(
+        0,
+        Number(world.player.ammo) || 0,
+      ) +
+      10 * hitCount;
+  }
+}
+
+function getProjectileHitSnapshot(world) {
+  const projectiles =
+    (world.projectiles ?? []).filter(
+      (projectile) =>
+        projectile.owner === "player",
+    );
+
+  return {
+    projectiles,
+    hitCounts: new Map(
+      projectiles.map((projectile) => [
+        projectile,
+        projectile.hitIds?.size ?? 0,
+      ]),
+    ),
+  };
+}
+
+function countNewProjectileHits(snapshot) {
+  return snapshot.projectiles.reduce(
+    (total, projectile) =>
+      total +
+      Math.max(
+        0,
+        (projectile.hitIds?.size ?? 0) -
+          (snapshot.hitCounts.get(projectile) ?? 0),
+      ),
+    0,
   );
+}
+
+function normalizeAngleDelta(angle) {
+  return Math.atan2(
+    Math.sin(angle),
+    Math.cos(angle),
+  );
+}
+
+function pickupVisibleForLegendaryMagnet(
+  world,
+  pickup,
+) {
+  if (world.viewMode !== "3d") {
+    return (
+      visibleStrengthAt(
+        world,
+        Math.floor(pickup.x),
+        Math.floor(pickup.y),
+      ) > 0.24
+    );
+  }
+
+  const dx =
+    pickup.x - world.player.x;
+  const dy =
+    pickup.y - world.player.y;
+  const distance = Math.hypot(dx, dy);
+
+  if (distance > VIEW_3D_MAX_DISTANCE) {
+    return false;
+  }
+
+  const angle = Math.atan2(dy, dx);
+  const angleFromFacing =
+    normalizeAngleDelta(
+      angle - world.player.facing,
+    );
+
+  if (
+    Math.abs(angleFromFacing) >
+    VIEW_3D_FOV / 2
+  ) {
+    return false;
+  }
+
+  return hasLineOfSight(
+    world,
+    world.player.x,
+    world.player.y,
+    pickup.x,
+    pickup.y,
+  );
+}
+
+function ensureMagnetOverflowQueue(world) {
+  world.player.magnetOverflowPowerUps ??= [];
+  world.player.legendaryPowerUpSlots ??=
+    [false, false, false];
+
+  return world.player.magnetOverflowPowerUps;
+}
+
+function drainMagnetOverflowQueue(world) {
+  const queue =
+    ensureMagnetOverflowQueue(world);
+
+  while (queue.length) {
+    const slotIndex =
+      world.player.powerUpSlots.findIndex(
+        (slot) => !slot,
+      );
+
+    if (slotIndex < 0) {
+      break;
+    }
+
+    const stored = queue.shift();
+    world.player.powerUpSlots[slotIndex] =
+      stored.key;
+    world.player.legendaryPowerUpSlots[
+      slotIndex
+    ] = Boolean(stored.legendary);
+  }
+}
+
+function captureMagnetOverflowPowerUps(world) {
+  if (!getLegendaryState(world, "magnet")) {
+    return 0;
+  }
+
+  drainMagnetOverflowQueue(world);
+
+  if (
+    world.player.powerUpSlots.some(
+      (slot) => !slot,
+    )
+  ) {
+    return 0;
+  }
+
+  const queue =
+    ensureMagnetOverflowQueue(world);
+  const remaining = [];
+  let captured = 0;
+
+  for (const pickup of world.pickups ?? []) {
+    if (
+      pickup.type === "powerup" &&
+      pickupVisibleForLegendaryMagnet(
+        world,
+        pickup,
+      )
+    ) {
+      queue.push({
+        key: pickup.powerUp,
+        legendary: Boolean(
+          pickup.legendary,
+        ),
+      });
+      captured += 1;
+      continue;
+    }
+
+    remaining.push(pickup);
+  }
+
+  if (captured > 0) {
+    world.pickups = remaining;
+    enhanced.setMessage(
+      world,
+      `Magnet secured ${captured} power-up${
+        captured === 1 ? "" : "s"
+      } for the next open slot`,
+      1.3,
+    );
+  }
+
+  return captured;
+}
+
+function scaleLegendaryShieldContacts(world) {
+  const state =
+    getLegendaryState(world, "shield");
+
+  if (!state) {
+    return () => {};
+  }
+
+  const originalLegendary =
+    state.legendary;
+  const backups = [];
+
+  state.legendary = false;
+
+  for (const enemy of world.enemies ?? []) {
+    if (
+      !Number.isFinite(enemy.contactDamage) ||
+      enemy.contactDamage <= 0
+    ) {
+      continue;
+    }
+
+    backups.push([
+      enemy,
+      enemy.contactDamage,
+    ]);
+    enemy.contactDamage *=
+      SHIELD_SOURCE_SCALE;
+  }
+
+  return () => {
+    for (const [enemy, damage] of backups) {
+      enemy.contactDamage = damage;
+    }
+
+    state.legendary = originalLegendary;
+  };
+}
+
+function scaleLegendaryShieldProjectiles(world) {
+  const state =
+    getLegendaryState(world, "shield");
+
+  if (!state) {
+    return () => {};
+  }
+
+  const originalLegendary =
+    state.legendary;
+  const backups = [];
+
+  state.legendary = false;
+
+  for (
+    const projectile of
+    world.projectiles ?? []
+  ) {
+    if (
+      projectile.owner === "player" ||
+      !Number.isFinite(projectile.damage)
+    ) {
+      continue;
+    }
+
+    backups.push([
+      projectile,
+      projectile.damage,
+    ]);
+    projectile.damage *=
+      SHIELD_SOURCE_SCALE;
+  }
+
+  return () => {
+    for (
+      const [projectile, damage] of backups
+    ) {
+      projectile.damage = damage;
+    }
+
+    state.legendary = originalLegendary;
+  };
+}
+
+function projectileWillHitPlayer(
+  world,
+  projectile,
+  dt,
+) {
+  if (
+    projectile.owner === "player" ||
+    (projectile.ttl ?? 0) <= dt
+  ) {
+    return false;
+  }
+
+  const startX = projectile.x;
+  const startY = projectile.y;
+  const endX =
+    startX + projectile.vx * dt;
+  const endY =
+    startY + projectile.vy * dt;
+  const segmentX = endX - startX;
+  const segmentY = endY - startY;
+  const lengthSquared =
+    segmentX * segmentX +
+    segmentY * segmentY;
+
+  let t = 0;
+
+  if (lengthSquared > 0) {
+    t =
+      (
+        (world.player.x - startX) *
+          segmentX +
+        (world.player.y - startY) *
+          segmentY
+      ) /
+      lengthSquared;
+    t = Math.max(0, Math.min(1, t));
+  }
+
+  const closestX =
+    startX + segmentX * t;
+  const closestY =
+    startY + segmentY * t;
+  const radius =
+    (projectile.radius ?? 0) +
+    world.player.radius;
+
+  if (
+    Math.hypot(
+      closestX - world.player.x,
+      closestY - world.player.y,
+    ) > radius
+  ) {
+    return false;
+  }
+
+  return hasLineOfSight(
+    world,
+    startX,
+    startY,
+    world.player.x,
+    world.player.y,
+  );
+}
+
+function findProjectileSourceEnemy(
+  world,
+  projectile,
+) {
+  if (projectile.sourceEnemyId) {
+    const exact =
+      world.enemies.find(
+        (enemy) =>
+          enemy.id ===
+          projectile.sourceEnemyId,
+      );
+
+    if (exact) {
+      return exact;
+    }
+  }
+
+  const sourceX =
+    projectile.sourceX ??
+    projectile.x;
+  const sourceY =
+    projectile.sourceY ??
+    projectile.y;
+  let nearest = null;
+  let nearestDistance = Infinity;
+
+  for (const enemy of world.enemies ?? []) {
+    const distance = Math.hypot(
+      enemy.x - sourceX,
+      enemy.y - sourceY,
+    );
+
+    if (distance < nearestDistance) {
+      nearest = enemy;
+      nearestDistance = distance;
+    }
+  }
+
+  return nearestDistance <= 1.5
+    ? nearest
+    : null;
+}
+
+function reflectIncomingPhaseProjectiles(
+  world,
+  dt,
+) {
+  const phaseState =
+    getLegendaryState(
+      world,
+      "phaseWalk",
+    );
+
+  if (!phaseState) {
+    return () => {};
+  }
+
+  const remaining = [];
+
+  for (
+    const projectile of
+    world.projectiles ?? []
+  ) {
+    if (
+      !projectileWillHitPlayer(
+        world,
+        projectile,
+        dt,
+      )
+    ) {
+      remaining.push(projectile);
+      continue;
+    }
+
+    const enemy =
+      findProjectileSourceEnemy(
+        world,
+        projectile,
+      );
+
+    if (enemy && enemy.hp > 0) {
+      enemy.hp -= Math.max(
+        0,
+        Number(projectile.damage) || 0,
+      );
+      enemy.lastHitAt = world.time;
+      enemy.awake = true;
+      enemy.pursuitStartedAt = world.time;
+      enemy.__legendaryRampEligible = false;
+    }
+  }
+
+  world.projectiles = remaining;
+
+  /*
+   * Core Phase Walk immunity stays active; only the enhanced
+   * proximity-based reflection heuristic is disabled.
+   */
+  const originalLegendary =
+    phaseState.legendary;
+  phaseState.legendary = false;
+
+  return () => {
+    phaseState.legendary =
+      originalLegendary;
+  };
+}
+
+function getLegendaryDemolitionState(world) {
+  return getLegendaryState(
+    world,
+    "demolition",
+  );
+}
+
+function suspendDepletedDemolitionForAttack(
+  world,
+) {
+  const state =
+    getLegendaryDemolitionState(world);
+
+  if (
+    !state ||
+    (state.charges ?? 0) > 0
+  ) {
+    return () => {};
+  }
+
+  const endsAt = state.endsAt;
+  state.endsAt = -Infinity;
+
+  return () => {
+    state.endsAt = endsAt;
+  };
+}
+
+function registerLegendaryDemolitionShot(
+  world,
+  beforeProjectileCount,
+) {
+  const state =
+    getLegendaryDemolitionState(world);
+
+  if (
+    !state ||
+    (state.charges ?? 0) <= 0
+  ) {
+    return;
+  }
+
+  const newProjectiles =
+    world.projectiles
+      .slice(beforeProjectileCount)
+      .filter(
+        (projectile) =>
+          projectile.owner === "player" &&
+          projectile.breaksWalls,
+      );
+
+  if (!newProjectiles.length) {
+    return;
+  }
+
+  state.charges = Math.max(
+    0,
+    state.charges - 1,
+  );
+
+  for (const projectile of newProjectiles) {
+    projectile.__legendaryDemolitionShot =
+      true;
+  }
+
+  if (state.charges === 0) {
+    enhanced.setMessage(
+      world,
+      "Demolition: final wall-breaking shot fired",
+      1.2,
+    );
+  }
+}
+
+function protectLegendaryDemolitionCharges(
+  world,
+) {
+  const state =
+    getLegendaryDemolitionState(world);
+
+  if (!state) {
+    return () => {};
+  }
+
+  const charges =
+    Math.max(
+      0,
+      Number(state.charges) || 0,
+    );
+  const endsAt = state.endsAt;
+
+  state.charges =
+    DEMOLITION_CHARGE_SENTINEL;
+  state.endsAt = Infinity;
+
+  return () => {
+    state.charges = charges;
+    state.endsAt = endsAt;
+  };
+}
+
+function finishLegendaryDemolitionIfSpent(
+  world,
+) {
+  const state =
+    getLegendaryDemolitionState(world);
+
+  if (
+    !state ||
+    (state.charges ?? 0) > 0
+  ) {
+    return;
+  }
+
+  const pendingShot =
+    (world.projectiles ?? []).some(
+      (projectile) =>
+        projectile
+          .__legendaryDemolitionShot,
+    );
+
+  if (pendingShot) {
+    return;
+  }
+
+  state.endsAt = world.time;
+  enhanced.setMessage(
+    world,
+    "Demolition depleted",
+    0.9,
+  );
+}
+
+function legendaryShort(powerUp) {
+  if (!powerUp?.legendary) {
+    return powerUp?.short;
+  }
+
+  return (
+    LEGENDARY_DESCRIPTIONS[
+      powerUp.key
+    ] ??
+    powerUp.short
+  );
+}
+
+export function getStoredPowerUps(world) {
+  return enhanced
+    .getStoredPowerUps(world)
+    .map((powerUp) =>
+      powerUp
+        ? {
+            ...powerUp,
+            short:
+              legendaryShort(powerUp),
+          }
+        : null,
+    );
+}
+
+export function getActivePowerUps(world) {
+  return enhanced
+    .getActivePowerUps(world)
+    .map((powerUp) => ({
+      ...powerUp,
+      short: legendaryShort(powerUp),
+    }));
+}
+
+export function updateVisionCache(world) {
+  enhanced.updateVisionCache(world);
+
+  if (
+    getLegendaryState(world, "sonar") &&
+    world.vision
+  ) {
+    /*
+     * Full sight is handled by visibleStrengthAt().
+     * Keeping this at zero prevents a full-maze scan every frame.
+     */
+    world.vision.sightBonus = 0;
+  }
+}
+
+export function visibleStrengthAt(
+  world,
+  tileX,
+  tileY,
+) {
+  if (
+    !world.labyrinthMode &&
+    getLegendaryState(world, "sonar")
+  ) {
+    return 1;
+  }
+
+  return enhanced.visibleStrengthAt(
+    world,
+    tileX,
+    tileY,
+  );
+}
+
+export function revealAroundPlayer(world) {
+  const state =
+    getLegendaryState(world, "sonar");
+
+  if (!state || world.labyrinthMode) {
+    enhanced.revealAroundPlayer(world);
+    return;
+  }
+
+  const token = state.endsAt;
+
+  if (
+    world.__legendarySonarRevealToken ===
+    token
+  ) {
+    return;
+  }
+
+  world.vision ??= {
+    sightBonus: 0,
+    facingX: Math.cos(world.player.facing),
+    facingY: Math.sin(world.player.facing),
+  };
+
+  const previousBonus =
+    world.vision.sightBonus;
+
+  world.vision.sightBonus =
+    Math.hypot(
+      world.width,
+      world.height,
+    ) + 2;
+
+  try {
+    /*
+     * One full reveal per Legendary Sonar activation is cheap;
+     * the former 9999 bonus forced this scan every frame.
+     */
+    enhanced.revealAroundPlayer(world);
+  } finally {
+    world.vision.sightBonus =
+      previousBonus;
+  }
+
+  world.__legendarySonarRevealToken =
+    token;
+}
+
+
+export function activateStoredPowerUp(
+  world,
+  slotIndex,
+) {
+  const key =
+    world.player.powerUpSlots[
+      slotIndex
+    ];
+  const legendary = Boolean(
+    world.player.legendaryPowerUpSlots?.[
+      slotIndex
+    ],
+  );
+  const beforeHp =
+    world.player.hp;
+  const wasActive =
+    key === "juggernaut" &&
+    powerUpIsActive(
+      world,
+      "juggernaut",
+    );
+
   const activated =
     enhanced.activateStoredPowerUp(
       world,
@@ -664,40 +1545,62 @@ export function activateStoredPowerUp(world, slotIndex) {
     return false;
   }
 
-  if (legendary) {
+  if (key === "juggernaut") {
     world.player.maxHp = 220;
-    world.player.hp = Math.min(
-      world.player.hp,
-      world.player.maxHp,
-    );
-    return true;
+
+    if (legendary) {
+      world.player.hp = 220;
+    } else if (!wasActive) {
+      world.player.hp = Math.min(
+        220,
+        Math.max(0, beforeHp) + 100,
+      );
+    } else {
+      world.player.hp = Math.min(
+        220,
+        world.player.hp,
+      );
+    }
   }
 
-  world.player.maxHp = Math.round(
-    world.player.baseMaxHp * 2,
-  );
-  world.player.hp = Math.min(
-    world.player.hp,
-    world.player.maxHp,
-  );
+  drainMagnetOverflowQueue(world);
 
   return true;
 }
 
+
 export function attack(world) {
   enableJojoMode(world);
 
-  const weaponKey = world.player.weapon;
+  const weaponKey =
+    world.player.weapon;
+  const weapon =
+    WEAPONS[weaponKey];
   const beforeNextAttackAt =
     world.player.nextAttackAt;
   const beforeProjectileCount =
     world.projectiles.length;
-  const beforeEnemies = snapshotEnemies(world);
+  const beforeEnemies =
+    snapshotEnemies(world);
+  const beforeEnemyHp =
+    snapshotEnemyHealth(world);
+  const rewards =
+    suspendLegendaryRewards(world);
+  const restoreDepletedDemolition =
+    suspendDepletedDemolitionForAttack(
+      world,
+    );
 
-  enhanced.attack(world);
+  try {
+    enhanced.attack(world);
+  } finally {
+    restoreDepletedDemolition();
+    rewards.restore();
+  }
 
   const attackStarted =
-    world.player.nextAttackAt > beforeNextAttackAt;
+    world.player.nextAttackAt >
+    beforeNextAttackAt;
 
   if (
     attackStarted &&
@@ -712,49 +1615,92 @@ export function attack(world) {
     beforeProjectileCount,
     weaponKey,
   );
-  registerEnemyDamage(world, beforeEnemies);
+
+  registerLegendaryDemolitionShot(
+    world,
+    beforeProjectileCount,
+  );
+
+  if (
+    weapon?.type === "melee" &&
+    attackStarted
+  ) {
+    applyLegendaryCombatRewards(
+      world,
+      totalActualEnemyDamage(
+        world,
+        beforeEnemyHp,
+      ),
+      countDamagedEnemies(
+        world,
+        beforeEnemyHp,
+      ),
+      rewards,
+    );
+  }
+
+  registerEnemyDamage(
+    world,
+    beforeEnemies,
+  );
 }
 
-export function updatePlayer(world, keys, dt) {
-  const cinematic = ensureCinematic(world);
-  const jojoMode = enableJojoMode(world);
-  const beforeHp = world.player.hp;
-  const weaponKey = world.player.weapon;
-  const beforeNextAttackAt =
-    world.player.nextAttackAt;
-  const beforeProjectileCount =
-    world.projectiles.length;
-  const beforeEnemies = snapshotEnemies(world);
 
-  if (jojoMode) {
-    enhanced.updatePlayer(
-      world,
-      stripJojoMovementKeys(world, keys),
-      dt,
-    );
-    moveJojoThroughWalls(world, keys, dt);
-  } else {
-    enhanced.updatePlayer(world, keys, dt);
-  }
-
-  const attackStarted =
-    world.player.nextAttackAt > beforeNextAttackAt;
-
-  if (
-    jojoMode &&
-    attackStarted &&
-    weaponKey === "fists"
-  ) {
-    finishJojoFistAttack(world);
-  }
-
-  detectFiredAttack(
-    world,
-    beforeNextAttackAt,
-    beforeProjectileCount,
-    weaponKey,
+export function updatePlayer(
+  world,
+  keys,
+  dt,
+) {
+  const cinematic =
+    ensureCinematic(world);
+  const jojoMode =
+    enableJojoMode(world);
+  const beforeHp =
+    world.player.hp;
+  const shouldAttack = Boolean(
+    keys[" "] ||
+      keys.Enter ||
+      world.pointer.down,
   );
-  registerEnemyDamage(world, beforeEnemies);
+  const pointerDown =
+    world.pointer.down;
+  const safeKeys = {
+    ...keys,
+    " ": false,
+    Enter: false,
+  };
+
+  world.pointer.down = false;
+
+  try {
+    if (jojoMode) {
+      enhanced.updatePlayer(
+        world,
+        stripJojoMovementKeys(
+          world,
+          safeKeys,
+        ),
+        dt,
+      );
+      moveJojoThroughWalls(
+        world,
+        safeKeys,
+        dt,
+      );
+    } else {
+      enhanced.updatePlayer(
+        world,
+        safeKeys,
+        dt,
+      );
+    }
+  } finally {
+    world.pointer.down = pointerDown;
+  }
+
+  if (shouldAttack) {
+    attack(world);
+  }
 
   if (world.player.hp < beforeHp) {
     cinematic.damageFlash = Math.max(
@@ -770,37 +1716,100 @@ export function updatePlayer(world, keys, dt) {
   tickCinematic(world, dt);
 }
 
+
 export function updatePickups(world, dt) {
   ensureCinematic(world);
   const beforePickups = [
     ...(world.pickups ?? []),
   ];
 
+  captureMagnetOverflowPowerUps(
+    world,
+  );
   enhanced.updatePickups(world, dt);
+  drainMagnetOverflowQueue(world);
+
   registerPickupCollections(
     world,
     beforePickups,
   );
 }
 
-export function updateProjectiles(world, dt) {
+
+export function updateProjectiles(
+  world,
+  dt,
+) {
   ensureCinematic(world);
-  const beforeEnemies = snapshotEnemies(world);
-  const beforeProjectiles =
-    snapshotProjectiles(world);
 
-  enhanced.updateProjectiles(world, dt);
+  const beforeEnemies =
+    snapshotEnemies(world);
 
-  registerEnemyDamage(world, beforeEnemies);
-  registerRemovedProjectileImpacts(
+  /*
+   * Reflect only projectiles whose movement segment actually
+   * intersects the player this frame.
+   */
+  const restorePhaseReflection =
+    reflectIncomingPhaseProjectiles(
+      world,
+      dt,
+    );
+
+  const beforeEnemyHp =
+    snapshotEnemyHealth(world);
+  const projectileHits =
+    getProjectileHitSnapshot(world);
+  const rewards =
+    suspendLegendaryRewards(world);
+  const restoreShield =
+    scaleLegendaryShieldProjectiles(
+      world,
+    );
+  const restoreDemolition =
+    protectLegendaryDemolitionCharges(
+      world,
+    );
+
+  try {
+    enhanced.updateProjectiles(
+      world,
+      dt,
+    );
+  } finally {
+    restoreDemolition();
+    restoreShield();
+    rewards.restore();
+    restorePhaseReflection();
+  }
+
+  applyLegendaryCombatRewards(
     world,
-    beforeProjectiles,
+    totalActualEnemyDamage(
+      world,
+      beforeEnemyHp,
+    ),
+    countNewProjectileHits(
+      projectileHits,
+    ),
+    rewards,
+  );
+
+  finishLegendaryDemolitionIfSpent(
+    world,
+  );
+
+  registerEnemyDamage(
+    world,
+    beforeEnemies,
   );
 }
 
+
 export function updateEnemies(world, dt) {
-  const cinematic = ensureCinematic(world);
-  const beforeHp = world.player.hp;
+  const cinematic =
+    ensureCinematic(world);
+  const beforeHp =
+    world.player.hp;
   const phase =
     PHASES[
       cinematic.phaseIndex ?? 0
@@ -808,9 +1817,14 @@ export function updateEnemies(world, dt) {
 
   if (cinematic.phaseIndex >= 2) {
     const wakeRadius =
-      cinematic.phaseIndex >= 3 ? 10 : 7;
+      cinematic.phaseIndex >= 3
+        ? 10
+        : 7;
 
-    for (const enemy of world.enemies ?? []) {
+    for (
+      const enemy of
+      world.enemies ?? []
+    ) {
       const distance = Math.hypot(
         enemy.x - world.player.x,
         enemy.y - world.player.y,
@@ -822,10 +1836,23 @@ export function updateEnemies(world, dt) {
     }
   }
 
-  enhanced.updateEnemies(
-    world,
-    dt * phase.enemySpeed,
-  );
+  /*
+   * Keep the requested 2.0 phase speed multiplier unchanged.
+   * Legendary Shield is corrected at the incoming damage source.
+   */
+  const restoreShield =
+    scaleLegendaryShieldContacts(
+      world,
+    );
+
+  try {
+    enhanced.updateEnemies(
+      world,
+      dt * phase.enemySpeed,
+    );
+  } finally {
+    restoreShield();
+  }
 
   if (world.player.hp < beforeHp) {
     cinematic.damageFlash = Math.max(
@@ -838,3 +1865,4 @@ export function updateEnemies(world, dt) {
     );
   }
 }
+

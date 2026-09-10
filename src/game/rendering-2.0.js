@@ -18,7 +18,10 @@ import {
   getWorldRenderZoom,
   visibleStrengthAt,
 } from "./gameplay-2.0.js";
-import { getDiscoveredPercent } from "./maze.js";
+import {
+  getDiscoveredPercent,
+  hasLineOfSight,
+} from "./maze.js";
 import {
   drawWorld as drawCityConformWorld,
   project3DSprite,
@@ -3019,7 +3022,16 @@ function drawProjectedWorldProps(
       item.y - world.player.y,
     );
 
-    if (distance > maxDistance) {
+    if (
+      distance > maxDistance ||
+      !hasLineOfSight(
+        world,
+        world.player.x,
+        world.player.y,
+        item.x,
+        item.y,
+      )
+    ) {
       continue;
     }
 
@@ -3298,7 +3310,18 @@ function drawKeepGuaranteedStatues2D(
   world,
   props,
 ) {
-  for (const statue of props.keepStatues) {
+  for (
+    let index = 0;
+    index < props.keepStatues.length;
+    index += 1
+  ) {
+    if (index === 0) {
+      continue;
+    }
+
+    const statue =
+      props.keepStatues[index];
+
     if (
       visibleStrengthAt(
         world,
@@ -3315,14 +3338,15 @@ function drawKeepGuaranteedStatues2D(
         statue.x,
         statue.y,
       );
-    const size = screen.scale * 0.64;
+    const size = screen.scale * 1.02;
 
     drawKeepStatueShape2D(
       ctx,
       screen.x,
-      screen.y + screen.scale * 0.02,
+      screen.y + screen.scale * 0.18,
       size,
       getFacingAngle(statue),
+      getKeepStatueVariant(statue),
     );
   }
 }
@@ -3838,7 +3862,17 @@ function drawOrbitalWreckPanels2D(
   world,
   props,
 ) {
-  for (const wreck of props.orbitalWrecks) {
+  for (
+    let index = 0;
+    index < props.orbitalWrecks.length;
+    index += 1
+  ) {
+    if (index === 0) {
+      continue;
+    }
+
+    const wreck =
+      props.orbitalWrecks[index];
     if (
       visibleStrengthAt(
         world,
@@ -4205,12 +4239,31 @@ function updateVisualPassCache(world) {
     (mark) => now - mark.createdAt <= mark.ttl,
   );
 
-  for (const particle of world.wallImpactParticles ?? []) {
-    if (particle.__visualPassSeen) {
+  for (
+    const particle of
+    world.__cinematic?.particles ?? []
+  ) {
+    if (
+      particle.kind !== "wallImpact" ||
+      particle.__visualPassSeen
+    ) {
       continue;
     }
 
     particle.__visualPassSeen = true;
+
+    const duplicate = cache.wallMarks.some(
+      (mark) =>
+        now - mark.createdAt < 0.16 &&
+        Math.hypot(
+          mark.x - particle.x,
+          mark.y - particle.y,
+        ) < 0.22,
+    );
+
+    if (duplicate) {
+      continue;
+    }
 
     pushWallMark(
       world,
@@ -4284,8 +4337,47 @@ function tileMaterialShade(world) {
   };
 }
 
+function tileHasForegroundEntity(
+  world,
+  tileX,
+  tileY,
+) {
+  const occupiesTile = (entity) =>
+    entity &&
+    Math.floor(entity.x) === tileX &&
+    Math.floor(entity.y) === tileY;
+
+  if (
+    occupiesTile(world.player) ||
+    (
+      world.exit &&
+      world.exit.x === tileX &&
+      world.exit.y === tileY
+    )
+  ) {
+    return true;
+  }
+
+  const groups = [
+    world.enemies,
+    world.pickups,
+    world.projectiles,
+    world.effects,
+    world.__cinematic?.particles,
+    world.__cinematic?.hitReactions,
+  ];
+
+  return groups.some(
+    (group) =>
+      (group ?? []).some(occupiesTile),
+  );
+}
+
 function drawMaterialSurfaces2D(ctx, world) {
-  if (world.viewMode === "3d") {
+  if (
+    world.viewMode === "3d" ||
+    world.level?.themeKey === "city"
+  ) {
     return;
   }
 
@@ -4296,7 +4388,10 @@ function drawMaterialSurfaces2D(ctx, world) {
 
   for (let y = bounds.minY; y <= bounds.maxY; y += 1) {
     for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
-      if (visibleStrengthAt(world, x, y) <= 0.05) {
+      const visibility =
+        visibleStrengthAt(world, x, y);
+
+      if (visibility < 0.98) {
         continue;
       }
 
@@ -4307,6 +4402,18 @@ function drawMaterialSurfaces2D(ctx, world) {
         (y - bounds.camera.y) *
         bounds.scale;
       const isFloor = fxTileIsFloor(world, x, y);
+
+      if (
+        isFloor &&
+        tileHasForegroundEntity(
+          world,
+          x,
+          y,
+        )
+      ) {
+        continue;
+      }
+
       const n = fxNoise(x, y, 910);
       const fill =
         isFloor
@@ -4317,7 +4424,7 @@ function drawMaterialSurfaces2D(ctx, world) {
             ? theme.wallBase
             : theme.wallAlt;
 
-      ctx.globalAlpha = 0.22;
+      ctx.globalAlpha = isFloor ? 0.07 : 0.12;
       ctx.fillStyle = fill;
       ctx.fillRect(
         screenX,
@@ -4510,6 +4617,17 @@ function drawOrbitalCruiserLandmark2D(
   }
 
   const wreck = props.orbitalWrecks[0];
+
+  if (
+    visibleStrengthAt(
+      world,
+      wreck.tileX,
+      wreck.tileY,
+    ) <= 0.12
+  ) {
+    return;
+  }
+
   const screen = getWorldScreenPosition(
     world,
     wreck.x,
@@ -4560,6 +4678,17 @@ function drawJungleLandmark2D(ctx, world) {
   }
 
   const tree = props.emeraldGrowth[0];
+
+  if (
+    visibleStrengthAt(
+      world,
+      tree.tileX,
+      tree.tileY,
+    ) <= 0.12
+  ) {
+    return;
+  }
+
   const screen = getWorldScreenPosition(
     world,
     tree.x,
@@ -4615,6 +4744,17 @@ function drawKeepLandmark2D(ctx, world) {
   }
 
   const statue = props.keepStatues[0];
+
+  if (
+    visibleStrengthAt(
+      world,
+      statue.tileX,
+      statue.tileY,
+    ) <= 0.12
+  ) {
+    return;
+  }
+
   const screen = getWorldScreenPosition(
     world,
     statue.x,
@@ -4651,9 +4791,16 @@ function drawCityStorefrontEdges2D(
 
   for (let y = bounds.minY; y <= bounds.maxY; y += 1) {
     for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
+      const visibility =
+        visibleStrengthAt(world, x, y);
+      const discovered =
+        world.discovered?.[
+          y * world.width + x
+        ] === 1;
+
       if (
         fxTileIsFloor(world, x, y) ||
-        visibleStrengthAt(world, x, y) <= 0.08 ||
+        (!discovered && visibility < 0.98) ||
         fxNoise(x, y, 931) > 0.16
       ) {
         continue;
@@ -4698,9 +4845,13 @@ function drawWeaponAnimationOverlay(ctx, world) {
   }
 
   const time = world.time ?? 0;
+  const lastAttackAt =
+    world.__cinematic
+      ?.lastRegisteredShotAt ??
+    -Infinity;
   const pulse = Math.max(
     0,
-    1 - (time - (world.player?.lastAttackTime ?? -99)) * 7,
+    1 - (time - lastAttackAt) * 7,
   );
 
   if (pulse <= 0) {

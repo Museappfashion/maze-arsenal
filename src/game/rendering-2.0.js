@@ -916,6 +916,16 @@ function fxTileIsFloor(world, x, y) {
   );
 }
 
+function fxTileIsWall(world, x, y) {
+  return (
+    x >= 0 &&
+    y >= 0 &&
+    x < world.width &&
+    y < world.height &&
+    !fxTileIsFloor(world, x, y)
+  );
+}
+
 function fxTileVisible(world, x, y) {
   return (
     visibleStrengthAt(world, x, y) >
@@ -2826,10 +2836,10 @@ function getThemePropCache(world, themeKey) {
       }
 
       const walls = {
-        north: isWallTile(world, x, y - 1),
-        south: isWallTile(world, x, y + 1),
-        west: isWallTile(world, x - 1, y),
-        east: isWallTile(world, x + 1, y),
+        north: fxTileIsWall(world, x, y - 1),
+        south: fxTileIsWall(world, x, y + 1),
+        west: fxTileIsWall(world, x - 1, y),
+        east: fxTileIsWall(world, x + 1, y),
       };
       const wallCount =
         Number(walls.north) +

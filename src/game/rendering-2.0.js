@@ -4158,7 +4158,679 @@ function drawFallenKeepIdentityGuaranteed(
   );
 }
 
+
+function getVisualPassCache(world) {
+  if (!world.__visualPassCache) {
+    world.__visualPassCache = {
+      wallMarks: [],
+      initializedAt: world.time ?? 0,
+    };
+  }
+
+  return world.__visualPassCache;
+}
+
+function pushWallMark(
+  world,
+  x,
+  y,
+  kind = "stone",
+) {
+  const cache = getVisualPassCache(world);
+
+  cache.wallMarks.push({
+    x,
+    y,
+    kind,
+    createdAt: world.time ?? 0,
+    ttl: kind === "orbital" ? 12 : 9,
+  });
+
+  if (cache.wallMarks.length > 90) {
+    cache.wallMarks.splice(
+      0,
+      cache.wallMarks.length - 90,
+    );
+  }
+}
+
+function updateVisualPassCache(world) {
+  const cache = getVisualPassCache(world);
+  const now = world.time ?? 0;
+
+  cache.wallMarks = cache.wallMarks.filter(
+    (mark) => now - mark.createdAt <= mark.ttl,
+  );
+
+  for (const particle of world.wallImpactParticles ?? []) {
+    if (particle.__visualPassSeen) {
+      continue;
+    }
+
+    particle.__visualPassSeen = true;
+
+    pushWallMark(
+      world,
+      particle.x,
+      particle.y,
+      world.level?.themeKey === "space"
+        ? "orbital"
+        : world.level?.themeKey === "city"
+          ? "city"
+          : world.level?.themeKey === "jungle"
+            ? "jungle"
+            : "stone",
+    );
+  }
+}
+
+function tileMaterialShade(world) {
+  const themeKey = world.level?.themeKey;
+
+  if (themeKey === "space") {
+    return {
+      floorBase: "#081528",
+      floorAlt: "#0d2038",
+      wallBase: "#56657c",
+      wallAlt: "#3a4558",
+      crack: "rgba(203,213,225,0.18)",
+      edge: "rgba(255,255,255,0.06)",
+    };
+  }
+
+  if (themeKey === "jungle") {
+    return {
+      floorBase: "#314228",
+      floorAlt: "#3b4d30",
+      wallBase: "#47633f",
+      wallAlt: "#304928",
+      crack: "rgba(20,83,45,0.22)",
+      edge: "rgba(250,250,200,0.04)",
+    };
+  }
+
+  if (themeKey === "medieval") {
+    return {
+      floorBase: "#3d342d",
+      floorAlt: "#473c33",
+      wallBase: "#6f655c",
+      wallAlt: "#554d46",
+      crack: "rgba(24,24,27,0.26)",
+      edge: "rgba(255,245,220,0.05)",
+    };
+  }
+
+  if (themeKey === "city") {
+    return {
+      floorBase: "#484b52",
+      floorAlt: "#555962",
+      wallBase: "#6c7280",
+      wallAlt: "#5b606d",
+      crack: "rgba(17,24,39,0.26)",
+      edge: "rgba(255,255,255,0.04)",
+    };
+  }
+
+  return {
+    floorBase: "#2f3b46",
+    floorAlt: "#394754",
+    wallBase: "#5b6872",
+    wallAlt: "#47545e",
+    crack: "rgba(15,23,42,0.2)",
+    edge: "rgba(255,255,255,0.04)",
+  };
+}
+
+function drawMaterialSurfaces2D(ctx, world) {
+  if (world.viewMode === "3d") {
+    return;
+  }
+
+  const bounds = fxVisibleBounds(world);
+  const theme = tileMaterialShade(world);
+
+  ctx.save();
+
+  for (let y = bounds.minY; y <= bounds.maxY; y += 1) {
+    for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
+      if (visibleStrengthAt(world, x, y) <= 0.05) {
+        continue;
+      }
+
+      const screenX =
+        (x - bounds.camera.x) *
+        bounds.scale;
+      const screenY =
+        (y - bounds.camera.y) *
+        bounds.scale;
+      const isFloor = fxTileIsFloor(world, x, y);
+      const n = fxNoise(x, y, 910);
+      const fill =
+        isFloor
+          ? n > 0.5
+            ? theme.floorBase
+            : theme.floorAlt
+          : n > 0.5
+            ? theme.wallBase
+            : theme.wallAlt;
+
+      ctx.globalAlpha = 0.22;
+      ctx.fillStyle = fill;
+      ctx.fillRect(
+        screenX,
+        screenY,
+        bounds.scale,
+        bounds.scale,
+      );
+
+      ctx.globalAlpha = 0.16;
+      ctx.strokeStyle = theme.crack;
+      ctx.lineWidth = Math.max(
+        1,
+        bounds.scale * 0.014,
+      );
+
+      if (isFloor) {
+        if (n > 0.62) {
+          ctx.beginPath();
+          ctx.moveTo(
+            screenX + bounds.scale * 0.18,
+            screenY + bounds.scale * 0.24,
+          );
+          ctx.lineTo(
+            screenX + bounds.scale * 0.48,
+            screenY + bounds.scale * 0.42,
+          );
+          ctx.lineTo(
+            screenX + bounds.scale * 0.72,
+            screenY + bounds.scale * 0.3,
+          );
+          ctx.stroke();
+        }
+
+        if (world.level?.themeKey === "space" && n > 0.56) {
+          ctx.globalAlpha = 0.1;
+          ctx.strokeStyle =
+            "rgba(56,189,248,0.18)";
+          ctx.beginPath();
+          ctx.moveTo(
+            screenX + bounds.scale * 0.16,
+            screenY + bounds.scale * 0.72,
+          );
+          ctx.lineTo(
+            screenX + bounds.scale * 0.82,
+            screenY + bounds.scale * 0.72,
+          );
+          ctx.stroke();
+        }
+
+        if (world.level?.themeKey === "city" && n > 0.58) {
+          ctx.globalAlpha = 0.08;
+          ctx.strokeStyle =
+            "rgba(191,219,254,0.16)";
+          ctx.beginPath();
+          ctx.moveTo(
+            screenX + bounds.scale * 0.2,
+            screenY + bounds.scale * 0.62,
+          );
+          ctx.lineTo(
+            screenX + bounds.scale * 0.8,
+            screenY + bounds.scale * 0.62,
+          );
+          ctx.stroke();
+        }
+      } else {
+        ctx.globalAlpha = 0.12;
+        ctx.strokeStyle = theme.edge;
+        ctx.strokeRect(
+          screenX + 1,
+          screenY + 1,
+          bounds.scale - 2,
+          bounds.scale - 2,
+        );
+
+        if (n > 0.55) {
+          ctx.globalAlpha = 0.14;
+          ctx.strokeStyle = theme.crack;
+          ctx.beginPath();
+          ctx.moveTo(
+            screenX + bounds.scale * 0.2,
+            screenY + bounds.scale * 0.16,
+          );
+          ctx.lineTo(
+            screenX + bounds.scale * 0.76,
+            screenY + bounds.scale * 0.66,
+          );
+          ctx.stroke();
+        }
+      }
+    }
+  }
+
+  ctx.restore();
+}
+
+function drawWallMarks2D(ctx, world) {
+  if (world.viewMode === "3d") {
+    return;
+  }
+
+  const cache = getVisualPassCache(world);
+
+  ctx.save();
+
+  for (const mark of cache.wallMarks) {
+    const tileX = Math.floor(mark.x);
+    const tileY = Math.floor(mark.y);
+
+    if (visibleStrengthAt(world, tileX, tileY) <= 0.05) {
+      continue;
+    }
+
+    const screen = getWorldScreenPosition(
+      world,
+      mark.x,
+      mark.y,
+    );
+    const age =
+      (world.time ?? 0) - mark.createdAt;
+    const alpha = Math.max(
+      0,
+      1 - age / mark.ttl,
+    );
+
+    ctx.globalAlpha = 0.3 * alpha;
+
+    if (mark.kind === "orbital") {
+      ctx.fillStyle = "rgba(147,197,253,0.7)";
+      ctx.fillRect(
+        screen.x - screen.scale * 0.1,
+        screen.y - 1,
+        screen.scale * 0.2,
+        2,
+      );
+      continue;
+    }
+
+    if (mark.kind === "city") {
+      ctx.fillStyle = "rgba(15,23,42,0.7)";
+      ctx.beginPath();
+      ctx.arc(
+        screen.x,
+        screen.y,
+        Math.max(2, screen.scale * 0.08),
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+      continue;
+    }
+
+    ctx.strokeStyle =
+      mark.kind === "jungle"
+        ? "rgba(20,83,45,0.65)"
+        : "rgba(30,30,30,0.72)";
+    ctx.lineWidth = Math.max(
+      1,
+      screen.scale * 0.03,
+    );
+    ctx.beginPath();
+    ctx.moveTo(
+      screen.x - screen.scale * 0.08,
+      screen.y - screen.scale * 0.03,
+    );
+    ctx.lineTo(
+      screen.x + screen.scale * 0.08,
+      screen.y + screen.scale * 0.03,
+    );
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function drawOrbitalCruiserLandmark2D(
+  ctx,
+  world,
+) {
+  if (
+    world.viewMode === "3d" ||
+    world.level?.themeKey !== "space"
+  ) {
+    return;
+  }
+
+  const props = getThemePropCache(world, "space");
+
+  if (!props.orbitalWrecks?.length) {
+    return;
+  }
+
+  const wreck = props.orbitalWrecks[0];
+  const screen = getWorldScreenPosition(
+    world,
+    wreck.x,
+    wreck.y,
+  );
+  const size = screen.scale * 1.45;
+
+  ctx.save();
+  ctx.translate(screen.x, screen.y);
+  ctx.rotate(0.28);
+  ctx.globalAlpha = 0.5;
+
+  ctx.fillStyle = "#475569";
+  ctx.beginPath();
+  ctx.moveTo(-size * 0.75, -size * 0.16);
+  ctx.lineTo(size * 0.68, -size * 0.32);
+  ctx.lineTo(size * 0.86, 0);
+  ctx.lineTo(size * 0.2, size * 0.22);
+  ctx.lineTo(-size * 0.62, size * 0.26);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = "#cbd5e1";
+  ctx.lineWidth = Math.max(1, size * 0.03);
+  ctx.stroke();
+
+  ctx.strokeStyle = "rgba(56,189,248,0.45)";
+  ctx.beginPath();
+  ctx.moveTo(-size * 0.32, -size * 0.02);
+  ctx.lineTo(size * 0.18, -size * 0.08);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawJungleLandmark2D(ctx, world) {
+  if (
+    world.viewMode === "3d" ||
+    world.level?.themeKey !== "jungle"
+  ) {
+    return;
+  }
+
+  const props = getThemePropCache(world, "jungle");
+
+  if (!props.emeraldGrowth?.length) {
+    return;
+  }
+
+  const tree = props.emeraldGrowth[0];
+  const screen = getWorldScreenPosition(
+    world,
+    tree.x,
+    tree.y,
+  );
+  const size = screen.scale * 1.18;
+
+  ctx.save();
+  ctx.translate(screen.x, screen.y + screen.scale * 0.08);
+  ctx.globalAlpha = 0.5;
+
+  ctx.fillStyle = "#4d3321";
+  ctx.fillRect(
+    -size * 0.12,
+    -size * 0.55,
+    size * 0.24,
+    size * 0.72,
+  );
+
+  ctx.fillStyle = "#3f6212";
+  for (const [lx, ly, r] of [
+    [0, -0.68, 0.28],
+    [-0.2, -0.46, 0.25],
+    [0.22, -0.44, 0.24],
+    [0.02, -0.3, 0.26],
+  ]) {
+    ctx.beginPath();
+    ctx.arc(
+      size * lx,
+      size * ly,
+      size * r,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+function drawKeepLandmark2D(ctx, world) {
+  if (
+    world.viewMode === "3d" ||
+    world.level?.themeKey !== "medieval"
+  ) {
+    return;
+  }
+
+  const props = getThemePropCache(world, "medieval");
+
+  if (!props.keepStatues?.length) {
+    return;
+  }
+
+  const statue = props.keepStatues[0];
+  const screen = getWorldScreenPosition(
+    world,
+    statue.x,
+    statue.y,
+  );
+
+  ctx.save();
+  ctx.globalAlpha = 0.4;
+  drawKeepStatueShape2D(
+    ctx,
+    screen.x,
+    screen.y + screen.scale * 0.28,
+    screen.scale * 1.18,
+    getFacingAngle(statue),
+    "shield",
+  );
+  ctx.restore();
+}
+
+function drawCityStorefrontEdges2D(
+  ctx,
+  world,
+) {
+  if (
+    world.viewMode === "3d" ||
+    world.level?.themeKey !== "city"
+  ) {
+    return;
+  }
+
+  const bounds = fxVisibleBounds(world);
+
+  ctx.save();
+
+  for (let y = bounds.minY; y <= bounds.maxY; y += 1) {
+    for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
+      if (
+        fxTileIsFloor(world, x, y) ||
+        visibleStrengthAt(world, x, y) <= 0.08 ||
+        fxNoise(x, y, 931) > 0.16
+      ) {
+        continue;
+      }
+
+      const sx =
+        (x - bounds.camera.x) * bounds.scale;
+      const sy =
+        (y - bounds.camera.y) * bounds.scale;
+
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = "#1f2937";
+      ctx.fillRect(
+        sx + bounds.scale * 0.16,
+        sy + bounds.scale * 0.18,
+        bounds.scale * 0.68,
+        bounds.scale * 0.44,
+      );
+
+      ctx.globalAlpha = 0.12;
+      ctx.strokeStyle = "#94a3b8";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(
+        sx + bounds.scale * 0.16,
+        sy + bounds.scale * 0.18,
+        bounds.scale * 0.68,
+        bounds.scale * 0.44,
+      );
+    }
+  }
+
+  ctx.restore();
+}
+
+function drawWeaponAnimationOverlay(ctx, world) {
+  const weaponKey = world.player?.weapon;
+  const definition =
+    WEAPON_DEFINITIONS?.[weaponKey];
+
+  if (!definition) {
+    return;
+  }
+
+  const time = world.time ?? 0;
+  const pulse = Math.max(
+    0,
+    1 - (time - (world.player?.lastAttackTime ?? -99)) * 7,
+  );
+
+  if (pulse <= 0) {
+    return;
+  }
+
+  ctx.save();
+
+  if (world.viewMode === "3d") {
+    const baseX = CANVAS_WIDTH * 0.58;
+    const baseY = CANVAS_HEIGHT * 0.86;
+    const kick = pulse * 22;
+
+    ctx.translate(baseX - kick, baseY + kick * 0.12);
+    ctx.rotate(-pulse * 0.06);
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = "#111827";
+
+    if (weaponKey === "smg") {
+      ctx.fillRect(-30, -8, 78, 16);
+      ctx.fillRect(12, 8, 10, 18);
+      ctx.fillStyle = "rgba(103,232,249,0.5)";
+      ctx.fillRect(42, -4, 12, 8);
+      ctx.fillRect(42, 4, 12, 8);
+    } else if (weaponKey === "shotgun") {
+      ctx.fillRect(-40, -10, 98, 20);
+      ctx.fillRect(-8, 8, 14, 22);
+    } else if (weaponKey === "bow") {
+      ctx.strokeStyle = "rgba(180,83,9,0.65)";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(0, 0, 28, -1.2, 1.2);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(226,232,240,0.5)";
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(10, -24);
+      ctx.lineTo(10, 24);
+      ctx.stroke();
+    } else {
+      ctx.fillRect(-28, -8, 76, 16);
+      ctx.fillRect(4, 8, 10, 18);
+    }
+
+    ctx.restore();
+    return;
+  }
+
+  const player = getWorldScreenPosition(
+    world,
+    world.player.x,
+    world.player.y,
+  );
+  const facing = world.player.facing ?? 0;
+  const offset =
+    player.scale * (0.3 + pulse * 0.08);
+
+  ctx.translate(
+    player.x + Math.cos(facing) * offset,
+    player.y + Math.sin(facing) * offset,
+  );
+  ctx.rotate(facing + pulse * 0.12);
+  ctx.globalAlpha = 0.58;
+  ctx.fillStyle = "#0f172a";
+
+  if (weaponKey === "smg") {
+    ctx.fillRect(
+      -player.scale * 0.05,
+      -player.scale * 0.03,
+      player.scale * 0.34,
+      player.scale * 0.06,
+    );
+    ctx.fillStyle = "rgba(103,232,249,0.58)";
+    ctx.fillRect(
+      player.scale * 0.22,
+      -player.scale * 0.018,
+      player.scale * 0.08,
+      player.scale * 0.016,
+    );
+    ctx.fillRect(
+      player.scale * 0.22,
+      player.scale * 0.002,
+      player.scale * 0.08,
+      player.scale * 0.016,
+    );
+  } else if (weaponKey === "shotgun") {
+    ctx.fillRect(
+      -player.scale * 0.06,
+      -player.scale * 0.035,
+      player.scale * 0.4,
+      player.scale * 0.07,
+    );
+  } else if (weaponKey === "bow") {
+    ctx.strokeStyle = "rgba(180,83,9,0.75)";
+    ctx.lineWidth = Math.max(
+      2,
+      player.scale * 0.03,
+    );
+    ctx.beginPath();
+    ctx.arc(
+      0,
+      0,
+      player.scale * 0.12,
+      -1.1,
+      1.1,
+    );
+    ctx.stroke();
+  } else {
+    ctx.fillRect(
+      -player.scale * 0.05,
+      -player.scale * 0.03,
+      player.scale * 0.28,
+      player.scale * 0.06,
+    );
+  }
+
+  ctx.restore();
+}
+
+function drawMaterialSurfacesAndLandmarks(
+  ctx,
+  world,
+) {
+  drawMaterialSurfaces2D(ctx, world);
+  drawOrbitalCruiserLandmark2D(ctx, world);
+  drawJungleLandmark2D(ctx, world);
+  drawKeepLandmark2D(ctx, world);
+  drawCityStorefrontEdges2D(ctx, world);
+  drawWallMarks2D(ctx, world);
+}
+
 export function drawWorld(ctx, world) {
+  updateVisualPassCache(world);
   const cinematic =
     world.__cinematic ?? {};
   const shake =
@@ -4191,9 +4863,11 @@ export function drawWorld(ctx, world) {
   );
 
   drawCityConformWorld(ctx, world);
+  drawMaterialSurfacesAndLandmarks(ctx, world);
   drawWorldIdentityEffects(ctx, world);
   drawEnemyPursuitVisuals(ctx, world);
   drawAnimatedPickupEffects(ctx, world);
+  drawWeaponAnimationOverlay(ctx, world);
   drawCinematicParticles(ctx, world);
   drawEnemyHitReactions(ctx, world);
 

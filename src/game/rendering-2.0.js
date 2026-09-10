@@ -11,6 +11,9 @@ import {
   ENEMY_PURSUIT_RAMP_SECONDS,
 } from "../config/enemies.js";
 import {
+  WEAPONS as WEAPON_DEFINITIONS,
+} from "../config/weapons-enhanced.js";
+import {
   getCamera,
   getWorldRenderZoom,
   visibleStrengthAt,

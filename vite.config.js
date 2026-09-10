@@ -44,6 +44,12 @@ export default defineConfig({
         ),
       },
       {
+        find: /^(?:.*\/)?components\/LevelSelectScreen\.jsx$/,
+        replacement: sourcePath(
+          "./src/components/LevelSelectScreen-2.0.jsx",
+        ),
+      },
+      {
         find: /^(?:.*\/)?services\/leaderboard\.js$/,
         replacement: sourcePath(
           "./src/services/leaderboard-enhanced.js",

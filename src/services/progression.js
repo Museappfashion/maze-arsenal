@@ -1,15 +1,43 @@
 // src/services/progression.js
+
 export const LEVEL_PROGRESS_STORAGE_KEY =
   "mist-maze-level-progress-v1";
 
-const MAX_UNLOCKED_LEVEL = 3;
+export const PROGRESSION_CHANGED_EVENT =
+  "mist-maze-progression-changed";
 
-const LEVEL_NUMBER = {
-  level0: 0,
-  level1: 1,
-  level2: 2,
-  level3: 3,
-};
+export const COMBAT_LEVEL_ORDER = Object.freeze([
+  "level0",
+  "level1",
+  "level2",
+  "level3",
+]);
+
+const MAX_UNLOCKED_LEVEL =
+  COMBAT_LEVEL_ORDER.length - 1;
+
+const LEVEL_NUMBER = Object.freeze(
+  Object.fromEntries(
+    COMBAT_LEVEL_ORDER.map((levelKey, index) => [
+      levelKey,
+      index,
+    ]),
+  ),
+);
+
+function normalizeHighestUnlocked(value) {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.max(
+    0,
+    Math.min(
+      MAX_UNLOCKED_LEVEL,
+      Math.floor(value),
+    ),
+  );
+}
 
 function readHighestUnlocked() {
   if (typeof window === "undefined") {
@@ -17,21 +45,13 @@ function readHighestUnlocked() {
   }
 
   try {
-    const value = Number(
-      window.localStorage.getItem(
-        LEVEL_PROGRESS_STORAGE_KEY,
+    return normalizeHighestUnlocked(
+      Number(
+        window.localStorage.getItem(
+          LEVEL_PROGRESS_STORAGE_KEY,
+        ),
       ),
     );
-
-    return Number.isFinite(value)
-      ? Math.max(
-          0,
-          Math.min(
-            MAX_UNLOCKED_LEVEL,
-            Math.floor(value),
-          ),
-        )
-      : 0;
   } catch {
     return 0;
   }
@@ -41,17 +61,14 @@ function writeHighestUnlocked(
   highestUnlocked,
   source,
 ) {
-  if (typeof window === "undefined") {
-    return readHighestUnlocked();
-  }
+  const normalized =
+    normalizeHighestUnlocked(
+      highestUnlocked,
+    );
 
-  const normalized = Math.max(
-    0,
-    Math.min(
-      MAX_UNLOCKED_LEVEL,
-      Math.floor(highestUnlocked),
-    ),
-  );
+  if (typeof window === "undefined") {
+    return normalized;
+  }
 
   try {
     window.localStorage.setItem(
@@ -64,7 +81,7 @@ function writeHighestUnlocked(
 
   window.dispatchEvent(
     new CustomEvent(
-      "mist-maze-progression-changed",
+      PROGRESSION_CHANGED_EVENT,
       {
         detail: {
           highestUnlocked: normalized,
@@ -81,41 +98,77 @@ export function getHighestUnlockedLevel() {
   return readHighestUnlocked();
 }
 
+export function getLevelNumber(levelKey) {
+  const levelNumber =
+    LEVEL_NUMBER[levelKey];
+
+  return Number.isInteger(levelNumber)
+    ? levelNumber
+    : null;
+}
+
 export function isLevelUnlocked(levelKey) {
   if (levelKey === "labyrinth") {
     return true;
   }
 
   const levelNumber =
-    LEVEL_NUMBER[levelKey];
+    getLevelNumber(levelKey);
 
   return (
-    Number.isInteger(levelNumber) &&
+    levelNumber !== null &&
     levelNumber <= readHighestUnlocked()
   );
 }
 
-export function unlockAllLevels() {
-  return writeHighestUnlocked(
-    MAX_UNLOCKED_LEVEL,
-    "skip-button",
+export function getNextLevelKey(levelKey) {
+  const levelNumber =
+    getLevelNumber(levelKey);
+
+  if (levelNumber === null) {
+    return null;
+  }
+
+  return (
+    COMBAT_LEVEL_ORDER[
+      levelNumber + 1
+    ] ?? null
+  );
+}
+
+export function getPreviousLevelKey(levelKey) {
+  const levelNumber =
+    getLevelNumber(levelKey);
+
+  if (
+    levelNumber === null ||
+    levelNumber === 0
+  ) {
+    return null;
+  }
+
+  return (
+    COMBAT_LEVEL_ORDER[
+      levelNumber - 1
+    ] ?? null
   );
 }
 
 export function recordLevelCompletion(levelKey) {
-  const completed =
-    LEVEL_NUMBER[levelKey];
+  const completedLevel =
+    getLevelNumber(levelKey);
 
-  if (!Number.isInteger(completed)) {
+  if (completedLevel === null) {
     return readHighestUnlocked();
   }
 
-  const nextHighest = Math.min(
-    MAX_UNLOCKED_LEVEL,
-    completed + 1,
-  );
   const previousHighest =
     readHighestUnlocked();
+
+  const nextHighest =
+    normalizeHighestUnlocked(
+      completedLevel + 1,
+    );
 
   if (nextHighest <= previousHighest) {
     return previousHighest;
@@ -124,5 +177,16 @@ export function recordLevelCompletion(levelKey) {
   return writeHighestUnlocked(
     nextHighest,
     "level-completion",
+  );
+}
+
+/**
+ * Retained for compatibility with older developer tooling.
+ * The player-facing level selector does not expose an unlock-all control.
+ */
+export function unlockAllLevels() {
+  return writeHighestUnlocked(
+    MAX_UNLOCKED_LEVEL,
+    "developer-unlock",
   );
 }

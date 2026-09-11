@@ -1,31 +1,53 @@
 // src/features/nextLevelEnhancement.js
 
-const NEXT_LEVEL_BY_KEY = Object.freeze({
-  level0: "level1",
-  level1: "level2",
-  level2: "level3",
-});
+import {
+  getNextLevelKey,
+  recordLevelCompletion,
+} from "../services/progression.js";
 
 const UPDATE_INTERVAL_MS = 100;
 const WAIT_TIMEOUT_MS = 4000;
+const NEXT_BUTTON_ACTION = "next-level";
 
 function getWorld() {
-  return globalThis.__mistMazeWorld ?? null;
+  return (
+    globalThis.__mistMazeWorld ??
+    null
+  );
 }
 
 function findButtonByText(labels) {
-  const normalized = labels.map((label) => label.toUpperCase());
+  const normalized =
+    labels.map(
+      (label) =>
+        label.toUpperCase(),
+    );
 
-  return [...document.querySelectorAll("button")].find((button) => {
-    const text = button.textContent?.trim().toUpperCase() ?? "";
+  return [
+    ...document.querySelectorAll(
+      "button",
+    ),
+  ].find((button) => {
+    const text =
+      button.textContent
+        ?.trim()
+        .toUpperCase() ?? "";
 
-    return normalized.some((label) => text.includes(label));
+    return normalized.some(
+      (label) =>
+        text.includes(label),
+    );
   });
 }
 
 function levelKeyFromCard(card) {
   const label =
-    card.querySelector(".level-choice-number")?.textContent?.trim() ?? "";
+    card
+      .querySelector(
+        ".level-choice-number",
+      )
+      ?.textContent
+      ?.trim() ?? "";
 
   if (/LEVEL\s*0/i.test(label)) {
     return "level0";
@@ -43,31 +65,46 @@ function levelKeyFromCard(card) {
     return "level3";
   }
 
-  if (/LABYRINTH/i.test(card.textContent ?? "")) {
+  if (
+    /LABYRINTH/i.test(
+      card.textContent ?? "",
+    )
+  ) {
     return "labyrinth";
   }
 
   return null;
 }
 
-function waitForElement(getElement, timeoutMs = WAIT_TIMEOUT_MS) {
+function waitForElement(
+  getElement,
+  timeoutMs = WAIT_TIMEOUT_MS,
+) {
   return new Promise((resolve) => {
-    const startedAt = performance.now();
+    const startedAt =
+      performance.now();
 
     const check = () => {
-      const element = getElement();
+      const element =
+        getElement();
 
       if (element) {
         resolve(element);
         return;
       }
 
-      if (performance.now() - startedAt >= timeoutMs) {
+      if (
+        performance.now() -
+          startedAt >=
+        timeoutMs
+      ) {
         resolve(null);
         return;
       }
 
-      window.requestAnimationFrame(check);
+      window.requestAnimationFrame(
+        check,
+      );
     };
 
     check();
@@ -75,11 +112,12 @@ function waitForElement(getElement, timeoutMs = WAIT_TIMEOUT_MS) {
 }
 
 function clickLevelMenu() {
-  const button = findButtonByText([
-    "LEVEL MENU",
-    "CHOOSE ANOTHER LEVEL",
-    "BACK TO MAIN MENU",
-  ]);
+  const button =
+    findButtonByText([
+      "LEVEL MENU",
+      "CHOOSE ANOTHER LEVEL",
+      "BACK TO MAIN MENU",
+    ]);
 
   if (!button) {
     return false;
@@ -89,9 +127,10 @@ function clickLevelMenu() {
   return true;
 }
 
-async function openNextLevel(nextLevelKey) {
+async function openNextLevel(
+  nextLevelKey,
+) {
   if (!nextLevelKey) {
-    clickLevelMenu();
     return;
   }
 
@@ -99,11 +138,20 @@ async function openNextLevel(nextLevelKey) {
     return;
   }
 
-  const card = await waitForElement(() =>
-    [...document.querySelectorAll(".level-choice")].find(
-      (candidate) => levelKeyFromCard(candidate) === nextLevelKey,
-    ),
-  );
+  const card =
+    await waitForElement(
+      () =>
+        [
+          ...document.querySelectorAll(
+            ".level-choice",
+          ),
+        ].find(
+          (candidate) =>
+            levelKeyFromCard(
+              candidate,
+            ) === nextLevelKey,
+        ),
+    );
 
   if (!card) {
     return;
@@ -111,83 +159,194 @@ async function openNextLevel(nextLevelKey) {
 
   card.click();
 
-  const form = await waitForElement(() =>
-    document.querySelector(".name-prompt-card"),
-  );
+  const form =
+    await waitForElement(
+      () =>
+        document.querySelector(
+          ".name-prompt-card",
+        ),
+    );
 
-  if (!(form instanceof HTMLFormElement)) {
-    return;
+  if (
+    form instanceof
+    HTMLFormElement
+  ) {
+    form.requestSubmit();
   }
-
-  form.requestSubmit();
 }
 
-function updateVictoryButton() {
-  const world = getWorld();
-  const button = document.querySelector(
-    '[data-mist-action="restart"]',
-  );
-
-  if (!world?.victory || world.labyrinthMode || !button) {
-    return;
-  }
-
-  const nextLevelKey = NEXT_LEVEL_BY_KEY[world.level?.key] ?? null;
-
-  button.textContent = nextLevelKey
-    ? "PLAY NEXT LEVEL"
-    : "BACK TO LEVEL MENU";
-
-  button.dataset.mistNextLevel = nextLevelKey ?? "menu";
+function removeNextLevelButton() {
+  document
+    .querySelector(
+      `[data-mist-action="${NEXT_BUTTON_ACTION}"]`,
+    )
+    ?.remove();
 }
 
-function interceptVictoryButton(event) {
-  const button = event.target.closest?.(
-    '[data-mist-action="restart"]',
+function styleNextLevelButton(
+  button,
+) {
+  Object.assign(
+    button.style,
+    {
+      minWidth: "270px",
+      padding: "17px 30px",
+      border:
+        "2px solid rgba(125, 211, 252, 0.92)",
+      borderRadius: "16px",
+      background:
+        "linear-gradient(135deg, #0ea5e9, #67e8f9 52%, #22d3ee)",
+      color: "#04111d",
+      font: "inherit",
+      fontSize: "18px",
+      fontWeight: "950",
+      letterSpacing: "0.075em",
+      cursor: "pointer",
+      pointerEvents: "auto",
+      boxShadow:
+        "0 0 30px rgba(34, 211, 238, 0.68)",
+    },
   );
+}
 
-  if (!button) {
-    return;
+function ensureNextLevelButton(
+  restartButton,
+  nextLevelKey,
+) {
+  let nextButton =
+    document.querySelector(
+      `[data-mist-action="${NEXT_BUTTON_ACTION}"]`,
+    );
+
+  if (!nextButton) {
+    nextButton =
+      document.createElement(
+        "button",
+      );
+
+    nextButton.type = "button";
+    nextButton.dataset.mistAction =
+      NEXT_BUTTON_ACTION;
+    nextButton.textContent =
+      "PLAY NEXT LEVEL";
+
+    styleNextLevelButton(
+      nextButton,
+    );
+
+    restartButton.insertAdjacentElement(
+      "afterend",
+      nextButton,
+    );
   }
 
+  nextButton.dataset.mistNextLevel =
+    nextLevelKey;
+
+  nextButton.onclick = (
+    event,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const currentWorld =
+      getWorld();
+
+    if (
+      !currentWorld?.victory ||
+      currentWorld.labyrinthMode
+    ) {
+      return;
+    }
+
+    const currentNextLevel =
+      getNextLevelKey(
+        currentWorld.level?.key,
+      );
+
+    if (!currentNextLevel) {
+      return;
+    }
+
+    recordLevelCompletion(
+      currentWorld.level.key,
+    );
+
+    document.exitPointerLock?.();
+
+    void openNextLevel(
+      currentNextLevel,
+    );
+  };
+}
+
+function updateTerminalButtons() {
   const world = getWorld();
 
-  if (!world?.victory || world.labyrinthMode) {
+  const restartButton =
+    document.querySelector(
+      '[data-mist-action="restart"]',
+    );
+
+  if (
+    !world ||
+    (!world.gameOver &&
+      !world.victory) ||
+    !restartButton
+  ) {
+    removeNextLevelButton();
     return;
   }
 
-  event.preventDefault();
-  event.stopPropagation();
-  event.stopImmediatePropagation();
+  restartButton.textContent =
+    "START NEW GAME";
 
-  document.exitPointerLock?.();
+  if (
+    !world.victory ||
+    world.labyrinthMode
+  ) {
+    removeNextLevelButton();
+    return;
+  }
+
+  recordLevelCompletion(
+    world.level?.key,
+  );
 
   const nextLevelKey =
-    NEXT_LEVEL_BY_KEY[world.level?.key] ?? null;
+    getNextLevelKey(
+      world.level?.key,
+    );
 
-  void openNextLevel(nextLevelKey);
+  if (!nextLevelKey) {
+    removeNextLevelButton();
+    return;
+  }
+
+  ensureNextLevelButton(
+    restartButton,
+    nextLevelKey,
+  );
 }
 
 export function installNextLevelEnhancement() {
   if (
-    typeof document === "undefined" ||
-    globalThis.__mistMazeNextLevelEnhancementInstalled
+    typeof document ===
+      "undefined" ||
+    globalThis
+      .__mistMazeNextLevelEnhancementInstalled
   ) {
     return;
   }
 
-  globalThis.__mistMazeNextLevelEnhancementInstalled = true;
-
-  document.addEventListener(
-    "click",
-    interceptVictoryButton,
-    true,
-  );
+  globalThis
+    .__mistMazeNextLevelEnhancementInstalled =
+    true;
 
   window.setInterval(
-    updateVictoryButton,
+    updateTerminalButtons,
     UPDATE_INTERVAL_MS,
   );
 
-  updateVictoryButton();
+  updateTerminalButtons();
 }

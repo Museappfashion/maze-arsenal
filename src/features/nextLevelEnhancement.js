@@ -2,18 +2,39 @@
 
 import {
   getNextLevelKey,
+  isLevelUnlocked,
   recordLevelCompletion,
 } from "../services/progression.js";
 
-const NEXT_BUTTON_ACTION =
-  "next-level";
+const UPDATE_INTERVAL_MS = 75;
+const WAIT_TIMEOUT_MS = 5000;
 
-const WAIT_TIMEOUT_MS = 4000;
+const NEXT_LEVEL_DETAILS = Object.freeze({
+  level1: {
+    label: "LEVEL 1",
+    subtitle: "ORBITAL RUINS",
+  },
+  level2: {
+    label: "LEVEL 2",
+    subtitle: "EMERALD WILDS",
+  },
+  level3: {
+    label: "LEVEL 3",
+    subtitle: "THE FALLEN KEEP",
+  },
+});
 
 function getWorld() {
   return (
-    globalThis
-      .__mistMazeWorld ??
+    globalThis.__mistMazeWorld ??
+    null
+  );
+}
+
+function getWorldLevelKey(world) {
+  return (
+    world?.levelKey ??
+    world?.level?.key ??
     null
   );
 }
@@ -54,40 +75,91 @@ function levelKeyFromCard(card) {
   return null;
 }
 
-function waitForElement(
-  getElement,
+function waitFor(
+  getValue,
   timeoutMs = WAIT_TIMEOUT_MS,
 ) {
-  return new Promise(
-    (resolve) => {
-      const startedAt =
-        performance.now();
+  return new Promise((resolve) => {
+    const startedAt =
+      performance.now();
 
-      const check = () => {
-        const element =
-          getElement();
+    const check = () => {
+      const value = getValue();
 
-        if (element) {
-          resolve(element);
-          return;
-        }
+      if (value) {
+        resolve(value);
+        return;
+      }
 
-        if (
-          performance.now() -
-            startedAt >=
-          timeoutMs
-        ) {
-          resolve(null);
-          return;
-        }
+      if (
+        performance.now() -
+          startedAt >=
+        timeoutMs
+      ) {
+        resolve(null);
+        return;
+      }
 
-        window
-          .requestAnimationFrame(
-            check,
-          );
-      };
+      window.requestAnimationFrame(
+        check,
+      );
+    };
 
-      check();
+    check();
+  });
+}
+
+function clearAddedUi() {
+  document
+    .querySelector(
+      '[data-mist-action="next-level"]',
+    )
+    ?.remove();
+
+  document
+    .querySelector(
+      "[data-mist-unlock-status]",
+    )
+    ?.remove();
+}
+
+function styleNextButton(button) {
+  Object.assign(
+    button.style,
+    {
+      minWidth: "270px",
+      padding: "17px 30px",
+      border:
+        "2px solid rgba(125, 211, 252, 0.95)",
+      borderRadius: "16px",
+      background:
+        "linear-gradient(135deg, #0ea5e9, #67e8f9 52%, #22d3ee)",
+      color: "#04111d",
+      font: "inherit",
+      fontSize: "16px",
+      fontWeight: "950",
+      lineHeight: "1.25",
+      letterSpacing: "0.055em",
+      cursor: "pointer",
+      pointerEvents: "auto",
+      boxShadow:
+        "0 0 30px rgba(34, 211, 238, 0.68)",
+    },
+  );
+}
+
+function styleUnlockStatus(status) {
+  Object.assign(
+    status.style,
+    {
+      color: "#bbf7d0",
+      fontSize: "12px",
+      fontWeight: "900",
+      letterSpacing: "0.08em",
+      textAlign: "center",
+      textShadow:
+        "0 0 14px rgba(74, 222, 128, 0.45)",
+      pointerEvents: "none",
     },
   );
 }
@@ -95,9 +167,13 @@ function waitForElement(
 async function openNextLevel(
   nextLevelKey,
 ) {
+  if (!nextLevelKey) {
+    return;
+  }
+
   const menuButton =
     document.querySelector(
-      '[data-mist-action="menu"]',
+      '#mist-maze-runtime-enhancements [data-mist-action="menu"]',
     );
 
   if (
@@ -110,25 +186,36 @@ async function openNextLevel(
   menuButton.click();
 
   const card =
-    await waitForElement(
-      () =>
-        [
-          ...document
-            .querySelectorAll(
-              ".level-choice",
-            ),
-        ].find(
-          (candidate) =>
-            levelKeyFromCard(
-              candidate,
-            ) ===
-            nextLevelKey,
+    await waitFor(() => {
+      if (
+        !isLevelUnlocked(
+          nextLevelKey,
+        )
+      ) {
+        return null;
+      }
+
+      return [
+        ...document.querySelectorAll(
+          ".level-choice",
         ),
-    );
+      ].find(
+        (candidate) =>
+          levelKeyFromCard(
+            candidate,
+          ) === nextLevelKey &&
+          candidate.getAttribute(
+            "aria-disabled",
+          ) !== "true" &&
+          !candidate.classList.contains(
+            "mist-locked-level",
+          ),
+      );
+    });
 
   if (
     !(card instanceof
-      HTMLElement)
+      HTMLButtonElement)
   ) {
     return;
   }
@@ -136,11 +223,12 @@ async function openNextLevel(
   card.click();
 
   const form =
-    await waitForElement(
+    await waitFor(
       () =>
         document.querySelector(
           ".name-prompt-card",
         ),
+      2500,
     );
 
   if (
@@ -151,48 +239,120 @@ async function openNextLevel(
   }
 }
 
-function removeNextLevelButton() {
-  document
-    .querySelector(
-      `[data-mist-action="${NEXT_BUTTON_ACTION}"]`,
-    )
-    ?.remove();
-}
+function ensureVictoryProgress(world) {
+  if (
+    !world?.victory ||
+    world.labyrinthMode
+  ) {
+    return null;
+  }
 
-function styleNextLevelButton(
-  button,
-) {
-  Object.assign(
-    button.style,
-    {
-      minWidth: "270px",
-      padding: "17px 30px",
-      border:
-        "2px solid rgba(125, 211, 252, 0.92)",
-      borderRadius: "16px",
-      background:
-        "linear-gradient(135deg, #0ea5e9, #67e8f9 52%, #22d3ee)",
-      color: "#04111d",
-      font: "inherit",
-      fontSize: "18px",
-      fontWeight: "950",
-      letterSpacing:
-        "0.075em",
-      cursor: "pointer",
-      pointerEvents: "auto",
-      boxShadow:
-        "0 0 30px rgba(34, 211, 238, 0.68)",
-    },
+  const levelKey =
+    getWorldLevelKey(world);
+
+  if (!levelKey) {
+    return null;
+  }
+
+  recordLevelCompletion(
+    levelKey,
+  );
+
+  return getNextLevelKey(
+    levelKey,
   );
 }
 
-function ensureNextLevelButton(
-  restartButton,
-  nextLevelKey,
-) {
-  let nextButton =
+function ensureEndGameUi() {
+  const world = getWorld();
+
+  if (
+    !world ||
+    (!world.gameOver &&
+      !world.victory)
+  ) {
+    clearAddedUi();
+    return;
+  }
+
+  const restartButton =
     document.querySelector(
-      `[data-mist-action="${NEXT_BUTTON_ACTION}"]`,
+      '#mist-maze-runtime-enhancements [data-mist-action="restart"]',
+    );
+
+  if (
+    !(restartButton instanceof
+      HTMLButtonElement)
+  ) {
+    return;
+  }
+
+  restartButton.textContent =
+    "START NEW GAME";
+
+  if (
+    !world.victory ||
+    world.labyrinthMode
+  ) {
+    clearAddedUi();
+    return;
+  }
+
+  const nextLevelKey =
+    ensureVictoryProgress(
+      world,
+    );
+
+  if (!nextLevelKey) {
+    clearAddedUi();
+    return;
+  }
+
+  const details =
+    NEXT_LEVEL_DETAILS[
+      nextLevelKey
+    ];
+
+  const actions =
+    restartButton.parentElement;
+
+  if (!actions) {
+    return;
+  }
+
+  let status =
+    actions.querySelector(
+      "[data-mist-unlock-status]",
+    );
+
+  if (!status) {
+    status =
+      document.createElement(
+        "div",
+      );
+
+    status.dataset
+      .mistUnlockStatus = "true";
+
+    styleUnlockStatus(
+      status,
+    );
+
+    restartButton
+      .insertAdjacentElement(
+        "afterend",
+        status,
+      );
+  }
+
+  status.textContent =
+    details
+      ? `✓ ${details.label} UNLOCKED`
+      : "✓ NEXT LEVEL UNLOCKED";
+
+  let nextButton =
+    actions.querySelector(
+      '[data-mist-action="next-level"]',
     );
 
   if (!nextButton) {
@@ -203,26 +363,25 @@ function ensureNextLevelButton(
 
     nextButton.type =
       "button";
+
     nextButton.dataset
       .mistAction =
-      NEXT_BUTTON_ACTION;
-    nextButton.textContent =
-      "PLAY NEXT LEVEL";
+      "next-level";
 
-    styleNextLevelButton(
+    styleNextButton(
       nextButton,
     );
 
-    restartButton
-      .insertAdjacentElement(
-        "afterend",
-        nextButton,
-      );
+    status.insertAdjacentElement(
+      "afterend",
+      nextButton,
+    );
   }
 
-  nextButton.dataset
-    .mistNextLevel =
-    nextLevelKey;
+  nextButton.textContent =
+    details
+      ? `PLAY ${details.label} — ${details.subtitle}`
+      : "PLAY NEXT LEVEL";
 
   nextButton.onclick = (
     event,
@@ -230,158 +389,45 @@ function ensureNextLevelButton(
     event.preventDefault();
     event.stopPropagation();
 
-    const world =
+    const currentWorld =
       getWorld();
 
-    if (
-      !world?.victory ||
-      world.labyrinthMode
-    ) {
-      return;
-    }
-
-    const currentNextLevel =
-      getNextLevelKey(
-        world.level?.key,
+    const currentNext =
+      ensureVictoryProgress(
+        currentWorld,
       );
 
-    if (!currentNextLevel) {
+    if (!currentNext) {
       return;
     }
-
-    recordLevelCompletion(
-      world.level.key,
-    );
 
     document
       .exitPointerLock?.();
 
     void openNextLevel(
-      currentNextLevel,
+      currentNext,
     );
   };
-}
-
-function updateTerminalButtons() {
-  const world =
-    getWorld();
-
-  const restartButton =
-    document.querySelector(
-      '[data-mist-action="restart"]',
-    );
-
-  const finished =
-    Boolean(
-      world?.gameOver ||
-      world?.victory,
-    );
-
-  if (
-    !finished ||
-    !restartButton
-  ) {
-    removeNextLevelButton();
-    return;
-  }
-
-  if (
-    restartButton
-      .textContent !==
-    "START NEW GAME"
-  ) {
-    restartButton
-      .textContent =
-      "START NEW GAME";
-  }
-
-  if (
-    !world.victory ||
-    world.labyrinthMode
-  ) {
-    removeNextLevelButton();
-    return;
-  }
-
-  recordLevelCompletion(
-    world.level?.key,
-  );
-
-  const nextLevelKey =
-    getNextLevelKey(
-      world.level?.key,
-    );
-
-  if (!nextLevelKey) {
-    removeNextLevelButton();
-    return;
-  }
-
-  ensureNextLevelButton(
-    restartButton,
-    nextLevelKey,
-  );
 }
 
 export function installNextLevelEnhancement() {
   if (
     typeof document ===
       "undefined" ||
-    typeof MutationObserver ===
-      "undefined" ||
     globalThis
       .__mistMazeNextLevelEnhancementInstalled
   ) {
-    return () => {};
+    return;
   }
 
   globalThis
     .__mistMazeNextLevelEnhancementInstalled =
     true;
 
-  let frameId = 0;
-
-  const schedule = () => {
-    if (frameId) {
-      return;
-    }
-
-    frameId =
-      window.requestAnimationFrame(
-        () => {
-          frameId = 0;
-          updateTerminalButtons();
-        },
-      );
-  };
-
-  const observer =
-    new MutationObserver(
-      schedule,
-    );
-
-  observer.observe(
-    document.body,
-    {
-      childList: true,
-      subtree: true,
-      characterData: true,
-    },
+  window.setInterval(
+    ensureEndGameUi,
+    UPDATE_INTERVAL_MS,
   );
 
-  schedule();
-
-  return () => {
-    observer.disconnect();
-
-    if (frameId) {
-      window.cancelAnimationFrame(
-        frameId,
-      );
-    }
-
-    globalThis
-      .__mistMazeNextLevelEnhancementInstalled =
-      false;
-  };
+  ensureEndGameUi();
 }

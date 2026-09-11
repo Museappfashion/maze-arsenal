@@ -10,8 +10,8 @@ import {
 export * from "./LevelSelectScreen.jsx?core";
 
 /**
- * Progression locking is applied by runtimeEnhancements.
- * This wrapper intentionally adds no skip/unlock bypass.
+ * Level locking is handled by runtimeEnhancements.
+ * This wrapper intentionally exposes no progression-skip button.
  */
 export function LevelSelectScreen(props) {
   return createElement(

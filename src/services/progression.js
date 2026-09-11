@@ -13,9 +13,6 @@ export const COMBAT_LEVEL_ORDER = Object.freeze([
   "level3",
 ]);
 
-const MAX_UNLOCKED_LEVEL =
-  COMBAT_LEVEL_ORDER.length - 1;
-
 const LEVEL_NUMBER = Object.freeze(
   Object.fromEntries(
     COMBAT_LEVEL_ORDER.map((levelKey, index) => [
@@ -24,6 +21,9 @@ const LEVEL_NUMBER = Object.freeze(
     ]),
   ),
 );
+
+const MAX_UNLOCKED_LEVEL =
+  COMBAT_LEVEL_ORDER.length - 1;
 
 function normalizeHighestUnlocked(value) {
   if (!Number.isFinite(value)) {
@@ -45,12 +45,17 @@ function readHighestUnlocked() {
   }
 
   try {
+    const stored =
+      window.localStorage.getItem(
+        LEVEL_PROGRESS_STORAGE_KEY,
+      );
+
+    if (stored === null) {
+      return 0;
+    }
+
     return normalizeHighestUnlocked(
-      Number(
-        window.localStorage.getItem(
-          LEVEL_PROGRESS_STORAGE_KEY,
-        ),
-      ),
+      Number(stored),
     );
   } catch {
     return 0;
@@ -181,8 +186,8 @@ export function recordLevelCompletion(levelKey) {
 }
 
 /**
- * Compatibility hook for developer tooling only.
- * No player-facing control calls this function.
+ * Compatibility export for developer tools only.
+ * There is no player-facing unlock-all control.
  */
 export function unlockAllLevels() {
   return writeHighestUnlocked(

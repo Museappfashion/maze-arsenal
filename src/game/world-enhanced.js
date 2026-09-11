@@ -7,9 +7,10 @@ import {
 } from "../config/legendaryPowerUps.js";
 import {
   applySpecialPlayerLoadout,
-  SPECIAL_WEAPON_LABELS,
-  shouldShowWeaponForWorld,
 } from "../config/specialPlayers.js";
+import {
+  addEnemy,
+} from "./gameplay.js?core";
 import {
   createWorld as createWorldCore,
   setWorldViewMode as setWorldViewModeCore,
@@ -17,10 +18,9 @@ import {
 
 export * from "./world.js?core";
 
-const SPECIAL_WEAPON_HOTKEYS = Object.freeze([
-  ["0", "swordGun"],
-  ["-", "blackSword"],
-  ["=", "portalGun"],
+const PRESERVED_ENEMY_KINDS = new Set([
+  "turret",
+  "warden",
 ]);
 
 function exposeWorld(world) {
@@ -32,39 +32,10 @@ function tileKey(x, y) {
   return `${x},${y}`;
 }
 
-function distanceBetweenTiles(a, b) {
+function tileDistance(a, b) {
   return (
     Math.abs(a.x - b.x) +
     Math.abs(a.y - b.y)
-  );
-}
-
-function selectEvenlyDistributedEnemies(
-  enemies,
-  targetCount,
-) {
-  if (targetCount >= enemies.length) {
-    return [...enemies];
-  }
-
-  if (targetCount <= 0) {
-    return [];
-  }
-
-  const step = enemies.length / targetCount;
-
-  return Array.from(
-    { length: targetCount },
-    (_unused, index) => {
-      const sourceIndex = Math.min(
-        enemies.length - 1,
-        Math.floor(
-          (index + 0.5) * step,
-        ),
-      );
-
-      return enemies[sourceIndex];
-    },
   );
 }
 
@@ -87,7 +58,70 @@ function shuffleInPlace(items) {
   return items;
 }
 
-function getAvailableEnemyTiles(world) {
+function selectEvenly(items, count) {
+  if (count <= 0) {
+    return [];
+  }
+
+  if (count >= items.length) {
+    return [...items];
+  }
+
+  const step = items.length / count;
+
+  return Array.from(
+    { length: count },
+    (_unused, index) => {
+      const sourceIndex = Math.min(
+        items.length - 1,
+        Math.floor(
+          (index + 0.5) * step,
+        ),
+      );
+
+      return items[sourceIndex];
+    },
+  );
+}
+
+function trimEnemiesToTarget(
+  world,
+  targetCount,
+) {
+  const preserved = world.enemies.filter(
+    (enemy) =>
+      PRESERVED_ENEMY_KINDS.has(
+        enemy.kind,
+      ),
+  );
+  const regular = world.enemies.filter(
+    (enemy) =>
+      !PRESERVED_ENEMY_KINDS.has(
+        enemy.kind,
+      ),
+  );
+
+  if (preserved.length >= targetCount) {
+    world.enemies = selectEvenly(
+      preserved,
+      targetCount,
+    );
+    return;
+  }
+
+  const regularCount =
+    targetCount - preserved.length;
+
+  world.enemies = [
+    ...selectEvenly(
+      regular,
+      regularCount,
+    ),
+    ...preserved,
+  ];
+}
+
+function getOccupiedTileKeys(world) {
   const occupied = new Set();
 
   occupied.add(
@@ -97,7 +131,7 @@ function getAvailableEnemyTiles(world) {
     ),
   );
 
-  for (const enemy of world.enemies ?? []) {
+  for (const enemy of world.enemies) {
     occupied.add(
       tileKey(
         Math.floor(enemy.x),
@@ -115,7 +149,14 @@ function getAvailableEnemyTiles(world) {
     );
   }
 
-  const candidates = (
+  return occupied;
+}
+
+function getAvailableEnemyTiles(world) {
+  const occupied =
+    getOccupiedTileKeys(world);
+
+  const tiles = (
     world.floorTiles ?? []
   ).filter((tile) => {
     if (
@@ -128,7 +169,7 @@ function getAvailableEnemyTiles(world) {
 
     if (
       world.start &&
-      distanceBetweenTiles(
+      tileDistance(
         tile,
         world.start,
       ) < 8
@@ -138,10 +179,10 @@ function getAvailableEnemyTiles(world) {
 
     if (
       world.exit &&
-      distanceBetweenTiles(
+      tileDistance(
         tile,
         world.exit,
-      ) < 3
+      ) < 4
     ) {
       return false;
     }
@@ -149,49 +190,40 @@ function getAvailableEnemyTiles(world) {
     return true;
   });
 
-  return shuffleInPlace(candidates);
+  return shuffleInPlace(tiles);
 }
 
-function cloneEnemyAtTile(
-  world,
-  sourceEnemy,
-  tile,
-) {
-  return {
-    ...sourceEnemy,
-    id: `enemy-${world.nextId++}`,
-    x: tile.x + 0.5,
-    y: tile.y + 0.5,
-    hp: sourceEnemy.maxHp,
-    maxHp: sourceEnemy.maxHp,
-    awake: false,
-    pursuitStartedAt: null,
-    nextAttackAt: 0,
-    nextContactAt: 0,
-    lastAttackAt: -Infinity,
-    attackStyle: null,
-    lastHitAt: -Infinity,
-    orbitDir:
-      Math.random() < 0.5 ? 1 : -1,
-  };
+function getRegularEnemyKindPool(world) {
+  const kinds = world.enemies
+    .filter(
+      (enemy) =>
+        !PRESERVED_ENEMY_KINDS.has(
+          enemy.kind,
+        ),
+    )
+    .map((enemy) => enemy.kind)
+    .filter(Boolean);
+
+  return kinds.length
+    ? kinds
+    : ["scout"];
 }
 
 function addEnemiesToTarget(
   world,
   targetCount,
 ) {
-  const sourceEnemies = [
-    ...(world.enemies ?? []),
-  ];
+  const needed =
+    targetCount - world.enemies.length;
 
-  if (!sourceEnemies.length) {
+  if (needed <= 0) {
     return;
   }
 
   const availableTiles =
     getAvailableEnemyTiles(world);
-  const needed =
-    targetCount - sourceEnemies.length;
+  const enemyKinds =
+    getRegularEnemyKindPool(world);
   const amountToAdd = Math.min(
     needed,
     availableTiles.length,
@@ -202,26 +234,23 @@ function addEnemiesToTarget(
     index < amountToAdd;
     index += 1
   ) {
-    const sourceEnemy =
-      sourceEnemies[
+    const kind =
+      enemyKinds[
         Math.floor(
           Math.random() *
-            sourceEnemies.length,
+            enemyKinds.length,
         )
       ];
-    const tile = availableTiles[index];
 
-    world.enemies.push(
-      cloneEnemyAtTile(
-        world,
-        sourceEnemy,
-        tile,
-      ),
+    addEnemy(
+      world,
+      availableTiles[index],
+      kind,
     );
   }
 }
 
-function rebalanceEnemyDensity(world) {
+function enforceEnemyDensity(world) {
   if (
     !world ||
     world.labyrinthMode
@@ -243,15 +272,11 @@ function rebalanceEnemyDensity(world) {
     world.enemies.length >
     targetCount
   ) {
-    world.enemies =
-      selectEvenlyDistributedEnemies(
-        world.enemies,
-        targetCount,
-      );
-    return;
-  }
-
-  if (
+    trimEnemiesToTarget(
+      world,
+      targetCount,
+    );
+  } else if (
     world.enemies.length <
     targetCount
   ) {
@@ -260,31 +285,10 @@ function rebalanceEnemyDensity(world) {
       targetCount,
     );
   }
-}
 
-function getWeaponHotkeyLabel(world) {
-  const specialWeaponLabels =
-    SPECIAL_WEAPON_HOTKEYS
-      .filter(
-        ([, weaponKey]) =>
-          shouldShowWeaponForWorld(
-            world,
-            weaponKey,
-          ),
-      )
-      .map(
-        ([hotkey, weaponKey]) =>
-          `${hotkey} ${
-            SPECIAL_WEAPON_LABELS[
-              weaponKey
-            ]
-          }`,
-      );
-
-  return [
-    "1-9",
-    ...specialWeaponLabels,
-  ].join(" · ");
+  world.targetEnemyCount =
+    targetCount;
+  world.minimapDirty = true;
 }
 
 function applyEnhancedControls(world) {
@@ -292,36 +296,20 @@ function applyEnhancedControls(world) {
     return;
   }
 
-  const weaponHotkeyLabel =
-    getWeaponHotkeyLabel(world);
-
   world.controls = (
     world.controls ?? []
-  ).map((control) => {
-    const text = String(control)
-      .replace(
-        "Z / X",
-        "Z / X / C",
-      )
-      .replace(
-        "maximum 2",
-        "maximum 3",
-      );
-
-    if (
-      text.startsWith(
-        "Switch weapon:",
-      )
-    ) {
-      return (
-        `Switch weapon: ` +
-        `${weaponHotkeyLabel} ` +
-        `or click the sidebar`
-      );
-    }
-
-    return text;
-  });
+  ).map(
+    (control) =>
+      String(control)
+        .replace(
+          "Z / X",
+          "Z / X / C",
+        )
+        .replace(
+          "maximum 2",
+          "maximum 3",
+        ),
+  );
 }
 
 export function createWorld(...args) {
@@ -333,9 +321,11 @@ export function createWorld(...args) {
   world.__leaderboardRunFinished = false;
   world.__leaderboardRunPromise = null;
 
-  rebalanceEnemyDensity(world);
+  enforceEnemyDensity(world);
 
   if (!world.labyrinthMode) {
+    applyEnhancedControls(world);
+
     world.player.powerUpSlots = [
       ...(world.player.powerUpSlots ?? []),
       null,
@@ -359,10 +349,8 @@ export function createWorld(...args) {
   }
 
   applySpecialPlayerLoadout(world);
-  exposeWorld(world);
-  applyEnhancedControls(world);
 
-  return world;
+  return exposeWorld(world);
 }
 
 export function setWorldViewMode(
@@ -395,8 +383,8 @@ export function setWorldViewMode(
       normalized,
     );
 
-  exposeWorld(world);
   applyEnhancedControls(world);
+  exposeWorld(world);
 
   return result;
 }

@@ -45,26 +45,182 @@ export const WEAPONS = {
   },
 };
 
-export const WEAPON_ORDER = [
+const SPECIAL_WEAPON_OWNER_NAMES = Object.freeze({
+  [SWORD_GUN_KEY]: "asher",
+  [BLACK_SWORD_KEY]: "feivel",
+  [PORTAL_GUN_KEY]: "david ch",
+});
+
+const ALL_WEAPON_ORDER = Object.freeze([
   ...CORE_WEAPON_ORDER,
   SWORD_GUN_KEY,
   BLACK_SWORD_KEY,
   PORTAL_GUN_KEY,
-];
+]);
 
-export const WEAPON_HOTKEY_MAP = {
+const ALL_WEAPON_HOTKEYS = Object.freeze({
   ...Object.fromEntries(
-    CORE_WEAPON_ORDER.slice(0, 9).map((weaponKey, index) => [
-      String(index + 1),
-      weaponKey,
-    ]),
+    CORE_WEAPON_ORDER
+      .slice(0, 9)
+      .map((weaponKey, index) => [
+        String(index + 1),
+        weaponKey,
+      ]),
   ),
   "0": SWORD_GUN_KEY,
   "-": BLACK_SWORD_KEY,
   "=": PORTAL_GUN_KEY,
-};
+});
 
-export const WEAPON_HOTKEY_LABEL =
-  "1-9 · 0 Sword Gun · - Black Sword · = Portal Gun";
+function normalizePlayerName(playerName) {
+  return String(playerName ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function getCurrentWorld() {
+  return globalThis.__mistMazeWorld ?? null;
+}
+
+function canCurrentPlayerSeeWeapon(weaponKey) {
+  const ownerName =
+    SPECIAL_WEAPON_OWNER_NAMES[weaponKey];
+
+  if (!ownerName) {
+    return true;
+  }
+
+  const world = getCurrentWorld();
+
+  if (!world) {
+    return false;
+  }
+
+  if (world.player?.ownedWeapons?.[weaponKey]) {
+    return true;
+  }
+
+  return (
+    normalizePlayerName(world.playerName) ===
+    ownerName
+  );
+}
+
+function getVisibleWeaponOrder() {
+  return ALL_WEAPON_ORDER.filter(
+    canCurrentPlayerSeeWeapon,
+  );
+}
+
+export const WEAPON_ORDER = new Proxy(
+  [...ALL_WEAPON_ORDER],
+  {
+    get(_target, property) {
+      const visibleOrder =
+        getVisibleWeaponOrder();
+
+      if (property === Symbol.iterator) {
+        return visibleOrder[
+          Symbol.iterator
+        ].bind(visibleOrder);
+      }
+
+      if (property === "length") {
+        return visibleOrder.length;
+      }
+
+      if (
+        typeof property === "string" &&
+        /^\d+$/.test(property)
+      ) {
+        return visibleOrder[Number(property)];
+      }
+
+      const value = Reflect.get(
+        visibleOrder,
+        property,
+        visibleOrder,
+      );
+
+      return typeof value === "function"
+        ? value.bind(visibleOrder)
+        : value;
+    },
+  },
+);
+
+export const WEAPON_HOTKEY_MAP = new Proxy(
+  { ...ALL_WEAPON_HOTKEYS },
+  {
+    get(target, property, receiver) {
+      const weaponKey = Reflect.get(
+        target,
+        property,
+        receiver,
+      );
+
+      if (
+        typeof weaponKey !== "string" ||
+        canCurrentPlayerSeeWeapon(weaponKey)
+      ) {
+        return weaponKey;
+      }
+
+      return undefined;
+    },
+
+    has(target, property) {
+      const weaponKey = target[property];
+
+      return (
+        typeof weaponKey === "string" &&
+        canCurrentPlayerSeeWeapon(weaponKey)
+      );
+    },
+
+    ownKeys(target) {
+      return Reflect.ownKeys(target).filter(
+        (property) => {
+          if (typeof property !== "string") {
+            return true;
+          }
+
+          const weaponKey = target[property];
+
+          return (
+            typeof weaponKey !== "string" ||
+            canCurrentPlayerSeeWeapon(
+              weaponKey,
+            )
+          );
+        },
+      );
+    },
+
+    getOwnPropertyDescriptor(
+      target,
+      property,
+    ) {
+      const weaponKey = target[property];
+
+      if (
+        typeof weaponKey === "string" &&
+        !canCurrentPlayerSeeWeapon(
+          weaponKey,
+        )
+      ) {
+        return undefined;
+      }
+
+      return Object.getOwnPropertyDescriptor(
+        target,
+        property,
+      );
+    },
+  },
+);
+
+export const WEAPON_HOTKEY_LABEL = "1-9";
 
 export { WEAPON_SPAWN_PLAN };

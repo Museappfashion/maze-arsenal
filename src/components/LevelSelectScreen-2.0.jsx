@@ -1,19 +1,21 @@
 // src/components/LevelSelectScreen-2.0.jsx
 
 import {
+  createElement,
+} from "react";
+import {
   LevelSelectScreen as CoreLevelSelectScreen,
 } from "./LevelSelectScreen.jsx?core";
 
 export * from "./LevelSelectScreen.jsx?core";
 
 /**
- * Runtime enhancements apply progression locks to the core level cards.
- * This wrapper intentionally avoids duplicating progression UI.
+ * Progression locking is applied by runtimeEnhancements.
+ * This wrapper intentionally adds no skip/unlock bypass.
  */
 export function LevelSelectScreen(props) {
-  return (
-    <CoreLevelSelectScreen
-      {...props}
-    />
+  return createElement(
+    CoreLevelSelectScreen,
+    props,
   );
 }

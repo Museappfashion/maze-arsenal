@@ -5,39 +5,17 @@ import {
   recordLevelCompletion,
 } from "../services/progression.js";
 
-const UPDATE_INTERVAL_MS = 100;
+const NEXT_BUTTON_ACTION =
+  "next-level";
+
 const WAIT_TIMEOUT_MS = 4000;
-const NEXT_BUTTON_ACTION = "next-level";
 
 function getWorld() {
   return (
-    globalThis.__mistMazeWorld ??
+    globalThis
+      .__mistMazeWorld ??
     null
   );
-}
-
-function findButtonByText(labels) {
-  const normalized =
-    labels.map(
-      (label) =>
-        label.toUpperCase(),
-    );
-
-  return [
-    ...document.querySelectorAll(
-      "button",
-    ),
-  ].find((button) => {
-    const text =
-      button.textContent
-        ?.trim()
-        .toUpperCase() ?? "";
-
-    return normalized.some(
-      (label) =>
-        text.includes(label),
-    );
-  });
 }
 
 function levelKeyFromCard(card) {
@@ -80,80 +58,78 @@ function waitForElement(
   getElement,
   timeoutMs = WAIT_TIMEOUT_MS,
 ) {
-  return new Promise((resolve) => {
-    const startedAt =
-      performance.now();
+  return new Promise(
+    (resolve) => {
+      const startedAt =
+        performance.now();
 
-    const check = () => {
-      const element =
-        getElement();
+      const check = () => {
+        const element =
+          getElement();
 
-      if (element) {
-        resolve(element);
-        return;
-      }
+        if (element) {
+          resolve(element);
+          return;
+        }
 
-      if (
-        performance.now() -
-          startedAt >=
-        timeoutMs
-      ) {
-        resolve(null);
-        return;
-      }
+        if (
+          performance.now() -
+            startedAt >=
+          timeoutMs
+        ) {
+          resolve(null);
+          return;
+        }
 
-      window.requestAnimationFrame(
-        check,
-      );
-    };
+        window
+          .requestAnimationFrame(
+            check,
+          );
+      };
 
-    check();
-  });
-}
-
-function clickLevelMenu() {
-  const button =
-    findButtonByText([
-      "LEVEL MENU",
-      "CHOOSE ANOTHER LEVEL",
-      "BACK TO MAIN MENU",
-    ]);
-
-  if (!button) {
-    return false;
-  }
-
-  button.click();
-  return true;
+      check();
+    },
+  );
 }
 
 async function openNextLevel(
   nextLevelKey,
 ) {
-  if (!nextLevelKey) {
+  const menuButton =
+    document.querySelector(
+      '[data-mist-action="menu"]',
+    );
+
+  if (
+    !(menuButton instanceof
+      HTMLButtonElement)
+  ) {
     return;
   }
 
-  if (!clickLevelMenu()) {
-    return;
-  }
+  menuButton.click();
 
   const card =
     await waitForElement(
       () =>
         [
-          ...document.querySelectorAll(
-            ".level-choice",
-          ),
+          ...document
+            .querySelectorAll(
+              ".level-choice",
+            ),
         ].find(
           (candidate) =>
             levelKeyFromCard(
               candidate,
-            ) === nextLevelKey,
+            ) ===
+            nextLevelKey,
         ),
     );
 
-  if (!card) {
+  if (
+    !(card instanceof
+      HTMLElement)
+  ) {
     return;
   }
 
@@ -200,7 +176,8 @@ function styleNextLevelButton(
       font: "inherit",
       fontSize: "18px",
       fontWeight: "950",
-      letterSpacing: "0.075em",
+      letterSpacing:
+        "0.075em",
       cursor: "pointer",
       pointerEvents: "auto",
       boxShadow:
@@ -224,8 +201,10 @@ function ensureNextLevelButton(
         "button",
       );
 
-    nextButton.type = "button";
-    nextButton.dataset.mistAction =
+    nextButton.type =
+      "button";
+    nextButton.dataset
+      .mistAction =
       NEXT_BUTTON_ACTION;
     nextButton.textContent =
       "PLAY NEXT LEVEL";
@@ -234,13 +213,15 @@ function ensureNextLevelButton(
       nextButton,
     );
 
-    restartButton.insertAdjacentElement(
-      "afterend",
-      nextButton,
-    );
+    restartButton
+      .insertAdjacentElement(
+        "afterend",
+        nextButton,
+      );
   }
 
-  nextButton.dataset.mistNextLevel =
+  nextButton.dataset
+    .mistNextLevel =
     nextLevelKey;
 
   nextButton.onclick = (
@@ -249,19 +230,19 @@ function ensureNextLevelButton(
     event.preventDefault();
     event.stopPropagation();
 
-    const currentWorld =
+    const world =
       getWorld();
 
     if (
-      !currentWorld?.victory ||
-      currentWorld.labyrinthMode
+      !world?.victory ||
+      world.labyrinthMode
     ) {
       return;
     }
 
     const currentNextLevel =
       getNextLevelKey(
-        currentWorld.level?.key,
+        world.level?.key,
       );
 
     if (!currentNextLevel) {
@@ -269,10 +250,11 @@ function ensureNextLevelButton(
     }
 
     recordLevelCompletion(
-      currentWorld.level.key,
+      world.level.key,
     );
 
-    document.exitPointerLock?.();
+    document
+      .exitPointerLock?.();
 
     void openNextLevel(
       currentNextLevel,
@@ -281,25 +263,37 @@ function ensureNextLevelButton(
 }
 
 function updateTerminalButtons() {
-  const world = getWorld();
+  const world =
+    getWorld();
 
   const restartButton =
     document.querySelector(
       '[data-mist-action="restart"]',
     );
 
+  const finished =
+    Boolean(
+      world?.gameOver ||
+      world?.victory,
+    );
+
   if (
-    !world ||
-    (!world.gameOver &&
-      !world.victory) ||
+    !finished ||
     !restartButton
   ) {
     removeNextLevelButton();
     return;
   }
 
-  restartButton.textContent =
-    "START NEW GAME";
+  if (
+    restartButton
+      .textContent !==
+    "START NEW GAME"
+  ) {
+    restartButton
+      .textContent =
+      "START NEW GAME";
+  }
 
   if (
     !world.victory ||
@@ -333,20 +327,61 @@ export function installNextLevelEnhancement() {
   if (
     typeof document ===
       "undefined" ||
+    typeof MutationObserver ===
+      "undefined" ||
     globalThis
       .__mistMazeNextLevelEnhancementInstalled
   ) {
-    return;
+    return () => {};
   }
 
   globalThis
     .__mistMazeNextLevelEnhancementInstalled =
     true;
 
-  window.setInterval(
-    updateTerminalButtons,
-    UPDATE_INTERVAL_MS,
+  let frameId = 0;
+
+  const schedule = () => {
+    if (frameId) {
+      return;
+    }
+
+    frameId =
+      window.requestAnimationFrame(
+        () => {
+          frameId = 0;
+          updateTerminalButtons();
+        },
+      );
+  };
+
+  const observer =
+    new MutationObserver(
+      schedule,
+    );
+
+  observer.observe(
+    document.body,
+    {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    },
   );
 
-  updateTerminalButtons();
+  schedule();
+
+  return () => {
+    observer.disconnect();
+
+    if (frameId) {
+      window.cancelAnimationFrame(
+        frameId,
+      );
+    }
+
+    globalThis
+      .__mistMazeNextLevelEnhancementInstalled =
+      false;
+  };
 }

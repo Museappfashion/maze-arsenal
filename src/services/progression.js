@@ -142,7 +142,7 @@ export function getPreviousLevelKey(levelKey) {
 
   if (
     levelNumber === null ||
-    levelNumber === 0
+    levelNumber <= 0
   ) {
     return null;
   }
@@ -181,8 +181,8 @@ export function recordLevelCompletion(levelKey) {
 }
 
 /**
- * Retained for compatibility with older developer tooling.
- * The player-facing level selector does not expose an unlock-all control.
+ * Compatibility hook for developer tooling only.
+ * No player-facing control calls this function.
  */
 export function unlockAllLevels() {
   return writeHighestUnlocked(

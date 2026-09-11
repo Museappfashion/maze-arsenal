@@ -1,21 +1,35 @@
 // src/features/specialWeaponVisibility.js
+
 import {
   SPECIAL_WEAPON_LABELS,
   shouldShowWeaponForWorld,
 } from "../config/specialPlayers.js";
+import {
+  BLACK_SWORD_KEY,
+  PORTAL_GUN_KEY,
+  SWORD_GUN_KEY,
+} from "../config/weapons-enhanced.js";
 
-const VISIBILITY_REFRESH_MS = 250;
+const HOTKEY_BY_WEAPON =
+  Object.freeze({
+    [SWORD_GUN_KEY]: "0",
+    [BLACK_SWORD_KEY]: "-",
+    [PORTAL_GUN_KEY]: "=",
+  });
 
 function findWeaponsSection() {
   for (
     const section of
-    document.querySelectorAll("section")
+    document.querySelectorAll(
+      "section",
+    )
   ) {
     const heading =
       section.querySelector("h2");
 
     if (
-      heading?.textContent?.trim() ===
+      heading?.textContent
+        ?.trim() ===
       "Weapons"
     ) {
       return section;
@@ -25,17 +39,23 @@ function findWeaponsSection() {
   return null;
 }
 
-function getWeaponKeyFromButton(button) {
+function getWeaponKeyFromButton(
+  button,
+) {
   const text =
     button.textContent ?? "";
 
   for (
-    const [weaponKey, label] of
-    Object.entries(
+    const [
+      weaponKey,
+      label,
+    ] of Object.entries(
       SPECIAL_WEAPON_LABELS,
     )
   ) {
-    if (text.includes(label)) {
+    if (
+      text.includes(label)
+    ) {
       return weaponKey;
     }
   }
@@ -43,32 +63,25 @@ function getWeaponKeyFromButton(button) {
   return null;
 }
 
-function setButtonVisible(
-  button,
-  visible,
-) {
-  if (visible) {
-    button.removeAttribute(
-      "data-special-weapon-hidden",
-    );
-    button.style.removeProperty(
-      "display",
-    );
-    return;
-  }
-
-  button.setAttribute(
-    "data-special-weapon-hidden",
-    "true",
-  );
-  button.style.setProperty(
-    "display",
-    "none",
-    "important",
+function findHotkeyBadge(button) {
+  return [
+    ...button.querySelectorAll(
+      "div",
+    ),
+  ].find((element) =>
+    [
+      "•",
+      "0",
+      "-",
+      "=",
+    ].includes(
+      element.textContent
+        ?.trim(),
+    ),
   );
 }
 
-function applySpecialWeaponVisibility() {
+function applySpecialWeaponBadges() {
   const section =
     findWeaponsSection();
 
@@ -77,37 +90,76 @@ function applySpecialWeaponVisibility() {
   }
 
   const world =
-    globalThis.__mistMazeWorld;
+    globalThis
+      .__mistMazeWorld;
 
   for (
     const button of
-    section.querySelectorAll("button")
+    section.querySelectorAll(
+      "button",
+    )
   ) {
     const weaponKey =
-      getWeaponKeyFromButton(button);
+      getWeaponKeyFromButton(
+        button,
+      );
 
     if (!weaponKey) {
       continue;
     }
 
-    setButtonVisible(
-      button,
+    const visible =
       shouldShowWeaponForWorld(
         world,
         weaponKey,
-      ),
-    );
+      );
+
+    if (!visible) {
+      /**
+       * The enhanced weapon registry prevents this button from rendering.
+       * This is only a defensive fallback for stale DOM during world swaps.
+       */
+      button.hidden = true;
+      continue;
+    }
+
+    button.hidden = false;
+
+    const badge =
+      findHotkeyBadge(button);
+
+    const expectedHotkey =
+      HOTKEY_BY_WEAPON[
+        weaponKey
+      ];
+
+    if (
+      badge &&
+      badge.textContent
+        ?.trim() !==
+        expectedHotkey
+    ) {
+      badge.textContent =
+        expectedHotkey;
+    }
   }
 }
 
 export function installSpecialWeaponVisibility() {
   if (
-    typeof document === "undefined" ||
+    typeof document ===
+      "undefined" ||
     typeof MutationObserver ===
-      "undefined"
+      "undefined" ||
+    globalThis
+      .__mistMazeSpecialWeaponVisibilityInstalled
   ) {
     return () => {};
   }
+
+  globalThis
+    .__mistMazeSpecialWeaponVisibilityInstalled =
+    true;
 
   let frameId = 0;
 
@@ -117,18 +169,23 @@ export function installSpecialWeaponVisibility() {
     }
 
     frameId =
-      window.requestAnimationFrame(() => {
-        frameId = 0;
-        applySpecialWeaponVisibility();
-      });
+      window.requestAnimationFrame(
+        () => {
+          frameId = 0;
+          applySpecialWeaponBadges();
+        },
+      );
   };
 
   const observer =
-    new MutationObserver(schedule);
+    new MutationObserver(
+      schedule,
+    );
 
   observer.observe(
-    document.getElementById("root") ??
-      document.body,
+    document.getElementById(
+      "root",
+    ) ?? document.body,
     {
       childList: true,
       subtree: true,
@@ -136,22 +193,19 @@ export function installSpecialWeaponVisibility() {
     },
   );
 
-  const intervalId =
-    window.setInterval(
-      applySpecialWeaponVisibility,
-      VISIBILITY_REFRESH_MS,
-    );
-
   schedule();
 
   return () => {
     observer.disconnect();
-    window.clearInterval(intervalId);
 
     if (frameId) {
       window.cancelAnimationFrame(
         frameId,
       );
     }
+
+    globalThis
+      .__mistMazeSpecialWeaponVisibilityInstalled =
+      false;
   };
 }

@@ -20,10 +20,13 @@ export function getTargetEnemyCount(world) {
     return null;
   }
 
-  const totalTiles = world.width * world.height;
+  const totalTiles =
+    world.width * world.height;
 
   return Math.max(
     1,
-    Math.round(totalTiles / tilesPerEnemy),
+    Math.round(
+      totalTiles / tilesPerEnemy,
+    ),
   );
 }

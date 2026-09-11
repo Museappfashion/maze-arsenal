@@ -4,6 +4,8 @@ import {
   shouldShowWeaponForWorld,
 } from "../config/specialPlayers.js";
 
+const VISIBILITY_REFRESH_MS = 250;
+
 function findWeaponsSection() {
   for (
     const section of
@@ -41,6 +43,31 @@ function getWeaponKeyFromButton(button) {
   return null;
 }
 
+function setButtonVisible(
+  button,
+  visible,
+) {
+  if (visible) {
+    button.removeAttribute(
+      "data-special-weapon-hidden",
+    );
+    button.style.removeProperty(
+      "display",
+    );
+    return;
+  }
+
+  button.setAttribute(
+    "data-special-weapon-hidden",
+    "true",
+  );
+  button.style.setProperty(
+    "display",
+    "none",
+    "important",
+  );
+}
+
 function applySpecialWeaponVisibility() {
   const section =
     findWeaponsSection();
@@ -63,11 +90,13 @@ function applySpecialWeaponVisibility() {
       continue;
     }
 
-    button.hidden =
-      !shouldShowWeaponForWorld(
+    setButtonVisible(
+      button,
+      shouldShowWeaponForWorld(
         world,
         weaponKey,
-      );
+      ),
+    );
   }
 }
 
@@ -103,13 +132,21 @@ export function installSpecialWeaponVisibility() {
     {
       childList: true,
       subtree: true,
+      characterData: true,
     },
   );
+
+  const intervalId =
+    window.setInterval(
+      applySpecialWeaponVisibility,
+      VISIBILITY_REFRESH_MS,
+    );
 
   schedule();
 
   return () => {
     observer.disconnect();
+    window.clearInterval(intervalId);
 
     if (frameId) {
       window.cancelAnimationFrame(

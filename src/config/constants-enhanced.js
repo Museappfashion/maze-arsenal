@@ -34,6 +34,7 @@ export const LEVEL_THEMES = {
 };
 
 export const LEVELS = {
+  ...CORE_LEVELS,
   level0: {
     key: "level0",
     label: "Level 0",
@@ -51,9 +52,24 @@ export const LEVELS = {
     enemyHpMultiplier: 0.75,
     enemyDamageMultiplier: 0.75,
     enemySpeedMultiplier: 0.9,
-    enemyBudgetMultiplier: 0.7,
+    enemyBudgetMultiplier: 0.55,
+    enemyPopulationMultiplier: 0.52,
   },
-  ...CORE_LEVELS,
+  level1: {
+    ...CORE_LEVELS.level1,
+    enemyBudgetMultiplier: 0.75,
+    enemyPopulationMultiplier: 0.68,
+  },
+  level2: {
+    ...CORE_LEVELS.level2,
+    enemyBudgetMultiplier: 1.55,
+    enemyPopulationMultiplier: 1.35,
+  },
+  level3: {
+    ...CORE_LEVELS.level3,
+    enemyBudgetMultiplier: 2,
+    enemyPopulationMultiplier: 1.7,
+  },
 };
 
 export const DEFAULT_LEVEL_KEY = "level0";

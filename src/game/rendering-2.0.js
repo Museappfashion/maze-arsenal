@@ -5155,6 +5155,585 @@ function drawNewSpecialHeldWeapon3D(
   ctx.restore();
 }
 
+
+function drawLinkedPortal2D(
+  ctx,
+  world,
+  portal,
+) {
+  const visibility =
+    visibleStrengthAt(
+      world,
+      Math.floor(portal.x),
+      Math.floor(portal.y),
+    );
+
+  if (visibility <= 0.1) {
+    return;
+  }
+
+  const screen =
+    getWorldScreenPosition(
+      world,
+      portal.displayX ?? portal.x,
+      portal.displayY ?? portal.y,
+    );
+  const time = world.time ?? 0;
+  const pulse =
+    0.88 +
+    0.12 *
+      Math.sin(
+        time * 5.4 +
+        (portal.key === "orange"
+          ? Math.PI
+          : 0),
+      );
+  const angle =
+    Math.atan2(
+      portal.outY,
+      portal.outX,
+    ) +
+    Math.PI / 2;
+
+  ctx.save();
+  ctx.translate(screen.x, screen.y);
+  ctx.rotate(angle);
+  ctx.globalCompositeOperation =
+    "lighter";
+  ctx.shadowBlur =
+    screen.scale * 0.28;
+  ctx.shadowColor = portal.color;
+  ctx.strokeStyle = portal.color;
+  ctx.lineWidth = Math.max(
+    2.2,
+    screen.scale * 0.055,
+  );
+  ctx.beginPath();
+  ctx.ellipse(
+    0,
+    0,
+    screen.scale * 0.31 * pulse,
+    screen.scale * 0.13 * pulse,
+    0,
+    0,
+    Math.PI * 2,
+  );
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+  ctx.globalCompositeOperation =
+    "source-over";
+  ctx.fillStyle = "rgba(2,6,23,0.72)";
+  ctx.beginPath();
+  ctx.ellipse(
+    0,
+    0,
+    screen.scale * 0.24,
+    screen.scale * 0.085,
+    0,
+    0,
+    Math.PI * 2,
+  );
+  ctx.fill();
+
+  ctx.globalAlpha = 0.75;
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = Math.max(
+    1,
+    screen.scale * 0.018,
+  );
+  ctx.beginPath();
+  ctx.ellipse(
+    0,
+    0,
+    screen.scale * 0.2,
+    screen.scale * 0.06,
+    0,
+    time * 1.8,
+    time * 1.8 + Math.PI * 1.45,
+  );
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawLinkedPortal3D(
+  ctx,
+  world,
+  portal,
+) {
+  if (
+    !hasLineOfSight(
+      world,
+      world.player.x,
+      world.player.y,
+      portal.x,
+      portal.y,
+    )
+  ) {
+    return;
+  }
+
+  const projection =
+    project3DSprite(
+      world,
+      portal.displayX ?? portal.x,
+      portal.displayY ?? portal.y,
+      CANVAS_WIDTH /
+        2 /
+        Math.tan(
+          VIEW_3D_FOV / 2,
+        ),
+    );
+
+  if (!projection) {
+    return;
+  }
+
+  const height =
+    Math.max(
+      30,
+      Math.min(
+        CANVAS_HEIGHT * 0.5,
+        projection.scale * 0.72,
+      ),
+    );
+  const width = height * 0.34;
+  const centerY =
+    CANVAS_HEIGHT * 0.57 +
+    Math.min(
+      CANVAS_HEIGHT * 0.18,
+      projection.scale * 0.06,
+    );
+  const pulse =
+    0.9 +
+    0.1 *
+      Math.sin(
+        (world.time ?? 0) * 5.2 +
+        (portal.key === "orange"
+          ? Math.PI
+          : 0),
+      );
+
+  ctx.save();
+  ctx.globalCompositeOperation =
+    "lighter";
+  ctx.shadowBlur = width * 0.8;
+  ctx.shadowColor = portal.color;
+  ctx.strokeStyle = portal.color;
+  ctx.lineWidth = Math.max(
+    2,
+    width * 0.12,
+  );
+  ctx.beginPath();
+  ctx.ellipse(
+    projection.screenX,
+    centerY,
+    width * pulse,
+    height * 0.5 * pulse,
+    0,
+    0,
+    Math.PI * 2,
+  );
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+  ctx.globalCompositeOperation =
+    "source-over";
+  ctx.fillStyle = "rgba(2,6,23,0.82)";
+  ctx.beginPath();
+  ctx.ellipse(
+    projection.screenX,
+    centerY,
+    width * 0.72,
+    height * 0.38,
+    0,
+    0,
+    Math.PI * 2,
+  );
+  ctx.fill();
+
+  ctx.globalAlpha = 0.68;
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = Math.max(
+    1,
+    width * 0.045,
+  );
+  ctx.beginPath();
+  ctx.ellipse(
+    projection.screenX,
+    centerY,
+    width * 0.56,
+    height * 0.29,
+    0,
+    (world.time ?? 0) * 1.7,
+    (world.time ?? 0) * 1.7 +
+      Math.PI * 1.4,
+  );
+  ctx.stroke();
+  ctx.restore();
+}
+
+
+function getLinkedPortal3DScreenPoint(
+  world,
+  portal,
+) {
+  if (
+    !hasLineOfSight(
+      world,
+      world.player.x,
+      world.player.y,
+      portal.x,
+      portal.y,
+    )
+  ) {
+    return null;
+  }
+
+  const projection =
+    project3DSprite(
+      world,
+      portal.displayX ?? portal.x,
+      portal.displayY ?? portal.y,
+      CANVAS_WIDTH /
+        2 /
+        Math.tan(
+          VIEW_3D_FOV / 2,
+        ),
+    );
+
+  if (!projection) {
+    return null;
+  }
+
+  return {
+    x: projection.screenX,
+    y:
+      CANVAS_HEIGHT * 0.57 +
+      Math.min(
+        CANVAS_HEIGHT * 0.18,
+        projection.scale * 0.06,
+      ),
+  };
+}
+
+function drawPortalLinkBeam2D(
+  ctx,
+  world,
+  blue,
+  orange,
+) {
+  const blueScreen =
+    getWorldScreenPosition(
+      world,
+      blue.displayX ?? blue.x,
+      blue.displayY ?? blue.y,
+    );
+  const orangeScreen =
+    getWorldScreenPosition(
+      world,
+      orange.displayX ?? orange.x,
+      orange.displayY ?? orange.y,
+    );
+  const gradient =
+    ctx.createLinearGradient(
+      blueScreen.x,
+      blueScreen.y,
+      orangeScreen.x,
+      orangeScreen.y,
+    );
+
+  gradient.addColorStop(
+    0,
+    "rgba(34,211,238,0.72)",
+  );
+  gradient.addColorStop(
+    0.48,
+    "rgba(226,232,240,0.24)",
+  );
+  gradient.addColorStop(
+    1,
+    "rgba(251,146,60,0.72)",
+  );
+
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.strokeStyle = gradient;
+  ctx.lineWidth = 2.2;
+  ctx.setLineDash([10, 9]);
+  ctx.lineDashOffset =
+    -(world.time ?? 0) * 22;
+  ctx.globalAlpha = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(
+    blueScreen.x,
+    blueScreen.y,
+  );
+  ctx.lineTo(
+    orangeScreen.x,
+    orangeScreen.y,
+  );
+  ctx.stroke();
+
+  ctx.globalAlpha = 0.22;
+  ctx.lineWidth = 7;
+  ctx.setLineDash([]);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawPortalLinkBeam3D(
+  ctx,
+  world,
+  blue,
+  orange,
+) {
+  const bluePoint =
+    getLinkedPortal3DScreenPoint(
+      world,
+      blue,
+    );
+  const orangePoint =
+    getLinkedPortal3DScreenPoint(
+      world,
+      orange,
+    );
+
+  if (!bluePoint || !orangePoint) {
+    return;
+  }
+
+  const gradient =
+    ctx.createLinearGradient(
+      bluePoint.x,
+      bluePoint.y,
+      orangePoint.x,
+      orangePoint.y,
+    );
+  gradient.addColorStop(
+    0,
+    "rgba(34,211,238,0.68)",
+  );
+  gradient.addColorStop(
+    0.5,
+    "rgba(226,232,240,0.2)",
+  );
+  gradient.addColorStop(
+    1,
+    "rgba(251,146,60,0.68)",
+  );
+
+  const controlX =
+    (bluePoint.x + orangePoint.x) *
+    0.5;
+  const controlY =
+    Math.min(
+      bluePoint.y,
+      orangePoint.y,
+    ) - 42;
+
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  ctx.strokeStyle = gradient;
+  ctx.lineWidth = 2;
+  ctx.setLineDash([9, 8]);
+  ctx.lineDashOffset =
+    -(world.time ?? 0) * 20;
+  ctx.globalAlpha = 0.45;
+  ctx.beginPath();
+  ctx.moveTo(
+    bluePoint.x,
+    bluePoint.y,
+  );
+  ctx.quadraticCurveTo(
+    controlX,
+    controlY,
+    orangePoint.x,
+    orangePoint.y,
+  );
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawPortalMinimapMarkers(
+  ctx,
+  world,
+) {
+  const portals =
+    world.portalGunPortals;
+
+  if (
+    !world.minimapOn ||
+    !portals?.blue ||
+    !portals?.orange
+  ) {
+    return;
+  }
+
+  const maxPanel = 170;
+  const scale =
+    Math.max(
+      1,
+      Math.floor(
+        maxPanel /
+          Math.max(
+            world.width,
+            world.height,
+          ),
+      ),
+    );
+  const mapWidth =
+    world.width * scale;
+  const panelX =
+    CANVAS_WIDTH -
+    mapWidth -
+    16;
+  const panelY = 16;
+  const markerRadius =
+    Math.max(
+      3,
+      scale * 0.75,
+    );
+  const blueX =
+    panelX +
+    portals.blue.x * scale;
+  const blueY =
+    panelY +
+    portals.blue.y * scale;
+  const orangeX =
+    panelX +
+    portals.orange.x * scale;
+  const orangeY =
+    panelY +
+    portals.orange.y * scale;
+  const gradient =
+    ctx.createLinearGradient(
+      blueX,
+      blueY,
+      orangeX,
+      orangeY,
+    );
+
+  gradient.addColorStop(
+    0,
+    portals.blue.color,
+  );
+  gradient.addColorStop(
+    1,
+    portals.orange.color,
+  );
+
+  ctx.save();
+  ctx.strokeStyle = gradient;
+  ctx.globalAlpha = 0.72;
+  ctx.lineWidth = Math.max(
+    1,
+    scale * 0.45,
+  );
+  ctx.setLineDash([3, 3]);
+  ctx.lineDashOffset =
+    -(world.time ?? 0) * 7;
+  ctx.beginPath();
+  ctx.moveTo(blueX, blueY);
+  ctx.lineTo(orangeX, orangeY);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  for (
+    const [portal, x, y] of [
+      [portals.blue, blueX, blueY],
+      [portals.orange, orangeX, orangeY],
+    ]
+  ) {
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = "rgba(2,6,23,0.92)";
+    ctx.strokeStyle = portal.color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(
+      x,
+      y,
+      markerRadius,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = portal.color;
+    ctx.beginPath();
+    ctx.arc(
+      x,
+      y,
+      Math.max(
+        1.5,
+        markerRadius * 0.42,
+      ),
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+function drawLinkedPortals(
+  ctx,
+  world,
+) {
+  const portals =
+    world.portalGunPortals;
+
+  if (!portals) {
+    return;
+  }
+
+  if (
+    portals.blue &&
+    portals.orange
+  ) {
+    if (world.viewMode === "3d") {
+      drawPortalLinkBeam3D(
+        ctx,
+        world,
+        portals.blue,
+        portals.orange,
+      );
+    } else {
+      drawPortalLinkBeam2D(
+        ctx,
+        world,
+        portals.blue,
+        portals.orange,
+      );
+    }
+  }
+
+  for (
+    const portal of
+    [portals.blue, portals.orange]
+  ) {
+    if (!portal) {
+      continue;
+    }
+
+    if (world.viewMode === "3d") {
+      drawLinkedPortal3D(
+        ctx,
+        world,
+        portal,
+      );
+    } else {
+      drawLinkedPortal2D(
+        ctx,
+        world,
+        portal,
+      );
+    }
+  }
+}
+
 function drawPortalProjectileAccents(
   ctx,
   world,
@@ -5445,6 +6024,7 @@ export function drawWorld(ctx, world) {
   drawWorldIdentityEffects(ctx, world);
   drawEnemyPursuitVisuals(ctx, world);
   drawAnimatedPickupEffects(ctx, world);
+  drawLinkedPortals(ctx, world);
   drawPortalProjectileAccents(ctx, world);
   drawWeaponAnimationOverlay(ctx, world);
   drawNewSpecialHeldWeapon2D(ctx, world);
@@ -5459,6 +6039,7 @@ export function drawWorld(ctx, world) {
 
   ctx.restore();
 
+  drawPortalMinimapMarkers(ctx, world);
   drawRunEscalationOverlay(ctx, world);
   drawResultOverlay(ctx, world);
 }

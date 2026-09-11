@@ -54,7 +54,7 @@ export function getWeaponPresentation(world, weaponKey) {
     return {
       label: "Portal Gun",
       description:
-        "Fires accurate portal-energy bolts that alternate blue and orange.",
+        "Alternates blue/orange shots. Hit walls to place a linked teleport pair.",
     };
   }
 

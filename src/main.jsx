@@ -6,24 +6,31 @@ import App from "./App.jsx";
 import { DeveloperAnalytics } from "./components/DeveloperAnalytics.jsx";
 import { installNextLevelEnhancement } from "./features/nextLevelEnhancement.js";
 import { installRuntimeEnhancements } from "./features/runtimeEnhancements.js";
+import { installSpecialWeaponVisibility } from "./features/specialWeaponVisibility.js";
 
-const rootElement = document.getElementById("root");
+const rootElement =
+  document.getElementById("root");
 
 if (!rootElement) {
   throw new Error("Missing #root element.");
 }
 
 const developerDashboard =
-  new URLSearchParams(window.location.search).get("developer") === "1";
+  new URLSearchParams(
+    window.location.search,
+  ).get("developer") === "1";
 
 if (!developerDashboard) {
   installRuntimeEnhancements();
   installNextLevelEnhancement();
+  installSpecialWeaponVisibility();
 }
 
 createRoot(rootElement).render(
   <>
-    {developerDashboard ? <DeveloperAnalytics /> : <App />}
+    {developerDashboard
+      ? <DeveloperAnalytics />
+      : <App />}
     <Analytics />
     <SpeedInsights />
   </>,

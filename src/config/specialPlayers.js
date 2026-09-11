@@ -345,3 +345,38 @@ export function applySpecialPlayerLoadout(world) {
       return false;
   }
 }
+
+export const SPECIAL_WEAPON_OWNERS = Object.freeze({
+  [SWORD_GUN_KEY]: SPECIAL_PLAYER_IDS.ASHER,
+  [BLACK_SWORD_KEY]: SPECIAL_PLAYER_IDS.FEIVEL,
+  [PORTAL_GUN_KEY]: SPECIAL_PLAYER_IDS.DAVID_CH,
+});
+
+export const SPECIAL_WEAPON_LABELS = Object.freeze({
+  [SWORD_GUN_KEY]: "Sword Gun",
+  [BLACK_SWORD_KEY]: "Black Sword",
+  [PORTAL_GUN_KEY]: "Portal Gun",
+});
+
+export function isSpecialOnlyWeapon(weaponKey) {
+  return Boolean(
+    SPECIAL_WEAPON_OWNERS[weaponKey],
+  );
+}
+
+export function shouldShowWeaponForWorld(
+  world,
+  weaponKey,
+) {
+  const ownerId =
+    SPECIAL_WEAPON_OWNERS[weaponKey];
+
+  if (!ownerId) {
+    return true;
+  }
+
+  return isSpecialPlayerWorld(
+    world,
+    ownerId,
+  );
+}

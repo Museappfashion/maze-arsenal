@@ -1,5 +1,6 @@
 // src/game/gameplay-2.0.js
 import {
+  FLOOR,
   VIEW_3D_FOV,
   VIEW_3D_MAX_DISTANCE,
 } from "../config/constants-enhanced.js";
@@ -1586,6 +1587,946 @@ export function activateStoredPowerUp(
 
 
 
+const PORTAL_COLORS = Object.freeze({
+  blue: "#22d3ee",
+  orange: "#fb923c",
+});
+const PORTAL_TRACE_STEP = 0.035;
+const PORTAL_TELEPORT_COOLDOWN = 0.45;
+const PORTAL_TRIGGER_PADDING = 0.22;
+
+function ensurePortalGunState(world) {
+  world.portalGunPortals ??= {
+    blue: null,
+    orange: null,
+    cooldownUntil: -Infinity,
+  };
+
+  return world.portalGunPortals;
+}
+
+function portalTileIsFloor(
+  world,
+  tileX,
+  tileY,
+) {
+  return (
+    tileX >= 0 &&
+    tileY >= 0 &&
+    tileX < world.width &&
+    tileY < world.height &&
+    world.grid?.[tileY]?.[tileX] === FLOOR
+  );
+}
+
+function portalCircleHitsWall(
+  world,
+  x,
+  y,
+  radius,
+) {
+  const sampleRadius =
+    Math.max(0.04, radius);
+  const diagonal =
+    sampleRadius * Math.SQRT1_2;
+  const samples = [
+    [0, 0],
+    [sampleRadius, 0],
+    [-sampleRadius, 0],
+    [0, sampleRadius],
+    [0, -sampleRadius],
+    [diagonal, diagonal],
+    [diagonal, -diagonal],
+    [-diagonal, diagonal],
+    [-diagonal, -diagonal],
+  ];
+
+  return samples.some(
+    ([offsetX, offsetY]) =>
+      !portalTileIsFloor(
+        world,
+        Math.floor(x + offsetX),
+        Math.floor(y + offsetY),
+      ),
+  );
+}
+
+function snapshotPortalProjectiles(world) {
+  return (world.projectiles ?? [])
+    .filter(
+      (projectile) =>
+        projectile.portalPlacesPortal === true,
+    )
+    .map((projectile) => ({
+      id: projectile.id,
+      x: projectile.x,
+      y: projectile.y,
+      vx: projectile.vx,
+      vy: projectile.vy,
+      radius:
+        Math.max(
+          0.04,
+          Number(projectile.radius) || 0,
+        ),
+      ttl: projectile.ttl,
+      portalColorKey:
+        projectile.portalColorKey,
+    }));
+}
+
+function tracePortalWallImpact(
+  world,
+  projectile,
+  dt,
+) {
+  if (
+    !projectile.portalColorKey ||
+    projectile.ttl <= dt
+  ) {
+    return null;
+  }
+
+  const moveX =
+    projectile.vx * dt;
+  const moveY =
+    projectile.vy * dt;
+  const distance =
+    Math.hypot(moveX, moveY);
+  const steps =
+    Math.max(
+      1,
+      Math.ceil(
+        distance / PORTAL_TRACE_STEP,
+      ),
+    );
+  let lastSafeX = projectile.x;
+  let lastSafeY = projectile.y;
+
+  for (
+    let step = 1;
+    step <= steps;
+    step += 1
+  ) {
+    const progress = step / steps;
+    const x =
+      projectile.x + moveX * progress;
+    const y =
+      projectile.y + moveY * progress;
+
+    if (
+      portalCircleHitsWall(
+        world,
+        x,
+        y,
+        projectile.radius,
+      )
+    ) {
+      const tileX =
+        Math.floor(lastSafeX);
+      const tileY =
+        Math.floor(lastSafeY);
+
+      if (
+        !portalTileIsFloor(
+          world,
+          tileX,
+          tileY,
+        )
+      ) {
+        return null;
+      }
+
+      const speed =
+        Math.hypot(
+          projectile.vx,
+          projectile.vy,
+        ) || 1;
+
+      const outX =
+        -projectile.vx / speed;
+      const outY =
+        -projectile.vy / speed;
+
+      return {
+        x: tileX + 0.5,
+        y: tileY + 0.5,
+        displayX:
+          x +
+          outX *
+            (projectile.radius + 0.025),
+        displayY:
+          y +
+          outY *
+            (projectile.radius + 0.025),
+        outX,
+        outY,
+        wallX: Math.floor(x),
+        wallY: Math.floor(y),
+      };
+    }
+
+    lastSafeX = x;
+    lastSafeY = y;
+  }
+
+  return null;
+}
+
+function placePortal(
+  world,
+  colorKey,
+  impact,
+) {
+  if (
+    !impact ||
+    !(colorKey in PORTAL_COLORS)
+  ) {
+    return false;
+  }
+
+  const portals =
+    ensurePortalGunState(world);
+  const previous =
+    portals[colorKey];
+
+  portals[colorKey] = {
+    ...impact,
+    key: colorKey,
+    color: PORTAL_COLORS[colorKey],
+    createdAt: world.time,
+  };
+
+  const changedTile =
+    !previous ||
+    previous.wallX !== impact.wallX ||
+    previous.wallY !== impact.wallY;
+
+  if (changedTile) {
+    const linked =
+      Boolean(
+        portals.blue &&
+        portals.orange,
+      );
+
+    enhanced.setMessage(
+      world,
+      linked
+        ? "PORTALS LINKED — WALK THROUGH EITHER"
+        : `${colorKey.toUpperCase()} PORTAL SET`,
+      linked ? 1.3 : 0.8,
+    );
+  }
+
+  spawnParticles(
+    world,
+    impact.x,
+    impact.y,
+    {
+      count: 12,
+      colors: [
+        PORTAL_COLORS[colorKey],
+        "#ffffff",
+      ],
+      speed: 2.2,
+      life: 0.34,
+      size: 0.055,
+      kind: "portalOpen",
+    },
+  );
+
+  return true;
+}
+
+function registerPortalWallImpacts(
+  world,
+  beforePortalProjectiles,
+  dt,
+) {
+  if (!beforePortalProjectiles.length) {
+    return;
+  }
+
+  const remainingIds =
+    new Set(
+      (world.projectiles ?? []).map(
+        (projectile) => projectile.id,
+      ),
+    );
+
+  for (
+    const projectile of
+    beforePortalProjectiles
+  ) {
+    if (
+      remainingIds.has(projectile.id)
+    ) {
+      continue;
+    }
+
+    const impact =
+      tracePortalWallImpact(
+        world,
+        projectile,
+        dt,
+      );
+
+    if (!impact) {
+      continue;
+    }
+
+    placePortal(
+      world,
+      projectile.portalColorKey,
+      impact,
+    );
+  }
+}
+
+function entityFitsAtPortalPoint(
+  world,
+  x,
+  y,
+  entityRadius,
+) {
+  const radius =
+    Math.max(
+      0.04,
+      Number(entityRadius) + 0.035,
+    );
+  const diagonal =
+    radius * Math.SQRT1_2;
+  const samples = [
+    [0, 0],
+    [radius, 0],
+    [-radius, 0],
+    [0, radius],
+    [0, -radius],
+    [diagonal, diagonal],
+    [diagonal, -diagonal],
+    [-diagonal, diagonal],
+    [-diagonal, -diagonal],
+  ];
+
+  return samples.every(
+    ([offsetX, offsetY]) =>
+      portalTileIsFloor(
+        world,
+        Math.floor(x + offsetX),
+        Math.floor(y + offsetY),
+      ),
+  );
+}
+
+function findPortalExitPoint(
+  world,
+  portal,
+  entityRadius,
+) {
+  const radius =
+    Math.max(
+      0.04,
+      Number(entityRadius) || 0,
+    );
+  const distances = [
+    radius + 0.42,
+    radius + 0.25,
+    0.12,
+    0,
+  ];
+
+  for (const distance of distances) {
+    const x =
+      portal.x +
+      portal.outX * distance;
+    const y =
+      portal.y +
+      portal.outY * distance;
+
+    if (
+      entityFitsAtPortalPoint(
+        world,
+        x,
+        y,
+        radius,
+      )
+    ) {
+      return { x, y };
+    }
+  }
+
+  return null;
+}
+
+
+const PORTAL_ENEMY_COOLDOWN = 0.34;
+const PORTAL_PROJECTILE_COOLDOWN = 0.14;
+
+function segmentCircleEntryT(
+  startX,
+  startY,
+  endX,
+  endY,
+  centerX,
+  centerY,
+  radius,
+) {
+  const offsetX = startX - centerX;
+  const offsetY = startY - centerY;
+  const moveX = endX - startX;
+  const moveY = endY - startY;
+  const radiusSquared = radius * radius;
+
+  if (
+    offsetX * offsetX +
+      offsetY * offsetY <=
+    radiusSquared
+  ) {
+    return 0;
+  }
+
+  const a =
+    moveX * moveX +
+    moveY * moveY;
+
+  if (a <= 1e-10) {
+    return null;
+  }
+
+  const b =
+    2 *
+    (
+      offsetX * moveX +
+      offsetY * moveY
+    );
+  const c =
+    offsetX * offsetX +
+    offsetY * offsetY -
+    radiusSquared;
+  const discriminant =
+    b * b - 4 * a * c;
+
+  if (discriminant < 0) {
+    return null;
+  }
+
+  const root =
+    Math.sqrt(discriminant);
+  const first =
+    (-b - root) / (2 * a);
+  const second =
+    (-b + root) / (2 * a);
+
+  if (first >= 0 && first <= 1) {
+    return first;
+  }
+
+  if (second >= 0 && second <= 1) {
+    return second;
+  }
+
+  return null;
+}
+
+function getPortalCrossing(
+  world,
+  startX,
+  startY,
+  endX,
+  endY,
+  radius,
+) {
+  const portals =
+    world.portalGunPortals;
+
+  if (
+    !portals?.blue ||
+    !portals?.orange
+  ) {
+    return null;
+  }
+
+  const pairs = [
+    [portals.blue, portals.orange],
+    [portals.orange, portals.blue],
+  ];
+  let best = null;
+
+  for (
+    const [source, destination] of pairs
+  ) {
+    const entryT =
+      segmentCircleEntryT(
+        startX,
+        startY,
+        endX,
+        endY,
+        source.x,
+        source.y,
+        Math.max(
+          0.12,
+          radius +
+            PORTAL_TRIGGER_PADDING,
+        ),
+      );
+
+    if (
+      entryT === null ||
+      (
+        best &&
+        entryT >= best.entryT
+      )
+    ) {
+      continue;
+    }
+
+    best = {
+      source,
+      destination,
+      entryT,
+    };
+  }
+
+  return best;
+}
+
+function rotateThroughPortal(
+  x,
+  y,
+  source,
+  destination,
+) {
+  const sourceInAngle =
+    Math.atan2(
+      -source.outY,
+      -source.outX,
+    );
+  const destinationOutAngle =
+    Math.atan2(
+      destination.outY,
+      destination.outX,
+    );
+  const rotation =
+    destinationOutAngle -
+    sourceInAngle;
+  const cosine =
+    Math.cos(rotation);
+  const sine =
+    Math.sin(rotation);
+
+  return {
+    x: x * cosine - y * sine,
+    y: x * sine + y * cosine,
+  };
+}
+
+function spawnPortalTransitEffects(
+  world,
+  source,
+  destination,
+  intensity = 1,
+) {
+  spawnParticles(
+    world,
+    source.x,
+    source.y,
+    {
+      count: Math.max(
+        4,
+        Math.round(7 * intensity),
+      ),
+      colors: [
+        source.color,
+        "#ffffff",
+      ],
+      speed: 2.2 * intensity,
+      life: 0.25,
+      size: 0.045 * intensity,
+      kind: "portalTransit",
+    },
+  );
+  spawnParticles(
+    world,
+    destination.x,
+    destination.y,
+    {
+      count: Math.max(
+        5,
+        Math.round(9 * intensity),
+      ),
+      colors: [
+        destination.color,
+        "#ffffff",
+      ],
+      speed: 2.5 * intensity,
+      life: 0.3,
+      size: 0.05 * intensity,
+      kind: "portalTransit",
+    },
+  );
+}
+
+function prepareProjectilePortalTransits(
+  world,
+  dt,
+) {
+  if (
+    dt <= 0 ||
+    !world.portalGunPortals?.blue ||
+    !world.portalGunPortals?.orange
+  ) {
+    return [];
+  }
+
+  const restoreVelocity = [];
+
+  for (
+    const projectile of
+    world.projectiles ?? []
+  ) {
+    if (
+      world.time <
+      (
+        projectile
+          .__portalTransitUntil ??
+        -Infinity
+      )
+    ) {
+      continue;
+    }
+
+    const endX =
+      projectile.x +
+      projectile.vx * dt;
+    const endY =
+      projectile.y +
+      projectile.vy * dt;
+    const radius =
+      Math.max(
+        0.03,
+        Number(projectile.radius) || 0,
+      );
+    const crossing =
+      getPortalCrossing(
+        world,
+        projectile.x,
+        projectile.y,
+        endX,
+        endY,
+        radius,
+      );
+
+    if (!crossing) {
+      continue;
+    }
+
+    const exit =
+      findPortalExitPoint(
+        world,
+        crossing.destination,
+        radius,
+      );
+
+    if (!exit) {
+      continue;
+    }
+
+    const rotatedVelocity =
+      rotateThroughPortal(
+        projectile.vx,
+        projectile.vy,
+        crossing.source,
+        crossing.destination,
+      );
+    const remainingFraction =
+      Math.max(
+        0,
+        1 - crossing.entryT,
+      );
+
+    restoreVelocity.push({
+      projectile,
+      vx: rotatedVelocity.x,
+      vy: rotatedVelocity.y,
+    });
+
+    projectile.x = exit.x;
+    projectile.y = exit.y;
+    projectile.vx =
+      rotatedVelocity.x *
+      remainingFraction;
+    projectile.vy =
+      rotatedVelocity.y *
+      remainingFraction;
+    projectile.__portalTransitUntil =
+      world.time +
+      PORTAL_PROJECTILE_COOLDOWN;
+
+    if (projectile.owner !== "player") {
+      projectile.sourceX =
+        crossing.destination.x;
+      projectile.sourceY =
+        crossing.destination.y;
+    }
+
+    spawnPortalTransitEffects(
+      world,
+      crossing.source,
+      crossing.destination,
+      0.65,
+    );
+  }
+
+  return restoreVelocity;
+}
+
+function restoreProjectilePortalVelocities(
+  world,
+  restoreVelocity,
+) {
+  if (!restoreVelocity.length) {
+    return;
+  }
+
+  const surviving =
+    new Set(world.projectiles ?? []);
+
+  for (const entry of restoreVelocity) {
+    if (!surviving.has(entry.projectile)) {
+      continue;
+    }
+
+    entry.projectile.vx = entry.vx;
+    entry.projectile.vy = entry.vy;
+  }
+}
+
+function snapshotEnemyPortalPositions(
+  world,
+) {
+  return new Map(
+    (world.enemies ?? []).map(
+      (enemy) => [
+        enemy.id,
+        {
+          x: enemy.x,
+          y: enemy.y,
+        },
+      ],
+    ),
+  );
+}
+
+function updateEnemyPortalTeleports(
+  world,
+  previousPositions,
+) {
+  if (
+    !world.portalGunPortals?.blue ||
+    !world.portalGunPortals?.orange
+  ) {
+    return;
+  }
+
+  for (const enemy of world.enemies ?? []) {
+    if (
+      enemy.hp <= 0 ||
+      world.time <
+        (
+          enemy.__portalTransitUntil ??
+          -Infinity
+        )
+    ) {
+      continue;
+    }
+
+    const previous =
+      previousPositions.get(enemy.id);
+
+    if (!previous) {
+      continue;
+    }
+
+    const radius =
+      Math.max(
+        0.08,
+        Number(enemy.radius) || 0,
+      );
+    const crossing =
+      getPortalCrossing(
+        world,
+        previous.x,
+        previous.y,
+        enemy.x,
+        enemy.y,
+        radius,
+      );
+
+    if (!crossing) {
+      continue;
+    }
+
+    const exit =
+      findPortalExitPoint(
+        world,
+        crossing.destination,
+        radius,
+      );
+
+    if (!exit) {
+      continue;
+    }
+
+    const displacement =
+      rotateThroughPortal(
+        enemy.x - previous.x,
+        enemy.y - previous.y,
+        crossing.source,
+        crossing.destination,
+      );
+    const remainingFraction =
+      Math.max(
+        0,
+        1 - crossing.entryT,
+      );
+    const proposedX =
+      exit.x +
+      displacement.x *
+        remainingFraction;
+    const proposedY =
+      exit.y +
+      displacement.y *
+        remainingFraction;
+
+    if (
+      entityFitsAtPortalPoint(
+        world,
+        proposedX,
+        proposedY,
+        radius,
+      )
+    ) {
+      enemy.x = proposedX;
+      enemy.y = proposedY;
+    } else {
+      enemy.x = exit.x;
+      enemy.y = exit.y;
+    }
+
+    enemy.__portalTransitUntil =
+      world.time +
+      PORTAL_ENEMY_COOLDOWN;
+    enemy.awake = true;
+
+    spawnPortalTransitEffects(
+      world,
+      crossing.source,
+      crossing.destination,
+      enemy.kind === "brute" ||
+        enemy.kind === "warden"
+        ? 1.15
+        : 0.85,
+    );
+  }
+}
+
+function updatePlayerPortalTeleport(world) {
+  const portals =
+    world.portalGunPortals;
+
+  if (
+    !portals?.blue ||
+    !portals?.orange ||
+    world.time <
+      (portals.cooldownUntil ??
+        -Infinity)
+  ) {
+    return false;
+  }
+
+  const pairs = [
+    [portals.blue, portals.orange],
+    [portals.orange, portals.blue],
+  ];
+
+  for (
+    const [source, destination] of pairs
+  ) {
+    const triggerRadius =
+      world.player.radius +
+      PORTAL_TRIGGER_PADDING;
+
+    if (
+      Math.hypot(
+        world.player.x - source.x,
+        world.player.y - source.y,
+      ) > triggerRadius
+    ) {
+      continue;
+    }
+
+    const exit =
+      findPortalExitPoint(
+        world,
+        destination,
+        world.player.radius,
+      );
+
+    if (!exit) {
+      continue;
+    }
+
+    world.player.x = exit.x;
+    world.player.y = exit.y;
+    portals.cooldownUntil =
+      world.time +
+      PORTAL_TELEPORT_COOLDOWN;
+    world.distanceTimer = 0;
+    world.distanceFieldDirty = true;
+    world.minimapDirty = true;
+    world.lastPlayerTile = {
+      x: Math.floor(exit.x),
+      y: Math.floor(exit.y),
+    };
+
+    spawnParticles(
+      world,
+      source.x,
+      source.y,
+      {
+        count: 10,
+        colors: [
+          source.color,
+          "#ffffff",
+        ],
+        speed: 2.4,
+        life: 0.3,
+        size: 0.055,
+        kind: "portalTransit",
+      },
+    );
+    spawnParticles(
+      world,
+      destination.x,
+      destination.y,
+      {
+        count: 14,
+        colors: [
+          destination.color,
+          "#ffffff",
+        ],
+        speed: 2.7,
+        life: 0.36,
+        size: 0.06,
+        kind: "portalTransit",
+      },
+    );
+
+    return true;
+  }
+
+  return false;
+}
+
 function styleSpecialWeaponProjectiles(
   world,
   weaponKey,
@@ -1597,28 +2538,53 @@ function styleSpecialWeaponProjectiles(
 
   const useOrange =
     Boolean(world.__portalGunOrangeShot);
+  const portalColorKey =
+    useOrange ? "orange" : "blue";
   const color =
-    useOrange ? "#fb923c" : "#22d3ee";
+    PORTAL_COLORS[portalColorKey];
+  const newProjectiles =
+    world.projectiles
+      .slice(beforeProjectileCount)
+      .filter(
+        (projectile) =>
+          projectile.owner === "player",
+      );
+
+  if (!newProjectiles.length) {
+    return;
+  }
 
   world.__portalGunOrangeShot =
     !useOrange;
 
   for (
-    const projectile of
-    world.projectiles.slice(
-      beforeProjectileCount,
-    )
+    let index = 0;
+    index < newProjectiles.length;
+    index += 1
   ) {
-    if (projectile.owner !== "player") {
-      continue;
-    }
+    const projectile =
+      newProjectiles[index];
 
     projectile.color = color;
     projectile.portalProjectile = true;
+    projectile.portalColorKey =
+      portalColorKey;
+    projectile.portalPlacesPortal =
+      index === 0;
+    projectile.breaksWalls = false;
     projectile.radius = Math.max(
       0.09,
       Number(projectile.radius) || 0,
     );
+
+    if (index === 0) {
+      /*
+       * The portal-setting bolt must reach the wall even when
+       * enemies cross its path.
+       */
+      projectile.piercesLeft =
+        Number.MAX_SAFE_INTEGER;
+    }
   }
 }
 
@@ -1757,6 +2723,8 @@ export function updatePlayer(
     world.pointer.down = pointerDown;
   }
 
+  updatePlayerPortalTeleport(world);
+
   if (shouldAttack) {
     attack(world);
   }
@@ -1803,6 +2771,13 @@ export function updateProjectiles(
 
   const beforeEnemies =
     snapshotEnemies(world);
+  const portalVelocityRestores =
+    prepareProjectilePortalTransits(
+      world,
+      dt,
+    );
+  const beforePortalProjectiles =
+    snapshotPortalProjectiles(world);
 
   /*
    * Reflect only projectiles whose movement segment actually
@@ -1841,6 +2816,11 @@ export function updateProjectiles(
     restorePhaseReflection();
   }
 
+  restoreProjectilePortalVelocities(
+    world,
+    portalVelocityRestores,
+  );
+
   applyLegendaryCombatRewards(
     world,
     totalActualEnemyDamage(
@@ -1857,6 +2837,12 @@ export function updateProjectiles(
     world,
   );
 
+  registerPortalWallImpacts(
+    world,
+    beforePortalProjectiles,
+    dt,
+  );
+
   registerEnemyDamage(
     world,
     beforeEnemies,
@@ -1869,6 +2855,8 @@ export function updateEnemies(world, dt) {
     ensureCinematic(world);
   const beforeHp =
     world.player.hp;
+  const beforePortalPositions =
+    snapshotEnemyPortalPositions(world);
   const phase =
     PHASES[
       cinematic.phaseIndex ?? 0
@@ -1912,6 +2900,11 @@ export function updateEnemies(world, dt) {
   } finally {
     restoreShield();
   }
+
+  updateEnemyPortalTeleports(
+    world,
+    beforePortalPositions,
+  );
 
   if (world.player.hp < beforeHp) {
     cinematic.damageFlash = Math.max(

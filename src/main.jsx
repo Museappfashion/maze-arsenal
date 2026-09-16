@@ -7,6 +7,7 @@ import { DeveloperAnalytics } from "./components/DeveloperAnalytics.jsx";
 import { installNextLevelEnhancement } from "./features/nextLevelEnhancement.js";
 import { installRuntimeEnhancements } from "./features/runtimeEnhancements.js";
 import { installSpecialWeaponVisibility } from "./features/specialWeaponVisibility.js";
+import { installVisualPolish } from "./features/visualPolish.js";
 
 const rootElement =
   document.getElementById("root");
@@ -24,6 +25,7 @@ if (!developerDashboard) {
   installRuntimeEnhancements();
   installNextLevelEnhancement();
   installSpecialWeaponVisibility();
+  installVisualPolish();
 }
 
 createRoot(rootElement).render(

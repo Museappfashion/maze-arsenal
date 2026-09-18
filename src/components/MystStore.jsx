@@ -704,10 +704,11 @@ export function MystStore() {
           </div>
 
           <div className="myst-store-note">
-            Cosmetics are permanent.
-            One-use objects are consumed
-            when their listed effect triggers.
-            Miz is earned at 1 coin per{" "}
+            10 cosmetics are permanent.
+            10 one-use powers are activated
+            manually from the Myst Powers button
+            during a maze. Miz is earned at
+            1 coin per{" "}
             {MIZ_TILES_PER_COIN} newly
             explored floor tiles.
           </div>

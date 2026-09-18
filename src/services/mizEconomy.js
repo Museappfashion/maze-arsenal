@@ -1,17 +1,23 @@
 // src/services/mizEconomy.js
 
 export const MIZ_TILES_PER_COIN = 43;
+
 export const MIZ_STATE_CHANGED_EVENT =
   "mist-maze-miz-state-changed";
+
 export const MIZ_SOUND_EVENT =
   "mist-maze-miz-sound";
 
 const STORAGE_KEY =
+  "mist-maze-miz-economy-v3";
+
+const LEGACY_V2_STORAGE_KEY =
   "mist-maze-miz-economy-v2";
-const LEGACY_STORAGE_KEY =
+
+const LEGACY_V1_STORAGE_KEY =
   "mist-maze-miz-economy-v1";
 
-const LEGACY_REFUND_PRICES =
+const LEGACY_V1_REFUNDS =
   Object.freeze({
     fieldWrap: 18,
     ammoSatchel: 24,
@@ -20,75 +26,244 @@ const LEGACY_REFUND_PRICES =
     pistolCase: 68,
   });
 
+const LEGACY_V2_CONSUMABLE_REFUNDS =
+  Object.freeze({
+    echoCharm: 5,
+    mistVeil: 9,
+  });
+
 export const MYST_SHOP_ITEMS =
   Object.freeze([
     Object.freeze({
       key: "violetCoinEdge",
       kind: "cosmetic",
       name: "Violet Coin Edge",
-      price: 12,
-      rarity: "Cosmetic",
+      price: 1200,
+      rarity: "Permanent cosmetic",
       description:
-        "A violet enamel ring fitted around the edge of your miz counter coin.",
+        "A violet enamel ring around the edge of the miz coin.",
       effectLabel:
-        "Permanent cosmetic · recolors the miz coin rim.",
+        "Permanent · violet rim on the in-game miz icon.",
     }),
     Object.freeze({
       key: "smokeCoinFace",
       kind: "cosmetic",
       name: "Smoke Coin Face",
-      price: 18,
-      rarity: "Cosmetic",
+      price: 1800,
+      rarity: "Permanent cosmetic",
       description:
-        "A smoky gray-purple finish for the center face of your miz coin.",
+        "A smoky gray-purple finish over the coin center.",
       effectLabel:
-        "Permanent cosmetic · adds a swirling coin-center finish.",
+        "Permanent · misted purple coin face.",
     }),
     Object.freeze({
       key: "mystCounterFrame",
       kind: "cosmetic",
       name: "Myst Counter Frame",
-      price: 26,
-      rarity: "Cosmetic",
+      price: 2600,
+      rarity: "Permanent cosmetic",
       description:
-        "A thin forged frame with muted purple enamel and a brushed gray edge.",
+        "A forged gray frame with muted purple enamel.",
       effectLabel:
-        "Permanent cosmetic · upgrades the in-game miz counter frame.",
+        "Permanent · upgrades the miz counter border.",
     }),
     Object.freeze({
       key: "orbitingSpecks",
       kind: "cosmetic",
       name: "Orbiting Specks",
-      price: 34,
-      rarity: "Cosmetic",
+      price: 3400,
+      rarity: "Permanent cosmetic",
       description:
-        "Two tiny gray-purple motes that orbit the miz icon while you play.",
+        "Two tiny gray-purple motes circling the miz icon.",
       effectLabel:
-        "Permanent cosmetic · adds subtle orbiting particles.",
+        "Permanent · subtle orbiting particles.",
     }),
     Object.freeze({
-      key: "echoCharm",
-      kind: "oneTime",
-      name: "Echo Charm",
-      price: 5,
-      rarity: "One use",
+      key: "starGlint",
+      kind: "cosmetic",
+      name: "Star Glint",
+      price: 4200,
+      rarity: "Permanent cosmetic",
       description:
-        "A small metal charm that changes the sound of the next miz you earn.",
+        "A small silver flare that catches the coin edge.",
       effectLabel:
-        "Consumed on your next miz gain · enhanced coin chime.",
+        "Permanent · animated coin-edge sparkle.",
+    }),
+    Object.freeze({
+      key: "engravedM",
+      kind: "cosmetic",
+      name: "Engraved M",
+      price: 5000,
+      rarity: "Permanent cosmetic",
+      description:
+        "A deeper, polished engraving for the M stamp.",
+      effectLabel:
+        "Permanent · brighter engraved M.",
+    }),
+    Object.freeze({
+      key: "frostedCoin",
+      kind: "cosmetic",
+      name: "Frosted Coin",
+      price: 5800,
+      rarity: "Permanent cosmetic",
+      description:
+        "A cold brushed-metal sheen over the miz coin.",
+      effectLabel:
+        "Permanent · frosted metallic coin finish.",
+    }),
+    Object.freeze({
+      key: "shadowHalo",
+      kind: "cosmetic",
+      name: "Shadow Halo",
+      price: 6600,
+      rarity: "Permanent cosmetic",
+      description:
+        "A soft gray-violet halo sitting behind the miz icon.",
+      effectLabel:
+        "Permanent · adds a restrained halo.",
+    }),
+    Object.freeze({
+      key: "doubleRim",
+      kind: "cosmetic",
+      name: "Double Rim",
+      price: 7600,
+      rarity: "Permanent cosmetic",
+      description:
+        "A second thin ring etched just inside the coin edge.",
+      effectLabel:
+        "Permanent · adds a second inner rim.",
+    }),
+    Object.freeze({
+      key: "pulseAura",
+      kind: "cosmetic",
+      name: "Pulse Aura",
+      price: 8800,
+      rarity: "Permanent cosmetic",
+      description:
+        "A slow low-intensity pulse around the complete counter.",
+      effectLabel:
+        "Permanent · gentle counter aura animation.",
+    }),
+
+    Object.freeze({
+      key: "healPulse",
+      kind: "oneTime",
+      name: "Vital Restore",
+      price: 500,
+      rarity: "One-use power",
+      description:
+        "A sealed pulse that reconstructs lost health.",
+      effectLabel:
+        "Activate in-game · restores health to maximum.",
       maxStack: 9,
     }),
     Object.freeze({
-      key: "mistVeil",
+      key: "ammoPulse",
       kind: "oneTime",
-      name: "Mist Veil Capsule",
-      price: 9,
-      rarity: "One use",
+      name: "Ammo Refill",
+      price: 600,
+      rarity: "One-use power",
       description:
-        "A sealed glass capsule of gray-purple mist.",
+        "A compressed supply imprint for emergency ammunition.",
       effectLabel:
-        "Consumed when your next maze starts · cosmetic edge haze for that run.",
-      maxStack: 5,
+        "Activate in-game · refills ammo to maximum.",
+      maxStack: 9,
+    }),
+    Object.freeze({
+      key: "nullPulse",
+      kind: "oneTime",
+      name: "Null Pulse",
+      price: 700,
+      rarity: "One-use power",
+      description:
+        "A short-range collapse wave that erases active projectiles.",
+      effectLabel:
+        "Activate in-game · clears every active projectile.",
+      maxStack: 9,
+    }),
+    Object.freeze({
+      key: "velocityBloom",
+      kind: "oneTime",
+      name: "Velocity Bloom",
+      price: 800,
+      rarity: "One-use power",
+      description:
+        "A brief kinetic distortion around the player.",
+      effectLabel:
+        "Activate in-game · +25% movement speed for 30 seconds.",
+      maxStack: 9,
+    }),
+    Object.freeze({
+      key: "vitalBloom",
+      kind: "oneTime",
+      name: "Vital Bloom",
+      price: 900,
+      rarity: "One-use power",
+      description:
+        "A temporary reinforcement of the player's physical reserve.",
+      effectLabel:
+        "Activate in-game · +50 max HP for the current run and heal 50.",
+      maxStack: 9,
+    }),
+    Object.freeze({
+      key: "mapFlash",
+      kind: "oneTime",
+      name: "Cartographer Flash",
+      price: 1000,
+      rarity: "One-use power",
+      description:
+        "A violent burst of spatial memory across the maze.",
+      effectLabel:
+        "Activate in-game · reveals the complete maze map.",
+      maxStack: 9,
+    }),
+    Object.freeze({
+      key: "arsenalKey",
+      kind: "oneTime",
+      name: "Arsenal Key",
+      price: 1100,
+      rarity: "One-use power",
+      description:
+        "A temporary authorization imprint for standard weapons.",
+      effectLabel:
+        "Activate in-game · unlocks all standard weapons for this run.",
+      maxStack: 9,
+    }),
+    Object.freeze({
+      key: "purgeOrb",
+      kind: "oneTime",
+      name: "Purge Orb",
+      price: 1200,
+      rarity: "One-use power",
+      description:
+        "A dense gray sphere that collapses nearby hostile signatures.",
+      effectLabel:
+        "Activate in-game · removes the 8 nearest standard enemies.",
+      maxStack: 9,
+    }),
+    Object.freeze({
+      key: "phoenixSpark",
+      kind: "oneTime",
+      name: "Phoenix Spark",
+      price: 1300,
+      rarity: "One-use power",
+      description:
+        "A one-shot emergency spark held until defeat.",
+      effectLabel:
+        "Activate after defeat · revive at 50% health.",
+      maxStack: 9,
+    }),
+    Object.freeze({
+      key: "exitFold",
+      kind: "oneTime",
+      name: "Exit Fold",
+      price: 1500,
+      rarity: "One-use power",
+      description:
+        "A single-use spatial fold keyed to the maze exit.",
+      effectLabel:
+        "Activate in-game · moves you directly to the exit.",
+      maxStack: 9,
     }),
   ]);
 
@@ -124,15 +299,43 @@ function normalizeInteger(value) {
   const number =
     Number(value);
 
-  if (
-    !Number.isFinite(number)
-  ) {
+  if (!Number.isFinite(number)) {
     return 0;
   }
 
   return Math.max(
     0,
     Math.floor(number),
+  );
+}
+
+function getCosmeticKeys() {
+  return new Set(
+    MYST_SHOP_ITEMS
+      .filter(
+        (item) =>
+          item.kind ===
+          "cosmetic",
+      )
+      .map(
+        (item) =>
+          item.key,
+      ),
+  );
+}
+
+function getPowerKeys() {
+  return new Set(
+    MYST_SHOP_ITEMS
+      .filter(
+        (item) =>
+          item.kind ===
+          "oneTime",
+      )
+      .map(
+        (item) =>
+          item.key,
+      ),
   );
 }
 
@@ -155,10 +358,12 @@ function sanitizeBooleanMap(
           allowedKeys.has(key) &&
           Boolean(enabled),
       )
-      .map(([key]) => [
-        key,
-        true,
-      ]),
+      .map(
+        ([key]) => [
+          key,
+          true,
+        ],
+      ),
   );
 }
 
@@ -177,7 +382,10 @@ function sanitizeCountMap(
   const entries = [];
 
   for (
-    const [key, rawCount] of
+    const [
+      key,
+      rawCount,
+    ] of
     Object.entries(value)
   ) {
     if (
@@ -186,13 +394,12 @@ function sanitizeCountMap(
       continue;
     }
 
-    const item =
-      ITEM_INDEX[key];
-
     const maximum =
       Math.max(
         1,
-        item?.maxStack ?? 9,
+        ITEM_INDEX[key]
+          ?.maxStack ??
+          9,
       );
 
     const count =
@@ -217,34 +424,6 @@ function sanitizeCountMap(
 }
 
 function sanitizeState(value) {
-  const cosmeticKeys =
-    new Set(
-      MYST_SHOP_ITEMS
-        .filter(
-          (item) =>
-            item.kind ===
-            "cosmetic",
-        )
-        .map(
-          (item) =>
-            item.key,
-        ),
-    );
-
-  const consumableKeys =
-    new Set(
-      MYST_SHOP_ITEMS
-        .filter(
-          (item) =>
-            item.kind ===
-            "oneTime",
-        )
-        .map(
-          (item) =>
-            item.key,
-        ),
-    );
-
   if (
     !value ||
     typeof value !==
@@ -264,15 +443,15 @@ function sanitizeState(value) {
       ),
     tileRemainder:
       Math.min(
-        MIZ_TILES_PER_COIN -
-          1,
+        MIZ_TILES_PER_COIN - 1,
         normalizeInteger(
           value.tileRemainder,
         ),
       ),
     lifetimeExploredTiles:
       normalizeInteger(
-        value.lifetimeExploredTiles,
+        value.lifetimeExploredTiles ??
+        value.lifetimeTiles,
       ),
     lifetimeMizEarned:
       normalizeInteger(
@@ -281,19 +460,17 @@ function sanitizeState(value) {
     cosmetics:
       sanitizeBooleanMap(
         value.cosmetics,
-        cosmeticKeys,
+        getCosmeticKeys(),
       ),
     consumables:
       sanitizeCountMap(
         value.consumables,
-        consumableKeys,
+        getPowerKeys(),
       ),
   };
 }
 
-function readStorage(
-  key,
-) {
+function readStorage(key) {
   if (
     typeof window ===
     "undefined"
@@ -302,13 +479,13 @@ function readStorage(
   }
 
   try {
-    const raw =
+    const stored =
       window.localStorage.getItem(
         key,
       );
 
-    return raw
-      ? JSON.parse(raw)
+    return stored
+      ? JSON.parse(stored)
       : null;
   } catch {
     return null;
@@ -332,50 +509,51 @@ function writeStorage(
       JSON.stringify(value),
     );
   } catch {
-    // Memory state remains available when browser storage is blocked.
+    // In-memory state still works when local storage is unavailable.
   }
 }
 
-function getLegacyRefund(
-  legacyState,
-) {
-  const owned =
-    legacyState?.owned;
-
-  if (
-    !owned ||
-    typeof owned !==
-      "object"
-  ) {
-    return 0;
-  }
-
-  return Object.entries(
-    LEGACY_REFUND_PRICES,
-  ).reduce(
-    (
-      total,
-      [key, price],
-    ) =>
-      total +
-      (
-        owned[key]
-          ? price
-          : 0
-      ),
-    0,
-  );
-}
-
-function migrateLegacyState() {
+function migrateV2State() {
   const legacy =
     readStorage(
-      LEGACY_STORAGE_KEY,
+      LEGACY_V2_STORAGE_KEY,
     );
 
   if (!legacy) {
     return null;
   }
+
+  const transferableCosmetics =
+    sanitizeBooleanMap(
+      legacy.cosmetics,
+      getCosmeticKeys(),
+    );
+
+  const oldConsumables =
+    legacy.consumables &&
+    typeof legacy.consumables ===
+      "object"
+      ? legacy.consumables
+      : {};
+
+  const consumableRefund =
+    Object.entries(
+      LEGACY_V2_CONSUMABLE_REFUNDS,
+    ).reduce(
+      (
+        total,
+        [
+          key,
+          price,
+        ],
+      ) =>
+        total +
+        normalizeInteger(
+          oldConsumables[key],
+        ) *
+          price,
+      0,
+    );
 
   const migrated =
     sanitizeState({
@@ -383,13 +561,75 @@ function migrateLegacyState() {
         normalizeInteger(
           legacy.miz,
         ) +
-        getLegacyRefund(
-          legacy,
-        ),
+        consumableRefund,
       tileRemainder:
         legacy.tileRemainder,
       lifetimeExploredTiles:
         legacy.lifetimeExploredTiles,
+      lifetimeMizEarned:
+        legacy.lifetimeMizEarned,
+      cosmetics:
+        transferableCosmetics,
+      consumables: {},
+    });
+
+  writeStorage(
+    STORAGE_KEY,
+    migrated,
+  );
+
+  return migrated;
+}
+
+function migrateV1State() {
+  const legacy =
+    readStorage(
+      LEGACY_V1_STORAGE_KEY,
+    );
+
+  if (!legacy) {
+    return null;
+  }
+
+  const owned =
+    legacy.owned &&
+    typeof legacy.owned ===
+      "object"
+      ? legacy.owned
+      : {};
+
+  const refund =
+    Object.entries(
+      LEGACY_V1_REFUNDS,
+    ).reduce(
+      (
+        total,
+        [
+          key,
+          price,
+        ],
+      ) =>
+        total +
+        (
+          owned[key]
+            ? price
+            : 0
+        ),
+      0,
+    );
+
+  const migrated =
+    sanitizeState({
+      miz:
+        normalizeInteger(
+          legacy.miz,
+        ) +
+        refund,
+      tileRemainder:
+        legacy.tileRemainder,
+      lifetimeExploredTiles:
+        legacy.lifetimeExploredTiles ??
+        legacy.lifetimeTiles,
       lifetimeMizEarned:
         legacy.lifetimeMizEarned,
       cosmetics: {},
@@ -476,12 +716,24 @@ export function loadMizState() {
     );
   }
 
-  const migrated =
-    migrateLegacyState();
+  const migratedV2 =
+    migrateV2State();
 
-  if (migrated) {
+  if (migratedV2) {
     memoryState =
-      migrated;
+      migratedV2;
+
+    return sanitizeState(
+      memoryState,
+    );
+  }
+
+  const migratedV1 =
+    migrateV1State();
+
+  if (migratedV1) {
+    memoryState =
+      migratedV1;
 
     return sanitizeState(
       memoryState,
@@ -536,7 +788,6 @@ export function addExploredTiles(
       state: current,
       mizEarned: 0,
       tilesAdded: 0,
-      enhancedChime: false,
     };
   }
 
@@ -550,36 +801,7 @@ export function addExploredTiles(
         MIZ_TILES_PER_COIN,
     );
 
-  let consumables = {
-    ...current.consumables,
-  };
-
-  let enhancedChime =
-    false;
-
-  if (
-    mizEarned > 0 &&
-    (
-      consumables.echoCharm ??
-      0
-    ) > 0
-  ) {
-    enhancedChime = true;
-
-    const nextCount =
-      consumables.echoCharm -
-      1;
-
-    if (nextCount > 0) {
-      consumables.echoCharm =
-        nextCount;
-    } else {
-      delete consumables
-        .echoCharm;
-    }
-  }
-
-  const nextState =
+  const state =
     saveMizState(
       {
         ...current,
@@ -595,22 +817,21 @@ export function addExploredTiles(
         lifetimeMizEarned:
           current.lifetimeMizEarned +
           mizEarned,
-        consumables,
       },
       {
-        reason: "tiles",
+        reason:
+          "tiles",
         mizEarned,
-        tilesAdded: tiles,
-        enhancedChime,
+        tilesAdded:
+          tiles,
       },
     );
 
   return {
-    state:
-      nextState,
+    state,
     mizEarned,
-    tilesAdded: tiles,
-    enhancedChime,
+    tilesAdded:
+      tiles,
   };
 }
 
@@ -684,17 +905,15 @@ export function consumeOneTimeItem(
     };
   }
 
-  const nextConsumables = {
+  const consumables = {
     ...current.consumables,
   };
 
   if (count > 1) {
-    nextConsumables[
-      itemKey
-    ] =
+    consumables[itemKey] =
       count - 1;
   } else {
-    delete nextConsumables[
+    delete consumables[
       itemKey
     ];
   }
@@ -703,8 +922,7 @@ export function consumeOneTimeItem(
     saveMizState(
       {
         ...current,
-        consumables:
-          nextConsumables,
+        consumables,
       },
       {
         reason:

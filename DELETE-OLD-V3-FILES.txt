@@ -1,0 +1,11 @@
+DELETE THESE OLD V3 FILES IF PRESENT
+
+src/components/GameUiFlickerFix.jsx
+src/styles/minimapPointerFix.css
+
+The new vite.config.js does not reference them.
+
+The minimap fix now lives in:
+src/features/minimapEnhancement.js
+
+This avoids the old GameUi alias recursion.

@@ -1,0 +1,9 @@
+BUILD HOTFIX V2
+
+This full pack is the prior character/Mendel/recursion-fix pack with
+src/config/specialPlayers.js corrected for backward compatibility.
+
+The Vercel failure on commit c831ef6 was caused by replacing the old
+specialPlayers module API rather than extending it.
+
+This V2 module keeps both APIs.

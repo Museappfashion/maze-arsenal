@@ -1,0 +1,8 @@
+BUILD HOTFIX V2
+
+This is the full cumulative character/Mendel/recursion-fix pack with the
+complete legacy specialPlayers API restored.
+
+The Vercel build log at commit 5f2c080 showed 10 missing exports. All
+exports listed by src/config/robbienator.js and presentations-enhanced.js
+are now statically present.

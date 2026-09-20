@@ -1,42 +1,159 @@
-MIST MAZE — GAMEPLAY UI V3.2 FULL
-===================================
+MIST MAZE — CHARACTER MODES + RECURSION FIX
+===============================================
 
-This full package includes the previous Myst/miz V3.1 files plus the new
-gameplay UI/navigation changes.
+THIS PACK IS CUMULATIVE.
 
-NEW BEHAVIOR
+IT INCLUDES:
+- Feivel special-weapon switching/access fix
+- Asher special-weapon switching/access fix
+- Special weapons visible only to their matching usernames
+- Feivel username typing fix
+- Mendel-only level names/themes
+- Under 770 lighter Labyrinth styling
+- Mendel-only The Trail with no Fallen Keep medieval identity
+- Yellow shrubs on The Trail
+- Stable non-recursive minimap overlay
+- 16-direction minimap arrow
+- +2 ammo per normal ammo pickup
+- Corrected visual polish from the previous update
+- Vite alias recursion repair
 
-END OF GAME
-- PLAY NEW GAME is always shown after victory or defeat.
-- On a combat victory with another combat level available, PLAY NEXT GAME
-  is also shown.
-- Labyrinth and the final combat level only show PLAY NEW GAME because
-  there is no next combat level.
+RECURSION FIX
+-------------
 
-DISPLAY CONTROLS
-- MINIMAP ON/OFF is a Settings button.
-- LABELS ON/OFF is a Settings button.
-- EXIT POINTER ON/OFF is a Settings button.
-- M and L no longer toggle these options.
-- Preferences persist locally.
+The previous V3 pack redirected:
 
-3D
-- Combat 3D now has a real minimap overlay.
-- The minimap can be turned completely off.
-- An exit pointer automatically shows LEFT / RIGHT / UP / DOWN relative
-  to the exit.
-- The pointer can be turned completely off.
+  GameUi.jsx
+    -> GameUiFlickerFix.jsx
+    -> GameUiEnhanced.jsx
+    -> GameUi.jsx
 
-GROUND ITEMS
-- Extra pulse, bob, spin, and hologram layers on ground pickups are removed.
-- Static pickup art remains.
-- Level 0 never shows Demolition/dynamite; its Demolition spawn is replaced
-  with Shield so the pickup count stays balanced.
+That can cycle through the alias again.
 
-FILES ADDED / REPLACED
+THIS PACK REMOVES THAT DESIGN.
+
+vite.config.js now restores:
+
+  GameUi.jsx -> GameUiEnhanced.jsx
+
+The minimap fix is now:
+  src/features/minimapEnhancement.js
+
+It draws a stable minimap overlay and never imports GameUi or
+GameUiEnhanced, so there is no component import loop.
+
+OLD FILES TO DELETE IF YOU ADDED THEM FROM V3
+----------------------------------------------
+
+  src/components/GameUiFlickerFix.jsx
+  src/styles/minimapPointerFix.css
+
+They are not referenced by this pack, so leaving them in the repo is
+harmless, but deleting them avoids future confusion.
+
+FEIVEL / ASHER
+--------------
+
+Feivel:
+- Black Sword remains permanently owned.
+- Feivel can select normal weapons.
+- Switching to a normal weapon does not remove Black Sword.
+- Black Sword remains available to switch back to.
+- Black Sword appears in the sidebar only for Feivel.
+
+Asher:
+- Sword Gun remains permanently owned.
+- Asher can select normal weapons.
+- Switching to a normal weapon does not remove Sword Gun.
+- Sword Gun remains available to switch back to.
+- Sword Gun appears in the sidebar only for Asher.
+
+Existing David ch / Portal Gun ownership is preserved.
+
+USERNAME INPUT
+--------------
+
+Gameplay keyboard handlers are stopped only while an input, textarea,
+select, or contenteditable field is receiving keyboard events.
+
+No preventDefault call is used.
+
+That means names such as:
+
+  Feivel
+
+type normally while gameplay weapon/movement hotkeys do not steal the
+keypresses.
+
+MENDEL ONLY
+-----------
+
+Level 1:
+  Orbital Ruins -> Under 770
+
+Under 770 uses the Labyrinth visual family but gets an additional
+lighter blue/white treatment.
+
+Level 2:
+  Emerald Wilds -> Jungle
+
+Level 3:
+  Fallen Keep -> The Trail
+
+For Mendel's Level 3 only:
+- The medieval theme is not dispatched.
+- Fallen Keep statues/torches/candles are therefore not used.
+- The level uses a natural trail base.
+- Interspersed yellow shrubs are added in 2D and 3D.
+
+Other usernames keep the normal level names and themes.
+
+MINIMAP
+-------
+
+The old React wrapper is no longer needed.
+
+The standalone minimap enhancement:
+- Leaves the original minimap in layout.
+- Hides only its pixels.
+- Draws a stable replacement canvas over it.
+- Uses a 16-direction arrow.
+- 16 directions = 22.5 degree increments.
+- Works for the normal minimap and Labyrinth locator.
+- Does not participate in the GameUi alias chain.
+
+AMMO
+----
+
+Support ammo:
+  4–9 -> 6–11
+
+Route ammo:
+  4–8 -> 6–10
+
+This is exactly +2 per generated normal ammo drop.
+
+FILES TO ADD / REPLACE
+----------------------
+
+REPLACE:
   vite.config.js
   src/main.jsx
-  src/features/gameplayUxEnhancement.js
+  src/config/ammo.js
+  src/config/weapons-enhanced.js
+  src/game/world-enhanced.js
+  src/features/visualPolish.js
+  src/features/specialWeaponVisibility.js
 
-The ZIP also contains the existing Myst store, miz economy, and visual polish
-files from the previous full package.
+ADD:
+  src/config/specialPlayers.js
+  src/config/characterProfiles.js
+  src/features/characterModeEnhancement.js
+  src/features/minimapEnhancement.js
+  src/features/mendelVisuals.js
+
+OPTIONALLY DELETE:
+  src/components/GameUiFlickerFix.jsx
+  src/styles/minimapPointerFix.css
+
+NO App.jsx CHANGE IS REQUIRED.

@@ -4,11 +4,28 @@ export const SWORD_GUN_KEY = "swordGun";
 export const BLACK_SWORD_KEY = "blackSword";
 export const PORTAL_GUN_KEY = "portalGun";
 
-/**
- * Array semantics preserve compatibility with code that calls
- * SPECIAL_PLAYER_IDS.includes(...), while named properties preserve
- * compatibility with code that uses SPECIAL_PLAYER_IDS.FEIVEL, etc.
+/*
+ * Legacy Robbienator exports are retained because older gameplay,
+ * presentation and compatibility modules still import them.
  */
+export const ROBBIENATOR_PLAYER_NAME =
+  "Robbienator";
+
+export const ROBBIENATOR_LABEL =
+  "Robbienator";
+
+export const ROBBIENATOR_WEAPON_KEY =
+  "robbienator";
+
+export const ROBBIENATOR_START_WEAPON_KEY =
+  ROBBIENATOR_WEAPON_KEY;
+
+/*
+ * This value is exported for compatibility. The newer special-player
+ * layer does not independently overwrite Robbienator ammo.
+ */
+export const ROBBIENATOR_AMMO = 0;
+
 const specialPlayerIds = [
   "robbienator",
   "asher",
@@ -19,16 +36,25 @@ const specialPlayerIds = [
 Object.assign(
   specialPlayerIds,
   {
-    ROBBIENATOR: "robbienator",
-    ASHER: "asher",
-    FEIVEL: "feivel",
-    DAVID_CH: "david ch",
-    DAVIDCH: "david ch",
+    ROBBIENATOR:
+      "robbienator",
+    ASHER:
+      "asher",
+    FEIVEL:
+      "feivel",
+    DAVID_CH:
+      "david ch",
+    DAVIDCH:
+      "david ch",
 
-    robbienator: "robbienator",
-    asher: "asher",
-    feivel: "feivel",
-    davidCh: "david ch",
+    robbienator:
+      "robbienator",
+    asher:
+      "asher",
+    feivel:
+      "feivel",
+    davidCh:
+      "david ch",
   },
 );
 
@@ -39,10 +65,14 @@ export const SPECIAL_PLAYER_IDS =
 
 export const SPECIAL_PLAYER_NAMES =
   Object.freeze({
-    ROBBIENATOR: "Robbienator",
-    ASHER: "Asher",
-    FEIVEL: "Feivel",
-    DAVID_CH: "David ch",
+    ROBBIENATOR:
+      ROBBIENATOR_PLAYER_NAME,
+    ASHER:
+      "Asher",
+    FEIVEL:
+      "Feivel",
+    DAVID_CH:
+      "David ch",
   });
 
 export const SPECIAL_WEAPON_LABELS =
@@ -67,15 +97,21 @@ export const SPECIAL_WEAPON_OWNER_NAMES =
 
 export const SPECIAL_PLAYER_WEAPONS =
   Object.freeze({
-    robbienator: null,
-    asher: SWORD_GUN_KEY,
-    feivel: BLACK_SWORD_KEY,
+    robbienator:
+      ROBBIENATOR_WEAPON_KEY,
+    asher:
+      SWORD_GUN_KEY,
+    feivel:
+      BLACK_SWORD_KEY,
     "david ch":
       PORTAL_GUN_KEY,
 
-    ROBBIENATOR: null,
-    ASHER: SWORD_GUN_KEY,
-    FEIVEL: BLACK_SWORD_KEY,
+    ROBBIENATOR:
+      ROBBIENATOR_WEAPON_KEY,
+    ASHER:
+      SWORD_GUN_KEY,
+    FEIVEL:
+      BLACK_SWORD_KEY,
     DAVID_CH:
       PORTAL_GUN_KEY,
   });
@@ -86,19 +122,22 @@ export const SPECIAL_PLAYER_LOADOUTS =
       Object.freeze({
         playerId:
           "robbienator",
-        specialWeapon: null,
+        specialWeapon:
+          ROBBIENATOR_WEAPON_KEY,
       }),
 
     asher:
       Object.freeze({
-        playerId: "asher",
+        playerId:
+          "asher",
         specialWeapon:
           SWORD_GUN_KEY,
       }),
 
     feivel:
       Object.freeze({
-        playerId: "feivel",
+        playerId:
+          "feivel",
         specialWeapon:
           BLACK_SWORD_KEY,
       }),
@@ -122,6 +161,8 @@ const SPECIAL_WEAPON_KEYS =
 const SPECIAL_PLAYER_ALIASES =
   Object.freeze({
     robbienator:
+      "robbienator",
+    robbie:
       "robbienator",
     asher:
       "asher",
@@ -147,15 +188,33 @@ export function normalizePlayerName(
 function normalizePlayerAlias(
   playerName,
 ) {
-  return normalizePlayerName(
-    playerName,
-  )
-    .replace(
-      /[^a-z0-9 ]+/g,
-      "",
+  return (
+    normalizePlayerName(
+      playerName,
     )
-    .replace(/\s+/g, " ")
-    .trim();
+      .replace(
+        /[^a-z0-9 ]+/g,
+        "",
+      )
+      .replace(/\s+/g, " ")
+      .trim()
+  );
+}
+
+export function isRobbiePlayerName(
+  playerName,
+) {
+  const normalized =
+    normalizePlayerAlias(
+      playerName,
+    );
+
+  return (
+    normalized ===
+      "robbienator" ||
+    normalized ===
+      "robbie"
+  );
 }
 
 export function getWorldPlayerName(
@@ -265,13 +324,6 @@ export function isSpecialPlayerName(
   );
 }
 
-/**
- * Supports all common call shapes:
- *   isSpecialPlayerWorld(world)
- *   isSpecialPlayerWorld(world, "feivel")
- *   isSpecialPlayerWorld(world, SPECIAL_PLAYER_IDS.FEIVEL)
- *   isSpecialPlayerWorld(world, ["feivel", "asher"])
- */
 export function isSpecialPlayerWorld(
   world,
   expectedPlayerId = null,
@@ -371,9 +423,39 @@ export function hasDavidChLoadout(
   );
 }
 
-/*
- * Compatibility aliases for older renderer/gameplay revisions.
- */
+export function isRobbienatorWeapon(
+  weaponKey,
+) {
+  return (
+    weaponKey ===
+    ROBBIENATOR_WEAPON_KEY
+  );
+}
+
+export function applyRobbienatorLoadout(
+  world,
+) {
+  if (
+    !world?.player ||
+    !hasRobbienatorLoadout(
+      world,
+    )
+  ) {
+    return world;
+  }
+
+  /*
+   * Preserve the existing world state instead of manufacturing an
+   * unknown legacy weapon definition. Older gameplay modules remain
+   * free to apply their own Robbienator-specific behavior.
+   */
+  world.player
+    .robbienatorLoadout =
+    true;
+
+  return world;
+}
+
 export const isRobbienatorWorld =
   hasRobbienatorLoadout;
 
@@ -418,6 +500,18 @@ export function getSpecialWeaponForPlayerName(
     );
 
   if (!playerId) {
+    return null;
+  }
+
+  /*
+   * Robbienator remains governed by the legacy compatibility layer.
+   * The new visibility layer only owns the three explicitly assigned
+   * special weapons below.
+   */
+  if (
+    playerId ===
+    "robbienator"
+  ) {
     return null;
   }
 
@@ -535,6 +629,18 @@ export function applySpecialPlayerLoadout(
     world.labyrinthMode
   ) {
     return world;
+  }
+
+  if (
+    hasRobbienatorLoadout(
+      world,
+    )
+  ) {
+    return (
+      applyRobbienatorLoadout(
+        world,
+      )
+    );
   }
 
   const specialWeapon =

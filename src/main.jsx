@@ -4,8 +4,6 @@ import { SpeedInsights } from "@vercel/speed-insights/react";
 import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
 import { DeveloperAnalytics } from "./components/DeveloperAnalytics.jsx";
-import { installGameplayUxEnhancement } from "./features/gameplayUxEnhancement.js";
-import { installMizEconomyEnhancement } from "./features/mizEconomyEnhancement.js";
 import { installNextLevelEnhancement } from "./features/nextLevelEnhancement.js";
 import { installRuntimeEnhancements } from "./features/runtimeEnhancements.js";
 import { installSpecialWeaponVisibility } from "./features/specialWeaponVisibility.js";
@@ -24,12 +22,10 @@ const developerDashboard =
   ).get("developer") === "1";
 
 if (!developerDashboard) {
-  installGameplayUxEnhancement();
   installRuntimeEnhancements();
   installNextLevelEnhancement();
   installSpecialWeaponVisibility();
   installVisualPolish();
-  installMizEconomyEnhancement();
 }
 
 createRoot(rootElement).render(

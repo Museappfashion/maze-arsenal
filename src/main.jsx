@@ -30,6 +30,9 @@ import {
   installRuntimeEnhancements,
 } from "./features/runtimeEnhancements.js";
 import {
+  installSettingsToggleEnhancement,
+} from "./features/settingsToggleEnhancement.js";
+import {
   installSpecialWeaponVisibility,
 } from "./features/specialWeaponVisibility.js";
 import {
@@ -60,6 +63,7 @@ if (!developerDashboard) {
   installCharacterModeEnhancement();
 
   installRuntimeEnhancements();
+  installSettingsToggleEnhancement();
   installNextLevelEnhancement();
   installSpecialWeaponVisibility();
 

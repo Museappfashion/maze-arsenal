@@ -300,6 +300,7 @@ function onInput(event) {
     target.value,
   );
 
+  ensureWorldRules();
   updateLevelNamesInDom();
 }
 
@@ -369,7 +370,7 @@ export function installCharacterModeEnhancement() {
   const intervalId =
     window.setInterval(
       ensureWorldRules,
-      100,
+      50,
     );
 
   ensureWorldRules();

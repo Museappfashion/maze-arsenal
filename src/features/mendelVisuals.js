@@ -7,6 +7,11 @@ import {
   VIEW_3D_FOV,
 } from "../config/constants.js";
 import {
+  applyCharacterWorldProfile,
+  isMendelWorld,
+} from "../config/characterProfiles.js";
+
+import {
   getCamera,
   getWorldRenderZoom,
   visibleStrengthAt,
@@ -899,8 +904,21 @@ function paint() {
     globalThis
       .__mistMazeWorld;
 
+  if (!world) {
+    return;
+  }
+
   if (
-    !world ||
+    isMendelWorld(
+      world,
+    )
+  ) {
+    applyCharacterWorldProfile(
+      world,
+    );
+  }
+
+  if (
     !world
       .__mendelVisualTheme
   ) {

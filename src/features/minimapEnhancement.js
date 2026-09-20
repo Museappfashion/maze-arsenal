@@ -58,32 +58,57 @@ function isMinimapCanvas(
   }
 
   if (
+    canvas.classList.contains(
+      OVERLAY_CLASS,
+    )
+  ) {
+    return false;
+  }
+
+  if (
     canvas.closest(
       ".labyrinth-locator",
     ) ||
     canvas.closest(
       ".mobile-minimap-wrap",
+    ) ||
+    canvas.closest(
+      "[class*='minimap']",
     )
   ) {
     return true;
   }
 
-  const section =
-    canvas.closest(
-      "section",
-    );
+  let current =
+    canvas.parentElement;
 
-  const heading =
-    section?.querySelector(
-      "h2",
-    );
+  for (
+    let depth = 0;
+    current &&
+      depth < 5;
+    depth += 1
+  ) {
+    const text =
+      current.textContent
+        ?.toLowerCase() ??
+      "";
 
-  return (
-    heading?.textContent
-      ?.trim()
-      .toLowerCase() ===
-    "minimap"
-  );
+    if (
+      text.includes(
+        "minimap",
+      ) ||
+      text.includes(
+        "locator",
+      )
+    ) {
+      return true;
+    }
+
+    current =
+      current.parentElement;
+  }
+
+  return false;
 }
 
 function ensureStyle() {
@@ -675,21 +700,30 @@ export function installMinimapEnhancement() {
         .__mistMazeWorld;
 
     if (world) {
-      for (
-        const canvas of
-        document.querySelectorAll(
-          "canvas",
-        )
-      ) {
-        if (
-          isMinimapCanvas(
-            canvas,
+      const minimapEnabled =
+        globalThis
+          .__mistMazeMinimapEnabled !==
+        false;
+
+      if (!minimapEnabled) {
+        restoreBaseCanvases();
+      } else {
+        for (
+          const canvas of
+          document.querySelectorAll(
+            "canvas",
           )
         ) {
-          renderCanvas(
-            canvas,
-            world,
-          );
+          if (
+            isMinimapCanvas(
+              canvas,
+            )
+          ) {
+            renderCanvas(
+              canvas,
+              world,
+            );
+          }
         }
       }
     }

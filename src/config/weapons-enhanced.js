@@ -1,6 +1,9 @@
 // src/config/weapons-enhanced.js
 
 import {
+  shouldShowWeaponForWorld,
+} from "./specialPlayers.js";
+import {
   WEAPONS as CORE_WEAPONS,
   WEAPON_ORDER as CORE_WEAPON_ORDER,
   WEAPON_SPAWN_PLAN,
@@ -10,13 +13,16 @@ export * from "./weapons.js?core";
 
 export const SWORD_GUN_KEY =
   "swordGun";
+
 export const BLACK_SWORD_KEY =
   "blackSword";
+
 export const PORTAL_GUN_KEY =
   "portalGun";
 
 export const WEAPONS = {
   ...CORE_WEAPONS,
+
   [SWORD_GUN_KEY]: {
     label: "Sword Gun",
     type: "ranged",
@@ -28,6 +34,7 @@ export const WEAPONS = {
     ammoCost: 1,
     pellets: 1,
   },
+
   [BLACK_SWORD_KEY]: {
     label: "Black Sword",
     type: "melee",
@@ -36,6 +43,7 @@ export const WEAPONS = {
     reach: 2.25,
     arc: 1.65,
   },
+
   [PORTAL_GUN_KEY]: {
     label: "Portal Gun",
     type: "ranged",
@@ -58,7 +66,12 @@ const SPECIAL_WEAPON_KEYS =
 
 const ALL_WEAPON_ORDER =
   Object.freeze([
-    ...CORE_WEAPON_ORDER,
+    ...CORE_WEAPON_ORDER.filter(
+      (weaponKey) =>
+        !SPECIAL_WEAPON_KEYS.has(
+          weaponKey,
+        ),
+    ),
     SWORD_GUN_KEY,
     BLACK_SWORD_KEY,
     PORTAL_GUN_KEY,
@@ -68,14 +81,24 @@ const ALL_WEAPON_HOTKEYS =
   Object.freeze({
     ...Object.fromEntries(
       CORE_WEAPON_ORDER
+        .filter(
+          (weaponKey) =>
+            !SPECIAL_WEAPON_KEYS.has(
+              weaponKey,
+            ),
+        )
         .slice(0, 9)
         .map(
-          (weaponKey, index) => [
+          (
+            weaponKey,
+            index,
+          ) => [
             String(index + 1),
             weaponKey,
           ],
         ),
     ),
+
     "0": SWORD_GUN_KEY,
     "-": BLACK_SWORD_KEY,
     "=": PORTAL_GUN_KEY,
@@ -84,7 +107,8 @@ const ALL_WEAPON_HOTKEYS =
 function getCurrentWorld() {
   return (
     globalThis
-      .__mistMazeWorld ?? null
+      .__mistMazeWorld ??
+    null
   );
 }
 
@@ -100,10 +124,11 @@ function isWeaponVisible(
     return true;
   }
 
-  return Boolean(
-    world?.player?.ownedWeapons?.[
-      weaponKey
-    ],
+  return (
+    shouldShowWeaponForWorld(
+      world,
+      weaponKey,
+    )
   );
 }
 
@@ -111,27 +136,64 @@ function getVisibleWeaponOrder() {
   const world =
     getCurrentWorld();
 
-  return ALL_WEAPON_ORDER.filter(
-    (weaponKey) =>
-      isWeaponVisible(
-        weaponKey,
-        world,
-      ),
+  return (
+    ALL_WEAPON_ORDER.filter(
+      (weaponKey) =>
+        isWeaponVisible(
+          weaponKey,
+          world,
+        ),
+    )
   );
 }
 
-/**
- * App.jsx consumes WEAPON_ORDER as an array.
- * The proxy preserves that API while filtering special weapons
- * before React renders the weapon list.
- */
 export const WEAPON_ORDER =
   new Proxy(
     [],
     {
-      get(_target, property) {
+      get(
+        _target,
+        property,
+      ) {
         const visibleOrder =
           getVisibleWeaponOrder();
+
+        if (
+          property ===
+          Symbol.iterator
+        ) {
+          return (
+            visibleOrder[
+              Symbol.iterator
+            ].bind(
+              visibleOrder,
+            )
+          );
+        }
+
+        if (
+          property === "length"
+        ) {
+          return (
+            visibleOrder.length
+          );
+        }
+
+        if (
+          typeof property ===
+            "string" &&
+          /^\d+$/.test(
+            property,
+          )
+        ) {
+          return (
+            visibleOrder[
+              Number(
+                property,
+              )
+            ]
+          );
+        }
 
         const value =
           Reflect.get(
@@ -142,7 +204,7 @@ export const WEAPON_ORDER =
 
         return (
           typeof value ===
-          "function"
+            "function"
             ? value.bind(
                 visibleOrder,
               )
@@ -177,48 +239,59 @@ export const WEAPON_HOTKEY_MAP =
           return weaponKey;
         }
 
-        return isWeaponVisible(
-          weaponKey,
-        )
-          ? weaponKey
-          : undefined;
+        return (
+          isWeaponVisible(
+            weaponKey,
+          )
+            ? weaponKey
+            : undefined
+        );
       },
 
-      has(target, property) {
+      has(
+        target,
+        property,
+      ) {
         const weaponKey =
           target[property];
 
-        return (
+        return Boolean(
           typeof weaponKey ===
             "string" &&
           isWeaponVisible(
             weaponKey,
-          )
+          ),
         );
       },
 
       ownKeys(target) {
-        return Reflect.ownKeys(
-          target,
-        ).filter((property) => {
-          if (
-            typeof property !==
-            "string"
-          ) {
-            return true;
-          }
+        return (
+          Reflect
+            .ownKeys(target)
+            .filter(
+              (property) => {
+                if (
+                  typeof property !==
+                  "string"
+                ) {
+                  return true;
+                }
 
-          const weaponKey =
-            target[property];
+                const weaponKey =
+                  target[
+                    property
+                  ];
 
-          return (
-            typeof weaponKey !==
-              "string" ||
-            isWeaponVisible(
-              weaponKey,
+                return (
+                  typeof weaponKey !==
+                    "string" ||
+                  isWeaponVisible(
+                    weaponKey,
+                  )
+                );
+              },
             )
-          );
-        });
+        );
       },
 
       getOwnPropertyDescriptor(
@@ -226,10 +299,11 @@ export const WEAPON_HOTKEY_MAP =
         property,
       ) {
         const descriptor =
-          Object.getOwnPropertyDescriptor(
-            target,
-            property,
-          );
+          Object
+            .getOwnPropertyDescriptor(
+              target,
+              property,
+            );
 
         if (!descriptor) {
           return undefined;
@@ -253,11 +327,6 @@ export const WEAPON_HOTKEY_MAP =
     },
   );
 
-/**
- * Core world creation happens before the special loadout is applied,
- * so the base controls advertise only public hotkeys.
- * world-enhanced.js adds the eligible player's one special hotkey later.
- */
 export const WEAPON_HOTKEY_LABEL =
   "1-9";
 

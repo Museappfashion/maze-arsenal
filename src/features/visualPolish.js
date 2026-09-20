@@ -23,6 +23,8 @@ const THEME_GLOW = {
   jungle: [132, 204, 22],
   medieval: [251, 146, 60],
   labyrinth: [129, 140, 248],
+  under770: [186, 230, 253],
+  trail: [234, 179, 8],
 };
 
 const CSS = `
@@ -140,8 +142,16 @@ function selectSpaced(candidates, count, salt, spacing) {
   return chosen;
 }
 
+function getVisualTheme(world) {
+  return (
+    world.__mendelVisualTheme ??
+    world.level?.themeKey ??
+    "city"
+  );
+}
+
 function buildCache(world) {
-  const theme = world.level?.themeKey ?? "city";
+  const theme = getVisualTheme(world);
   const all = (world.floorTiles ?? [])
     .filter((tile) => {
       if (
@@ -210,7 +220,7 @@ function buildCache(world) {
 
 function getCache(world) {
   const key =
-    `${world.level?.themeKey ?? "city"}:${world.width}x${world.height}`;
+    `${getVisualTheme(world)}:${world.width}x${world.height}`;
   return world.__visualPolishCache?.key === key
     ? world.__visualPolishCache
     : buildCache(world);
@@ -1394,8 +1404,7 @@ function draw3D(ctx, world, cache) {
 
 function drawAtmosphere(ctx, world) {
   const theme =
-    world.level?.themeKey ??
-    "city";
+    getVisualTheme(world);
   const glow =
     THEME_GLOW[theme] ??
     THEME_GLOW.city;

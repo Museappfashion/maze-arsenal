@@ -1,6 +1,9 @@
 // src/game/world-enhanced.js
 
 import {
+  applyCharacterWorldProfile,
+} from "../config/characterProfiles.js";
+import {
   getTargetEnemyCount,
 } from "../config/enemyDensity.js";
 import {
@@ -547,6 +550,10 @@ export function createWorld(
 ) {
   const world =
     createWorldCore(...args);
+
+  applyCharacterWorldProfile(
+    world,
+  );
 
   world.leaderboardEligible =
     !world.labyrinthMode;

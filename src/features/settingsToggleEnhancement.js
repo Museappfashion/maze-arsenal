@@ -15,6 +15,9 @@ const LABELS_STORAGE_KEY =
 const MINIMAP_STORAGE_KEY =
   "mist-maze-minimap-enabled";
 
+const ROOT_MINIMAP_ATTRIBUTE =
+  "data-mist-minimap-enabled";
+
 function readStoredBoolean(
   key,
   fallback,
@@ -33,7 +36,7 @@ function readStoredBoolean(
       return false;
     }
   } catch {
-    // Local storage can be unavailable in restricted browser modes.
+    // Storage can be unavailable in restricted browser modes.
   }
 
   return fallback;
@@ -51,7 +54,7 @@ function writeStoredBoolean(
       ),
     );
   } catch {
-    // Keep the in-memory setting even when storage is unavailable.
+    // Keep the in-memory value when storage is unavailable.
   }
 }
 
@@ -132,6 +135,11 @@ function ensureStyle() {
     .mist-labels-disabled [data-world-label="true"] {
       display: none !important;
     }
+
+    html[${ROOT_MINIMAP_ATTRIBUTE}="false"]
+      [data-mist-minimap-shell="1"] {
+      display: none !important;
+    }
   `;
 
   document.head.append(
@@ -165,6 +173,7 @@ function setBooleanField(
 function applyLabelsSetting(
   world,
   enabled,
+  persist = true,
 ) {
   labelsEnabled =
     Boolean(enabled);
@@ -219,15 +228,18 @@ function applyLabelsSetting(
       !labelsEnabled,
     );
 
-  writeStoredBoolean(
-    LABELS_STORAGE_KEY,
-    labelsEnabled,
-  );
+  if (persist) {
+    writeStoredBoolean(
+      LABELS_STORAGE_KEY,
+      labelsEnabled,
+    );
+  }
 }
 
 function applyMinimapSetting(
   world,
   enabled,
+  persist = true,
 ) {
   minimapEnabled =
     Boolean(enabled);
@@ -236,71 +248,81 @@ function applyMinimapSetting(
     .__mistMazeMinimapEnabled =
     minimapEnabled;
 
-  if (world) {
-    setBooleanField(
-      world,
-      "minimapOn",
-      minimapEnabled,
+  document
+    .documentElement
+    .setAttribute(
+      ROOT_MINIMAP_ATTRIBUTE,
+      String(
+        minimapEnabled,
+      ),
     );
 
-    setBooleanField(
-      world,
-      "showMinimap",
-      minimapEnabled,
-    );
+  if (world) {
+    for (
+      const field of [
+        "minimapOn",
+        "showMinimap",
+        "minimapEnabled",
+      ]
+    ) {
+      setBooleanField(
+        world,
+        field,
+        minimapEnabled,
+      );
+    }
 
     if (
       world.settings &&
       typeof world.settings ===
         "object"
     ) {
-      setBooleanField(
-        world.settings,
-        "minimapOn",
-        minimapEnabled,
-      );
-
-      setBooleanField(
-        world.settings,
-        "showMinimap",
-        minimapEnabled,
-      );
+      for (
+        const field of [
+          "minimapOn",
+          "showMinimap",
+          "minimapEnabled",
+        ]
+      ) {
+        setBooleanField(
+          world.settings,
+          field,
+          minimapEnabled,
+        );
+      }
     }
   }
 
-  writeStoredBoolean(
-    MINIMAP_STORAGE_KEY,
-    minimapEnabled,
-  );
+  if (persist) {
+    writeStoredBoolean(
+      MINIMAP_STORAGE_KEY,
+      minimapEnabled,
+    );
+  }
 }
 
-function textEquals(
+function normalizedText(
   element,
-  value,
 ) {
   return (
     element?.textContent
       ?.trim()
-      .toLowerCase() ===
-    value.toLowerCase()
+      .toLowerCase() ??
+    ""
   );
 }
 
 function findSettingsRoot() {
-  const headings =
-    document.querySelectorAll(
-      "h1, h2, h3, [role='heading']",
-    );
-
   for (
     const heading of
-    headings
+    document.querySelectorAll(
+      "h1, h2, h3, [role='heading']",
+    )
   ) {
     if (
-      !textEquals(
+      normalizedText(
         heading,
-        "settings",
-      )
+      ) !== "settings"
     ) {
       continue;
     }
@@ -311,12 +333,14 @@ function findSettingsRoot() {
     for (
       let depth = 0;
       current &&
-        depth < 7;
+      depth < 8;
       depth += 1
     ) {
       const text =
-        current.textContent ??
-        "";
+        (
+          current.textContent ??
+          ""
+        ).toUpperCase();
 
       if (
         text.includes(
@@ -347,65 +371,60 @@ function findViewCard(
     return null;
   }
 
-  const candidates =
-    settingsRoot.querySelectorAll(
-      "section, div",
-    );
+  const viewHeadings =
+    Array.from(
+      settingsRoot
+        .querySelectorAll(
+          "h1, h2, h3, h4, strong, span, div",
+        ),
+    )
+      .filter(
+        (element) =>
+          normalizedText(
+            element,
+          ) === "view",
+      );
 
   for (
-    const candidate of
-    candidates
+    const heading of
+    viewHeadings
   ) {
-    const children =
-      Array.from(
-        candidate.children,
-      );
+    let current =
+      heading.parentElement;
 
-    const hasViewHeading =
-      children.some(
-        (child) =>
-          textEquals(
-            child,
-            "view",
-          ) ||
-          child
-            .querySelector?.(
-              "h2, h3, h4, [role='heading']",
-            )
-            ?.textContent
-            ?.trim()
-            .toLowerCase() ===
-            "view",
-      );
-
-    if (!hasViewHeading) {
-      continue;
-    }
-
-    const buttons =
-      Array.from(
-        candidate.querySelectorAll(
-          "button",
-        ),
-      );
-
-    const buttonLabels =
-      buttons.map(
-        (button) =>
-          button.textContent
-            ?.trim()
-            .toLowerCase(),
-      );
-
-    if (
-      buttonLabels.includes(
-        "2d",
-      ) &&
-      buttonLabels.includes(
-        "3d",
-      )
+    for (
+      let depth = 0;
+      current &&
+      depth < 5;
+      depth += 1
     ) {
-      return candidate;
+      const buttonLabels =
+        Array.from(
+          current
+            .querySelectorAll(
+              "button",
+            ),
+        )
+          .map(
+            (button) =>
+              normalizedText(
+                button,
+              ),
+          );
+
+      if (
+        buttonLabels.includes(
+          "2d",
+        ) &&
+        buttonLabels.includes(
+          "3d",
+        )
+      ) {
+        return current;
+      }
+
+      current =
+        current.parentElement;
     }
   }
 
@@ -422,6 +441,13 @@ function renderButtonState(
       Boolean(enabled),
     );
 
+  button.setAttribute(
+    "aria-pressed",
+    String(
+      Boolean(enabled),
+    ),
+  );
+
   button.textContent =
     `${label}: ${
       enabled
@@ -433,10 +459,6 @@ function renderButtonState(
 function ensureSettingsControls() {
   const settingsRoot =
     findSettingsRoot();
-
-  if (!settingsRoot) {
-    return;
-  }
 
   const viewCard =
     findViewCard(
@@ -469,9 +491,24 @@ function ensureSettingsControls() {
     labelsButton.type =
       "button";
 
-    labelsButton.dataset
-      .setting =
+    labelsButton.dataset.setting =
       "labels";
+
+    labelsButton.addEventListener(
+      "click",
+      () => {
+        applyLabelsSetting(
+          getWorld(),
+          !labelsEnabled,
+        );
+
+        renderButtonState(
+          labelsButton,
+          "LABELS",
+          labelsEnabled,
+        );
+      },
+    );
 
     const minimapButton =
       document.createElement(
@@ -481,43 +518,24 @@ function ensureSettingsControls() {
     minimapButton.type =
       "button";
 
-    minimapButton.dataset
-      .setting =
+    minimapButton.dataset.setting =
       "minimap";
 
-    labelsButton
-      .addEventListener(
-        "click",
-        () => {
-          applyLabelsSetting(
-            getWorld(),
-            !labelsEnabled,
-          );
+    minimapButton.addEventListener(
+      "click",
+      () => {
+        applyMinimapSetting(
+          getWorld(),
+          !minimapEnabled,
+        );
 
-          renderButtonState(
-            labelsButton,
-            "LABELS",
-            labelsEnabled,
-          );
-        },
-      );
-
-    minimapButton
-      .addEventListener(
-        "click",
-        () => {
-          applyMinimapSetting(
-            getWorld(),
-            !minimapEnabled,
-          );
-
-          renderButtonState(
-            minimapButton,
-            "MINIMAP",
-            minimapEnabled,
-          );
-        },
-      );
+        renderButtonState(
+          minimapButton,
+          "MINIMAP",
+          minimapEnabled,
+        );
+      },
+    );
 
     wrapper.append(
       labelsButton,
@@ -556,23 +574,34 @@ function ensureSettingsControls() {
   }
 }
 
+let lastWorld = null;
+
 function synchronizeWorld() {
   const world =
     getWorld();
 
   if (!world) {
+    lastWorld = null;
     return;
   }
 
-  applyLabelsSetting(
-    world,
-    labelsEnabled,
-  );
+  if (
+    world !== lastWorld
+  ) {
+    lastWorld = world;
 
-  applyMinimapSetting(
-    world,
-    minimapEnabled,
-  );
+    applyLabelsSetting(
+      world,
+      labelsEnabled,
+      false,
+    );
+
+    applyMinimapSetting(
+      world,
+      minimapEnabled,
+      false,
+    );
+  }
 }
 
 export function areLabelsEnabled() {
@@ -603,11 +632,13 @@ export function installSettingsToggleEnhancement() {
   applyLabelsSetting(
     getWorld(),
     labelsEnabled,
+    false,
   );
 
   applyMinimapSetting(
     getWorld(),
     minimapEnabled,
+    false,
   );
 
   let frameId = 0;
@@ -677,6 +708,12 @@ export function installSettingsToggleEnhancement() {
       .classList
       .remove(
         "mist-labels-disabled",
+      );
+
+    document
+      .documentElement
+      .removeAttribute(
+        ROOT_MINIMAP_ATTRIBUTE,
       );
 
     globalThis[

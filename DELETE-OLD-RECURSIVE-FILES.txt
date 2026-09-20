@@ -1,0 +1,15 @@
+DELETE THESE OLD RECURSIVE V3 FILES IF PRESENT
+
+src/components/GameUiFlickerFix.jsx
+src/styles/minimapPointerFix.css
+
+The new V5 vite.config.js does NOT reference GameUiFlickerFix.jsx.
+
+The active GameUi alias is:
+  GameUi.jsx -> GameUiEnhanced.jsx
+
+Minimap fixes now live in:
+  src/features/minimapEnhancement.js
+
+Settings toggles live in:
+  src/features/settingsToggleEnhancement.js

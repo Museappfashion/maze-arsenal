@@ -46,20 +46,26 @@ function quantizeFacing(
   );
 }
 
+function normalizedText(
+  element,
+) {
+  return (
+    element?.textContent
+      ?.trim()
+      .toLowerCase() ??
+    ""
+  );
+}
+
 function isMinimapCanvas(
   canvas,
 ) {
   if (
-    canvas.closest(
-      ".maze-frame",
-    )
-  ) {
-    return false;
-  }
-
-  if (
     canvas.classList.contains(
       OVERLAY_CLASS,
+    ) ||
+    canvas.closest(
+      ".maze-frame",
     )
   ) {
     return false;
@@ -71,44 +77,41 @@ function isMinimapCanvas(
     ) ||
     canvas.closest(
       ".mobile-minimap-wrap",
-    ) ||
-    canvas.closest(
-      "[class*='minimap']",
     )
   ) {
     return true;
   }
 
-  let current =
-    canvas.parentElement;
+  const section =
+    canvas.closest(
+      "section",
+    );
 
-  for (
-    let depth = 0;
-    current &&
-      depth < 5;
-    depth += 1
-  ) {
-    const text =
-      current.textContent
-        ?.toLowerCase() ??
-      "";
+  return (
+    normalizedText(
+      section?.querySelector(
+        "h1, h2, h3",
+      ),
+    ) ===
+    "minimap"
+  );
+}
 
-    if (
-      text.includes(
-        "minimap",
-      ) ||
-      text.includes(
-        "locator",
-      )
-    ) {
-      return true;
-    }
-
-    current =
-      current.parentElement;
-  }
-
-  return false;
+function getMinimapShell(
+  baseCanvas,
+) {
+  return (
+    baseCanvas.closest(
+      ".labyrinth-locator",
+    ) ||
+    baseCanvas.closest(
+      ".mobile-minimap-wrap",
+    ) ||
+    baseCanvas.closest(
+      "section",
+    ) ||
+    baseCanvas.parentElement
+  );
 }
 
 function ensureStyle() {
@@ -145,11 +148,33 @@ function ensureStyle() {
     [data-mist-minimap-base-hidden="1"] {
       visibility: hidden !important;
     }
+
+    html[data-mist-minimap-enabled="false"]
+      [data-mist-minimap-shell="1"] {
+      display: none !important;
+    }
   `;
 
   document.head.append(
     style,
   );
+}
+
+function markShell(
+  baseCanvas,
+) {
+  const shell =
+    getMinimapShell(
+      baseCanvas,
+    );
+
+  if (shell) {
+    shell.dataset
+      .mistMinimapShell =
+      "1";
+  }
+
+  return shell;
 }
 
 function ensureOverlay(
@@ -161,6 +186,10 @@ function ensureOverlay(
   if (!parent) {
     return null;
   }
+
+  markShell(
+    baseCanvas,
+  );
 
   parent.dataset
     .mistStableMinimapHost =
@@ -226,7 +255,10 @@ function drawDirectionArrow(
 ) {
   ctx.save();
 
-  ctx.translate(x, y);
+  ctx.translate(
+    x,
+    y,
+  );
 
   ctx.rotate(
     quantizeFacing(
@@ -639,6 +671,25 @@ function renderCanvas(
   );
 }
 
+function markExistingMinimaps() {
+  for (
+    const canvas of
+    document.querySelectorAll(
+      "canvas",
+    )
+  ) {
+    if (
+      isMinimapCanvas(
+        canvas,
+      )
+    ) {
+      markShell(
+        canvas,
+      );
+    }
+  }
+}
+
 function restoreBaseCanvases() {
   for (
     const canvas of
@@ -658,6 +709,16 @@ function restoreBaseCanvases() {
   ) {
     delete host.dataset
       .mistStableMinimapHost;
+  }
+
+  for (
+    const shell of
+    document.querySelectorAll(
+      '[data-mist-minimap-shell="1"]',
+    )
+  ) {
+    delete shell.dataset
+      .mistMinimapShell;
   }
 
   for (
@@ -699,31 +760,32 @@ export function installMinimapEnhancement() {
       globalThis
         .__mistMazeWorld;
 
-    if (world) {
-      const minimapEnabled =
-        globalThis
-          .__mistMazeMinimapEnabled !==
-        false;
+    markExistingMinimaps();
 
-      if (!minimapEnabled) {
-        restoreBaseCanvases();
-      } else {
-        for (
-          const canvas of
-          document.querySelectorAll(
-            "canvas",
+    const minimapEnabled =
+      globalThis
+        .__mistMazeMinimapEnabled !==
+      false;
+
+    if (
+      world &&
+      minimapEnabled
+    ) {
+      for (
+        const canvas of
+        document.querySelectorAll(
+          "canvas",
+        )
+      ) {
+        if (
+          isMinimapCanvas(
+            canvas,
           )
         ) {
-          if (
-            isMinimapCanvas(
-              canvas,
-            )
-          ) {
-            renderCanvas(
-              canvas,
-              world,
-            );
-          }
+          renderCanvas(
+            canvas,
+            world,
+          );
         }
       }
     }

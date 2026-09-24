@@ -15,7 +15,7 @@ import {
   recordLevelCompletion,
 } from "../services/progression.js";
 
-const ROOT_ID = "mist-maze-runtime-enhancements";
+const ROOT_ID = "mist-maze-runtime-hud";
 const STYLE_ID = "mist-maze-runtime-styles";
 const UPDATE_MS = 50;
 const POINTER_DIRECTION_COUNT = 16;
@@ -1302,17 +1302,11 @@ function updateOverlay(root, state) {
     timerHtml(world, second),
     exitPointerHtml(world),
     powerHudHtml(world),
-    endOverlayHtml(world, state),
   ].join("");
 
   if (markup !== state.lastMarkup) {
     root.innerHTML = markup;
     state.lastMarkup = markup;
-    bindOverlayActions(
-      root,
-      world,
-      state,
-    );
   }
 }
 

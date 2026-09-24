@@ -27,6 +27,30 @@ import { recordGameFinished, recordGameStarted, recordPlaySeconds, recordVisitor
 import { clamp, formatTime } from "./utils/math.js";
 import { sanitizePlayerName } from "./utils/player.js";
 
+function getRemainingExitDistancePercent(world) {
+  const startX = (world.start?.x ?? 1) + 0.5;
+  const startY = (world.start?.y ?? 1) + 0.5;
+  const exitX = world.exit ? world.exit.x + 0.5 : startX;
+  const exitY = world.exit ? world.exit.y + 0.5 : startY;
+  const initialDistance = Math.hypot(
+    exitX - startX,
+    exitY - startY,
+  );
+
+  if (world.victory || initialDistance <= 0.001) {
+    return 0;
+  }
+
+  const remainingDistance = Math.hypot(
+    exitX - world.player.x,
+    exitY - world.player.y,
+  );
+
+  return Math.round(
+    Math.max(0, Math.min(1, remainingDistance / initialDistance)) * 100,
+  );
+}
+
 export default function App() {
 const canvasRef = useRef(null);
 const worldRef = useRef(createWorld(DEFAULT_LEVEL_KEY));
@@ -964,6 +988,7 @@ const loop = (timestamp) => {
     analyticsRunEndedRef.current = true;
     flushPlayAnalytics(world);
     void recordGameFinished(world);
+    forceRefresh();
   }
 
   if (world.audioEvents?.length) {
@@ -985,7 +1010,9 @@ const loop = (timestamp) => {
   hudAccumulatorRef.current += dt;
   if (hudAccumulatorRef.current >= HUD_REFRESH_INTERVAL) {
     hudAccumulatorRef.current = 0;
-    forceRefresh();
+    if (!world.gameOver && !world.victory) {
+      forceRefresh();
+    }
   }
 
   frameRef.current = requestAnimationFrame(loop);
@@ -1166,6 +1193,120 @@ return (
               </div>
             )}
           </div>
+        )}
+
+        {(world.gameOver || world.victory) && (
+          <section
+            id="mist-maze-runtime-enhancements"
+            aria-label="Run complete"
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 100,
+              display: "grid",
+              placeItems: "center",
+              padding: 20,
+              background: "rgba(2, 6, 23, 0.88)",
+              backdropFilter: "blur(3px)",
+            }}
+          >
+            <div
+              style={{
+                width: "min(520px, 94%)",
+                display: "grid",
+                justifyItems: "center",
+                gap: 14,
+                textAlign: "center",
+              }}
+            >
+              <strong
+                style={{
+                  color: world.victory ? "#4ade80" : "#fb7185",
+                  fontSize: "clamp(38px, 8vw, 72px)",
+                  lineHeight: 1,
+                  textShadow: world.victory
+                    ? "0 0 26px rgba(34,197,94,.55)"
+                    : "0 0 26px rgba(239,68,68,.55)",
+                }}
+              >
+                {world.victory ? "MAZE ESCAPED" : "GAME OVER"}
+              </strong>
+
+              <span style={{ color: "#cbd5e1", fontSize: 16 }}>
+                {world.victory
+                  ? `Finished in ${formatTime(world.time)}`
+                  : `You survived ${formatTime(world.time)}`}
+              </span>
+
+              <div
+                role="status"
+                aria-label="Run statistics"
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  justifyContent: "center",
+                  gap: "7px 18px",
+                  color: "#94a3b8",
+                  fontSize: 12,
+                }}
+              >
+                <span>Enemies killed <strong style={{ color: "#e2e8f0" }}>{world.kills}</strong></span>
+                <span>Maze discovered <strong style={{ color: "#e2e8f0" }}>{getDiscoveredPercent(world)}%</strong></span>
+                <span>Distance to exit <strong style={{ color: "#e2e8f0" }}>{getRemainingExitDistancePercent(world)}%</strong></span>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  justifyItems: "center",
+                  gap: 10,
+                  marginTop: 6,
+                }}
+              >
+                <button
+                  type="button"
+                  data-mist-action="restart"
+                  className="mist-play-again-button"
+                  onClick={resetWorld}
+                  style={{
+                    minWidth: 270,
+                    padding: "17px 30px",
+                    border: "2px solid rgba(255,255,255,.92)",
+                    borderRadius: 16,
+                    background: "linear-gradient(135deg,#facc15,#67e8f9 52%,#22d3ee)",
+                    color: "#04111d",
+                    font: "inherit",
+                    fontSize: 18,
+                    fontWeight: 950,
+                    letterSpacing: ".075em",
+                    cursor: "pointer",
+                    boxShadow: "0 0 30px rgba(34,211,238,.75),0 0 58px rgba(250,204,21,.34)",
+                  }}
+                >
+                  PLAY AGAIN
+                </button>
+                <button
+                  type="button"
+                  data-mist-action="menu"
+                  onClick={returnToLevelSelect}
+                  style={{
+                    minWidth: 170,
+                    padding: "9px 14px",
+                    border: "1px solid rgba(148,163,184,.25)",
+                    borderRadius: 11,
+                    background: "rgba(15,23,42,.74)",
+                    color: "#94a3b8",
+                    font: "inherit",
+                    fontSize: 11,
+                    fontWeight: 800,
+                    cursor: "pointer",
+                  }}
+                >
+                  MAIN MENU
+                </button>
+              </div>
+            </div>
+          </section>
         )}
       </div>
     </main>

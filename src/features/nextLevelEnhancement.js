@@ -288,7 +288,7 @@ function ensureEndGameUi() {
   }
 
   restartButton.textContent =
-    "START NEW GAME";
+    "PLAY AGAIN";
 
   if (
     !world.victory ||

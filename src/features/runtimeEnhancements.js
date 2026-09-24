@@ -18,6 +18,9 @@ import {
 const ROOT_ID = "mist-maze-runtime-enhancements";
 const STYLE_ID = "mist-maze-runtime-styles";
 const UPDATE_MS = 50;
+const POINTER_DIRECTION_COUNT = 16;
+const POINTER_DIRECTION_STEP =
+  Math.PI * 2 / POINTER_DIRECTION_COUNT;
 
 function getWorld() {
   return globalThis.__mistMazeWorld ?? null;
@@ -723,6 +726,104 @@ function timerHtml(world, second) {
   `;
 }
 
+function exitPointerHtml(world) {
+  if (
+    world.gameOver ||
+    world.victory ||
+    !world.exit ||
+    !world.player ||
+    globalThis.__mistMazePointerEnabled === false ||
+    world.exitPointerOn === false ||
+    world.pointerGuideEnabled === false
+  ) {
+    return "";
+  }
+
+  const bearing = Math.atan2(
+    world.exit.y + 0.5 - world.player.y,
+    world.exit.x + 0.5 - world.player.x,
+  );
+  const selectedIndex = (
+    (Math.round(bearing / POINTER_DIRECTION_STEP) %
+      POINTER_DIRECTION_COUNT) +
+    POINTER_DIRECTION_COUNT
+  ) % POINTER_DIRECTION_COUNT;
+  const directionDegrees = selectedIndex * 22.5;
+  const spokes = Array.from(
+    { length: POINTER_DIRECTION_COUNT },
+    (_, index) => {
+      const selected = index === selectedIndex;
+
+      return `
+        <line
+          x1="${selected ? 42 : 51}"
+          y1="40"
+          x2="65"
+          y2="40"
+          transform="rotate(${index * 22.5} 40 40)"
+          stroke="${selected ? "#e0f2fe" : "rgba(125,211,252,.28)"}"
+          stroke-width="${selected ? 4 : 1.25}"
+          stroke-linecap="round"
+          ${selected ? 'filter="url(#mist-pointer-glow)"' : ""}
+        />
+      `;
+    },
+  ).join("");
+
+  return `
+    <div
+      role="img"
+      aria-label="Exit direction ${selectedIndex + 1} of 16"
+      style="
+        position:absolute;
+        top:8px;
+        left:50%;
+        width:80px;
+        height:80px;
+        transform:translateX(-50%);
+        pointer-events:none;
+        filter:drop-shadow(0 3px 9px rgba(0,0,0,.75));
+      "
+    >
+      <svg
+        viewBox="0 0 80 80"
+        width="80"
+        height="80"
+        aria-hidden="true"
+      >
+        <defs>
+          <filter id="mist-pointer-glow" x="-100%" y="-100%" width="300%" height="300%">
+            <feGaussianBlur stdDeviation="2.4" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+        <circle
+          cx="40"
+          cy="40"
+          r="31"
+          fill="rgba(2,6,23,.86)"
+          stroke="rgba(125,211,252,.5)"
+          stroke-width="1"
+        />
+        ${spokes}
+        <g transform="rotate(${directionDegrees} 40 40)">
+          <path
+            d="M72 40 L62 34 L62 46 Z"
+            fill="#67e8f9"
+            stroke="#e0f2fe"
+            stroke-width="1"
+            filter="url(#mist-pointer-glow)"
+          />
+        </g>
+        <circle cx="40" cy="40" r="2.5" fill="#f8fafc" />
+      </svg>
+    </div>
+  `;
+}
+
 function powerHudHtml(world) {
   if (world.viewMode !== "3d") {
     return "";
@@ -1199,6 +1300,7 @@ function updateOverlay(root, state) {
 
   const markup = [
     timerHtml(world, second),
+    exitPointerHtml(world),
     powerHudHtml(world),
     endOverlayHtml(world, state),
   ].join("");

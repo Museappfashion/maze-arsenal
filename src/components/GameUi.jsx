@@ -34,27 +34,68 @@ function useViewSettings() {
   return settings;
 }
 
+function drawPlayerMarker(ctx, x, y, radius) {
+  ctx.save();
+  ctx.shadowColor = "#38bdf8";
+  ctx.shadowBlur = Math.max(5, radius * 1.6);
+  ctx.fillStyle = "#38bdf8";
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 export function MinimapPanel({ world, compact = false }) {
   const canvasRef = useRef(null);
+  const bufferRef = useRef(null);
+  const { minimapEnabled } = useViewSettings();
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    const shouldShowMinimap =
-      world.labyrinthMode || world.viewMode === "3d" || world.minimapOn;
 
-    if (!canvas || !shouldShowMinimap) {
+    if (!canvas || !minimapEnabled) {
       return;
     }
 
-    const ctx = canvas.getContext("2d");
+    if (!bufferRef.current) {
+      bufferRef.current = document.createElement("canvas");
+    }
+
+    const buffer = bufferRef.current;
+    let renderWidth;
+    let renderHeight;
 
     if (world.labyrinthMode) {
       const size = compact ? 136 : world.mobileView ? 176 : 160;
+      renderWidth = size;
+      renderHeight = size;
+    } else {
+      const maxSize = compact ? 220 : world.mobileView ? 440 : 320;
+      const scale = Math.max(
+        1,
+        Math.floor(maxSize / Math.max(world.width, world.height)),
+      );
+      renderWidth = world.width * scale;
+      renderHeight = world.height * scale;
+    }
+
+    if (buffer.width !== renderWidth || buffer.height !== renderHeight) {
+      buffer.width = renderWidth;
+      buffer.height = renderHeight;
+    }
+
+    const ctx = buffer.getContext("2d");
+
+    if (!ctx) {
+      return;
+    }
+
+    ctx.clearRect(0, 0, renderWidth, renderHeight);
+
+    if (world.labyrinthMode) {
+      const size = renderWidth;
       const padding = 12;
       const usable = size - padding * 2;
-
-      canvas.width = size;
-      canvas.height = size;
 
       ctx.fillStyle = "#010204";
       ctx.fillRect(0, 0, size, size);
@@ -64,8 +105,8 @@ export function MinimapPanel({ world, compact = false }) {
       ctx.strokeRect(0.5, 0.5, size - 1, size - 1);
 
       const pointFor = (x, y) => ({
-        x: padding + (x / Math.max(1, world.width - 1)) * usable,
-        y: padding + (y / Math.max(1, world.height - 1)) * usable,
+        x: padding + (x / Math.max(1, world.width)) * usable,
+        y: padding + (y / Math.max(1, world.height)) * usable,
       });
 
       const exitPoint = pointFor(
@@ -81,105 +122,88 @@ export function MinimapPanel({ world, compact = false }) {
       ctx.arc(exitPoint.x, exitPoint.y, compact ? 4 : 5, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.shadowColor = "#38bdf8";
-      ctx.fillStyle = "#38bdf8";
-      ctx.beginPath();
-      ctx.arc(
+      ctx.shadowBlur = 0;
+      drawPlayerMarker(
+        ctx,
         playerPoint.x,
         playerPoint.y,
         compact ? 4 : 5,
-        0,
-        Math.PI * 2,
       );
-      ctx.fill();
-      ctx.shadowBlur = 0;
+    } else {
+      const scale = renderWidth / Math.max(1, world.width);
+      const theme = getTheme(world);
+
+      for (let y = 0; y < world.height; y += 1) {
+        for (let x = 0; x < world.width; x += 1) {
+          const discovered =
+            world.discovered[indexOfTile(world.width, x, y)] === 1;
+
+          if (!discovered) {
+            ctx.fillStyle = theme.backdrop;
+          } else if (world.grid[y][x] === STEEL_WALL) {
+            ctx.fillStyle = theme.steelA ?? "#7c8794";
+          } else if (world.grid[y][x] === WALL) {
+            ctx.fillStyle = theme.wallB;
+          } else {
+            ctx.fillStyle = theme.floorB;
+          }
+
+          ctx.fillRect(x * scale, y * scale, scale, scale);
+        }
+      }
+
+      ctx.fillStyle = "#22c55e";
+      ctx.fillRect(
+        world.exit.x * scale,
+        world.exit.y * scale,
+        Math.max(3, scale + 1),
+        Math.max(3, scale + 1),
+      );
+
+      if (hasPowerUp(world, "sonar")) {
+        for (const enemy of world.enemies) {
+          ctx.fillStyle =
+            enemy.kind === "warden"
+              ? "#f472b6"
+              : enemy.kind === "turret"
+                ? "#facc15"
+                : "#ef4444";
+          ctx.fillRect(
+            Math.floor(enemy.x) * scale,
+            Math.floor(enemy.y) * scale,
+            Math.max(2, scale),
+            Math.max(2, scale),
+          );
+        }
+      }
+
+      drawPlayerMarker(
+        ctx,
+        world.player.x * scale,
+        world.player.y * scale,
+        Math.max(2, scale * 0.7),
+      );
+    }
+
+    if (canvas.width !== renderWidth || canvas.height !== renderHeight) {
+      canvas.width = renderWidth;
+      canvas.height = renderHeight;
+    }
+
+    const visibleContext = canvas.getContext("2d");
+
+    if (!visibleContext) {
       return;
     }
 
-    const maxSize = compact ? 220 : world.mobileView ? 440 : 320;
-    const scale = Math.max(
-      1,
-      Math.floor(maxSize / Math.max(world.width, world.height)),
-    );
-    const mapWidth = world.width * scale;
-    const mapHeight = world.height * scale;
-
-    canvas.width = mapWidth;
-    canvas.height = mapHeight;
-    ctx.clearRect(0, 0, mapWidth, mapHeight);
-
-    for (let y = 0; y < world.height; y += 1) {
-      for (let x = 0; x < world.width; x += 1) {
-        const discovered =
-          world.discovered[indexOfTile(world.width, x, y)] === 1;
-        const theme = getTheme(world);
-
-        if (!discovered) {
-          ctx.fillStyle = theme.backdrop;
-        } else if (world.grid[y][x] === STEEL_WALL) {
-          ctx.fillStyle = theme.steelA ?? "#7c8794";
-        } else if (world.grid[y][x] === WALL) {
-          ctx.fillStyle = theme.wallB;
-        } else {
-          ctx.fillStyle = theme.floorB;
-        }
-
-        ctx.fillRect(x * scale, y * scale, scale, scale);
-      }
-    }
-
-    ctx.fillStyle = "#22c55e";
-    ctx.fillRect(
-      world.exit.x * scale,
-      world.exit.y * scale,
-      Math.max(3, scale + 1),
-      Math.max(3, scale + 1),
-    );
-
-    if (hasPowerUp(world, "sonar")) {
-      for (const enemy of world.enemies) {
-        ctx.fillStyle =
-          enemy.kind === "warden"
-            ? "#f472b6"
-            : enemy.kind === "turret"
-              ? "#facc15"
-              : "#ef4444";
-        ctx.fillRect(
-          Math.floor(enemy.x) * scale,
-          Math.floor(enemy.y) * scale,
-          Math.max(2, scale),
-          Math.max(2, scale),
-        );
-      }
-    }
-
-    ctx.fillStyle = "#38bdf8";
-    ctx.fillRect(
-      Math.floor(world.player.x) * scale,
-      Math.floor(world.player.y) * scale,
-      Math.max(2, scale + 1),
-      Math.max(2, scale + 1),
-    );
+    visibleContext.save();
+    visibleContext.globalCompositeOperation = "copy";
+    visibleContext.drawImage(buffer, 0, 0);
+    visibleContext.restore();
   });
 
-  const shouldShowMinimap =
-    world.labyrinthMode || world.viewMode === "3d" || world.minimapOn;
-
-  if (!shouldShowMinimap) {
-    return (
-      <div
-        style={{
-          padding: 16,
-          borderRadius: 16,
-          background: "rgba(15, 23, 42, 0.9)",
-          border: "1px solid rgba(148, 163, 184, 0.14)",
-          color: "#94a3b8",
-          fontSize: 13,
-        }}
-      >
-        Minimap hidden. Press M to show it.
-      </div>
-    );
+  if (!minimapEnabled) {
+    return null;
   }
 
   if (world.labyrinthMode) {

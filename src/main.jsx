@@ -21,9 +21,6 @@ import {
   installMendelVisuals,
 } from "./features/mendelVisuals.js";
 import {
-  installMinimapEnhancement,
-} from "./features/minimapEnhancement.js";
-import {
   installNextLevelEnhancement,
 } from "./features/nextLevelEnhancement.js";
 import {
@@ -66,12 +63,6 @@ if (!developerDashboard) {
   installSettingsToggleEnhancement();
   installNextLevelEnhancement();
   installSpecialWeaponVisibility();
-
-  /*
-   * Standalone runtime minimap drawing avoids importing
-   * GameUiEnhanced back through the GameUi alias.
-   */
-  installMinimapEnhancement();
 
   installVisualPolish();
   installMendelVisuals();

@@ -144,6 +144,30 @@ The current build includes:
 - Fullscreen/landscape button where the browser supports it.
 - Desktop keyboard and mouse controls remain unchanged.
 
+## View settings and run summary
+
+The **VIEW** section in Settings includes three persistent controls, all on by
+default:
+
+- **Labels** — shows or hides in-world labels.
+- **Minimap** — shows or hides the minimap in both 2D and 3D.
+- **Pointer** — shows or hides the exit guide. The guide compares 16 directions
+  and lights the closest direction toward the exit.
+
+The minimap is rendered through a stable buffered canvas so a completed frame
+replaces the previous frame without exposing a cleared canvas.
+
+At the end of every run, the game displays enemies killed, maze discovered,
+and the remaining straight-line distance to the exit as a percentage of the
+spawn-to-exit distance. **Play Again** starts a fresh run with the same level
+settings, while **Main Menu** returns to level selection.
+
+Run the production build and the Vite-alias import-cycle audit together with:
+
+```bash
+npm run verify
+```
+
 
 ## Combat behavior
 
@@ -179,4 +203,3 @@ The dashboard shows per anonymous Supabase user:
 Support counts are click attempts, not confirmed payments. The client has no
 SELECT permission on the analytics table; dashboard reads go through the
 server-only Vercel function.
-

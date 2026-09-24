@@ -12,6 +12,27 @@ import { getDiscoveredPercent } from "../game/maze.js";
 import { formatTime, indexOfTile } from "../utils/math.js";
 import { getPlayerDisplayName } from "../utils/player.js";
 import { recordDonationAttempt } from "../services/developerAnalytics.js";
+import {
+  getViewSettings,
+  setLabelsEnabled,
+  setMinimapEnabled,
+  setPointerEnabled,
+  subscribeViewSettings,
+} from "../features/settingsToggleEnhancement.js";
+
+function useViewSettings() {
+  const [settings, setSettings] = useState(getViewSettings);
+
+  useEffect(
+    () =>
+      subscribeViewSettings(
+        () => setSettings(getViewSettings()),
+      ),
+    [],
+  );
+
+  return settings;
+}
 
 export function MinimapPanel({ world, compact = false }) {
   const canvasRef = useRef(null);
@@ -385,6 +406,27 @@ export function SettingsControls({
   onSfxVolumeChange,
   audioStatus,
 }) {
+  const {
+    labelsEnabled,
+    minimapEnabled,
+    pointerEnabled,
+  } = useViewSettings();
+
+  const viewSettingButton = (
+    label,
+    enabled,
+    onToggle,
+  ) => (
+    <button
+      type="button"
+      data-enabled={String(enabled)}
+      aria-pressed={enabled}
+      onClick={() => onToggle(!enabled)}
+    >
+      {label}: {enabled ? "ON" : "OFF"}
+    </button>
+  );
+
   return (
     <div className="settings-controls">
       <div className="settings-section-title">VIEW</div>
@@ -397,6 +439,28 @@ export function SettingsControls({
           ? "✓ 3D · SWITCH TO 2D"
           : "2D CLASSIC · SWITCH TO 3D"}
       </button>
+
+      <div
+        className="mist-extra-view-settings"
+        role="group"
+        aria-label="View visibility settings"
+      >
+        {viewSettingButton(
+          "LABELS",
+          labelsEnabled,
+          setLabelsEnabled,
+        )}
+        {viewSettingButton(
+          "MINIMAP",
+          minimapEnabled,
+          setMinimapEnabled,
+        )}
+        {viewSettingButton(
+          "POINTER",
+          pointerEnabled,
+          setPointerEnabled,
+        )}
+      </div>
 
       <div className="settings-section-title">SOUND</div>
       <AudioVolumeControls

@@ -27,22 +27,33 @@ const DIRECTION_STEP =
   2 /
   DIRECTION_COUNT;
 
-function quantizeFacing(
-  facing,
-) {
-  const angle =
-    Number.isFinite(
-      facing,
-    )
-      ? facing
+function quantizeDirectionIndex(angle) {
+  const normalizedAngle =
+    Number.isFinite(angle)
+      ? angle
       : 0;
 
   return (
-    Math.round(
-      angle /
-      DIRECTION_STEP,
-    ) *
-    DIRECTION_STEP
+    (
+      Math.round(normalizedAngle / DIRECTION_STEP) %
+        DIRECTION_COUNT
+    ) +
+    DIRECTION_COUNT
+  ) % DIRECTION_COUNT;
+}
+
+function getExitBearing(world) {
+  return Math.atan2(
+    world.exit.y + 0.5 - world.player.y,
+    world.exit.x + 0.5 - world.player.x,
+  );
+}
+
+function isExitPointerEnabled(world) {
+  return (
+    globalThis.__mistMazePointerEnabled !== false &&
+    world.exitPointerOn !== false &&
+    world.pointerGuideEnabled !== false
   );
 }
 
@@ -246,75 +257,84 @@ function ensureOverlay(
   return overlay;
 }
 
-function drawDirectionArrow(
+function drawPlayerMarker(
   ctx,
   x,
   y,
-  facing,
   size,
 ) {
   ctx.save();
-
-  ctx.translate(
-    x,
-    y,
-  );
-
-  ctx.rotate(
-    quantizeFacing(
-      facing,
-    ),
-  );
-
-  ctx.shadowColor =
-    "#38bdf8";
-
-  ctx.shadowBlur =
-    Math.max(
-      3,
-      size * 0.8,
-    );
-
-  ctx.fillStyle =
-    "#38bdf8";
-
-  ctx.strokeStyle =
-    "#e0f2fe";
-
-  ctx.lineWidth =
-    Math.max(
-      1,
-      size * 0.13,
-    );
-
-  ctx.lineJoin =
-    "round";
-
+  ctx.shadowColor = "#38bdf8";
+  ctx.shadowBlur = Math.max(3, size * 0.75);
+  ctx.fillStyle = "#38bdf8";
   ctx.beginPath();
-
-  ctx.moveTo(
-    size,
-    0,
-  );
-
-  ctx.lineTo(
-    -size * 0.62,
-    -size * 0.58,
-  );
-
-  ctx.lineTo(
-    -size * 0.32,
-    0,
-  );
-
-  ctx.lineTo(
-    -size * 0.62,
-    size * 0.58,
-  );
-
-  ctx.closePath();
+  ctx.arc(x, y, Math.max(2, size * 0.36), 0, Math.PI * 2);
   ctx.fill();
-  ctx.stroke();
+  ctx.restore();
+}
+
+function drawExitPointer(
+  ctx,
+  x,
+  y,
+  bearing,
+  size,
+  enabled,
+) {
+  drawPlayerMarker(ctx, x, y, size);
+
+  if (!enabled) {
+    return;
+  }
+
+  const selectedIndex =
+    quantizeDirectionIndex(bearing);
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.lineCap = "round";
+
+  for (
+    let index = 0;
+    index < DIRECTION_COUNT;
+    index += 1
+  ) {
+    const selected = index === selectedIndex;
+    const innerRadius = size * 0.68;
+    const outerRadius =
+      size * (selected ? 1.62 : 1.04);
+
+    ctx.save();
+    ctx.rotate(index * DIRECTION_STEP);
+    ctx.beginPath();
+    ctx.moveTo(innerRadius, 0);
+    ctx.lineTo(outerRadius, 0);
+    ctx.strokeStyle = selected
+      ? "#67e8f9"
+      : "rgba(125, 211, 252, 0.24)";
+    ctx.lineWidth = selected
+      ? Math.max(2, size * 0.3)
+      : Math.max(1, size * 0.1);
+
+    if (selected) {
+      ctx.shadowColor = "#22d3ee";
+      ctx.shadowBlur = Math.max(5, size * 1.1);
+    }
+
+    ctx.stroke();
+
+    if (selected) {
+      ctx.fillStyle = "#e0f2fe";
+      ctx.beginPath();
+      ctx.moveTo(size * 1.82, 0);
+      ctx.lineTo(size * 1.42, -size * 0.28);
+      ctx.lineTo(size * 1.42, size * 0.28);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
 
   ctx.restore();
 }
@@ -436,12 +456,13 @@ function drawLabyrinthLocator(
     markerSize,
   );
 
-  drawDirectionArrow(
+  drawExitPointer(
     ctx,
     player.x,
     player.y,
-    world.player.facing,
+    getExitBearing(world),
     markerSize * 1.4,
+    isExitPointerEnabled(world),
   );
 }
 
@@ -602,13 +623,13 @@ function drawNormalMinimap(
     }
   }
 
-  drawDirectionArrow(
+  drawExitPointer(
     ctx,
     world.player.x *
       cellWidth,
     world.player.y *
       cellHeight,
-    world.player.facing,
+    getExitBearing(world),
     Math.max(
       4.5,
       Math.min(
@@ -620,6 +641,7 @@ function drawNormalMinimap(
         2.2,
       ),
     ),
+    isExitPointerEnabled(world),
   );
 }
 
@@ -636,10 +658,32 @@ function renderCanvas(
     return;
   }
 
-  const ctx =
+  const visibleContext =
     overlay.getContext(
       "2d",
     );
+
+  if (!visibleContext) {
+    return;
+  }
+
+  let buffer =
+    overlay.__mistStableMinimapBuffer;
+
+  if (!buffer) {
+    buffer = document.createElement("canvas");
+    overlay.__mistStableMinimapBuffer = buffer;
+  }
+
+  if (
+    buffer.width !== overlay.width ||
+    buffer.height !== overlay.height
+  ) {
+    buffer.width = overlay.width;
+    buffer.height = overlay.height;
+  }
+
+  const ctx = buffer.getContext("2d");
 
   if (!ctx) {
     return;
@@ -648,27 +692,19 @@ function renderCanvas(
   ctx.clearRect(
     0,
     0,
-    overlay.width,
-    overlay.height,
+    buffer.width,
+    buffer.height,
   );
 
   if (
     world.labyrinthMode
   ) {
-    drawLabyrinthLocator(
-      ctx,
-      overlay,
-      world,
-    );
-
-    return;
+    drawLabyrinthLocator(ctx, buffer, world);
+  } else {
+    drawNormalMinimap(ctx, buffer, world);
   }
 
-  drawNormalMinimap(
-    ctx,
-    overlay,
-    world,
-  );
+  visibleContext.drawImage(buffer, 0, 0);
 }
 
 function markExistingMinimaps() {

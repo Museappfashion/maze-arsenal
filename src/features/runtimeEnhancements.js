@@ -8,6 +8,9 @@ import {
   getLabyrinthTimeRemaining,
 } from "../game/labyrinth.js";
 import {
+  getDiscoveredPercent,
+} from "../game/maze.js";
+import {
   isLevelUnlocked,
   recordLevelCompletion,
 } from "../services/progression.js";
@@ -51,6 +54,31 @@ function ensureStyles() {
   const style = document.createElement("style");
   style.id = STYLE_ID;
   style.textContent = `
+    @keyframes mist-play-again-pulse {
+      0%, 100% {
+        transform: translateY(0) scale(1);
+        filter: saturate(1);
+      }
+      50% {
+        transform: translateY(-2px) scale(1.025);
+        filter: saturate(1.18);
+      }
+    }
+
+    .mist-play-again-button {
+      animation: mist-play-again-pulse 1.8s ease-in-out infinite;
+    }
+
+    .mist-play-again-button:hover {
+      filter: saturate(1.25) brightness(1.06) !important;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .mist-play-again-button {
+        animation: none;
+      }
+    }
+
     .mist-locked-level {
       position: relative !important;
       filter: saturate(.48) brightness(.72);
@@ -905,6 +933,90 @@ function clickMenuControl() {
   );
 }
 
+function getRemainingExitDistancePercent(world) {
+  const startX =
+    (world.start?.x ?? 1) + 0.5;
+  const startY =
+    (world.start?.y ?? 1) + 0.5;
+  const exitX = world.exit
+    ? world.exit.x + 0.5
+    : startX;
+  const exitY = world.exit
+    ? world.exit.y + 0.5
+    : startY;
+  const initialDistance =
+    Math.hypot(
+      exitX - startX,
+      exitY - startY,
+    );
+
+  if (world.victory || initialDistance <= 0.001) {
+    return 0;
+  }
+
+  const remainingDistance =
+    Math.hypot(
+      exitX - world.player.x,
+      exitY - world.player.y,
+    );
+
+  return Math.round(
+    Math.max(
+      0,
+      Math.min(
+        1,
+        remainingDistance / initialDistance,
+      ),
+    ) * 100,
+  );
+}
+
+function endStatsHtml(world) {
+  const stats = [
+    [
+      "Enemies killed",
+      Math.max(0, Math.floor(Number(world.kills) || 0)),
+    ],
+    [
+      "Maze discovered",
+      `${getDiscoveredPercent(world)}%`,
+    ],
+    [
+      "Distance to exit",
+      `${getRemainingExitDistancePercent(world)}%`,
+    ],
+  ];
+
+  return stats
+    .map(
+      ([label, value]) => `
+        <span style="
+          display:inline-flex;
+          align-items:baseline;
+          gap:5px;
+          color:#94a3b8;
+          font-size:11px;
+          line-height:1.35;
+          white-space:nowrap;
+        ">
+          <span style="
+            color:#64748b;
+            font-size:9px;
+            font-weight:850;
+            letter-spacing:.08em;
+            text-transform:uppercase;
+          ">${label}</span>
+          <strong style="
+            color:#e2e8f0;
+            font-size:12px;
+            font-weight:900;
+          ">${value}</strong>
+        </span>
+      `,
+    )
+    .join("");
+}
+
 function endOverlayHtml(world, state) {
   if (
     (!world.gameOver && !world.victory) ||
@@ -912,11 +1024,6 @@ function endOverlayHtml(world, state) {
   ) {
     return "";
   }
-
-  const primary =
-    world.gameOver
-      ? "START NEW GAME"
-      : "TRY AGAIN";
 
   return `
     <div style="
@@ -930,11 +1037,25 @@ function endOverlayHtml(world, state) {
         display:grid;
         justify-items:center;
         gap:12px;
-        margin-top:145px;
+        margin-top:112px;
       ">
+        <div
+          role="status"
+          aria-label="Run statistics"
+          style="
+            display:flex;
+            flex-wrap:wrap;
+            justify-content:center;
+            gap:7px 16px;
+            max-width:94%;
+            padding:0 8px;
+            text-shadow:0 2px 8px rgba(0,0,0,.9);
+          "
+        >${endStatsHtml(world)}</div>
         <button
           type="button"
           data-mist-action="restart"
+          class="mist-play-again-button"
           style="
             min-width:270px;
             padding:17px 30px;
@@ -950,7 +1071,7 @@ function endOverlayHtml(world, state) {
             pointer-events:auto;
             box-shadow:0 0 30px rgba(34,211,238,.75),0 0 58px rgba(250,204,21,.34);
           "
-        >${primary}</button>
+        >PLAY AGAIN</button>
         <button
           type="button"
           data-mist-action="menu"
@@ -967,7 +1088,7 @@ function endOverlayHtml(world, state) {
             cursor:pointer;
             pointer-events:auto;
           "
-        >Back to main menu</button>
+        >MAIN MENU</button>
       </div>
     </div>
   `;

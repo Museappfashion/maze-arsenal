@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "audit:cycles": "node scripts/audit-import-cycles.mjs",
+    "verify": "npm run audit:cycles && npm run build",
     "preview": "vite preview"
   },
   "dependencies": {

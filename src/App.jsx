@@ -11,11 +11,17 @@ import { CANVAS_HEIGHT, CANVAS_WIDTH, DEFAULT_LEVEL_KEY, PASSAGE_WIDTH, VIEW_3D_
 import { getAmmoLabel, getWeaponLabel, getWeaponPresentation } from "./config/presentations.js";
 import { DISTANCE_FIELD_INTERVAL, HUD_REFRESH_INTERVAL } from "./config/runtime.js";
 import { WEAPONS, WEAPON_HOTKEY_MAP, WEAPON_ORDER } from "./config/weapons.js";
-import { activateStoredPowerUp, attack, computeDistanceField, getActivePowerUps, getStoredPowerUps, revealAroundPlayer, selectWeapon, setMessage, toggleLabels, updateEffects, updateEnemies, updatePickups, updatePlayer, updatePowerUps, updateProjectiles, updateVisionCache } from "./game/gameplay.js";
+import { activateStoredPowerUp, attack, computeDistanceField, getActivePowerUps, getStoredPowerUps, revealAroundPlayer, selectWeapon, setMessage, updateEffects, updateEnemies, updatePickups, updatePlayer, updatePowerUps, updateProjectiles, updateVisionCache } from "./game/gameplay.js";
 import { activateLabyrinthBreaker, selectLabyrinthLight, selectLabyrinthLightByHotkey, selectNextLabyrinthLight, updateLabyrinth } from "./game/labyrinth.js";
 import { getDiscoveredPercent } from "./game/maze.js";
 import { drawWorld } from "./game/rendering.js";
 import { createWorld, setWorldViewMode } from "./game/world.js";
+import {
+  areLabelsEnabled,
+  isMinimapEnabled,
+  setLabelsEnabled,
+  setMinimapEnabled,
+} from "./features/settingsToggleEnhancement.js";
 import { GLOBAL_LEADERBOARD_ENABLED, addLeaderboardTime, createEmptyUserRanks, detectCountryCode, fetchGlobalLeaderboards, loadLeaderboards, saveLeaderboards, submitGlobalLeaderboardTime } from "./services/leaderboard.js";
 import { recordGameFinished, recordGameStarted, recordPlaySeconds, recordVisitorSeen } from "./services/developerAnalytics.js";
 import { clamp, formatTime } from "./utils/math.js";
@@ -231,8 +237,8 @@ const handleLabyrinthNextLight = useCallback(() => {
 const handleMobileMapToggle = useCallback(() => {
   const world = worldRef.current;
 
-  if (!world.minimapOn) {
-    world.minimapOn = true;
+  if (!isMinimapEnabled()) {
+    setMinimapEnabled(true);
     setMessage(world, "Minimap on", 1);
     setMobileMapExpanded(true);
     forceRefresh();
@@ -683,17 +689,15 @@ const handleKeyDown = (event) => { const world = worldRef.current; const key = e
   }
 
   if (key === "m" || key === "M") {
-    if (world.viewMode === "3d") {
-      world.minimapOn = true;
-      setMessage(world, "Minimap stays on in 3D", 1);
-    } else {
-      world.minimapOn = !world.minimapOn;
-      setMessage(world, world.minimapOn ? "Minimap on" : "Minimap off", 1);
-    }
+    const enabled = !isMinimapEnabled();
+    setMinimapEnabled(enabled);
+    setMessage(world, enabled ? "Minimap on" : "Minimap off", 1);
   }
 
   if (!world.labyrinthMode && (key === "l" || key === "L")) {
-    toggleLabels(world);
+    const enabled = !areLabelsEnabled();
+    setLabelsEnabled(enabled);
+    setMessage(world, enabled ? "Labels on" : "Labels off", 1);
   }
 
   if (key === "Escape") {

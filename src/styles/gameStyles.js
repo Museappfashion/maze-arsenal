@@ -1277,7 +1277,7 @@ export const GAME_STYLES = `
       background: #000;
     }
 
-    .touch-mobile .maze-frame > canvas {
+    .touch-mobile .maze-frame > canvas:not(#mist-visual-polish-canvas) {
       width: 100%;
       height: 100%;
       object-fit: contain;

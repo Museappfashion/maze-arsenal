@@ -11,6 +11,11 @@ import {
   LABYRINTH_MIN_MINUTES,
 } from "../config/labyrinth.js";
 import { LEADERBOARD_LIMIT, countryCodeToFlag, normalizeLevelLeaderboards } from "../services/leaderboard.js";
+import {
+  COMBAT_LEVEL_ORDER,
+  getHighestUnlockedLevel,
+  unlockAllLevels,
+} from "../services/progression.js";
 import { formatLeaderboardTime } from "../utils/math.js";
 import { PLAYER_NAME_LIMIT, getPlayerDisplayName, sanitizePlayerName } from "../utils/player.js";
 
@@ -397,6 +402,11 @@ export function LevelSelectScreen({
   const [pendingLevelKey, setPendingLevelKey] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
+  const [allLevelsUnlocked, setAllLevelsUnlocked] = useState(
+    () =>
+      getHighestUnlockedLevel() >=
+      COMBAT_LEVEL_ORDER.length - 1,
+  );
   const [labyrinthDifficulty, setLabyrinthDifficulty] = useState(
     LABYRINTH_DEFAULT_DIFFICULTY,
   );
@@ -444,6 +454,11 @@ export function LevelSelectScreen({
         : {},
     );
     setPendingLevelKey(null);
+  };
+
+  const handleUnlockAllLevels = () => {
+    unlockAllLevels();
+    setAllLevelsUnlocked(true);
   };
 
   return (
@@ -509,6 +524,45 @@ export function LevelSelectScreen({
             <SupportButtons />
           </section>
         )}
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            marginBottom: 14,
+          }}
+        >
+          <button
+            type="button"
+            onClick={handleUnlockAllLevels}
+            disabled={allLevelsUnlocked}
+            aria-live="polite"
+            style={{
+              minHeight: 42,
+              padding: "9px 15px",
+              border: allLevelsUnlocked
+                ? "1px solid rgba(74,222,128,.45)"
+                : "1px solid rgba(250,204,21,.68)",
+              borderRadius: 12,
+              background: allLevelsUnlocked
+                ? "rgba(20,83,45,.52)"
+                : "linear-gradient(135deg,rgba(161,98,7,.78),rgba(202,138,4,.56))",
+              color: allLevelsUnlocked ? "#bbf7d0" : "#fef9c3",
+              font: "inherit",
+              fontSize: 12,
+              fontWeight: 900,
+              letterSpacing: ".055em",
+              cursor: allLevelsUnlocked ? "default" : "pointer",
+              boxShadow: allLevelsUnlocked
+                ? "none"
+                : "0 8px 24px rgba(202,138,4,.18)",
+            }}
+          >
+            {allLevelsUnlocked
+              ? "✓ ALL MAZES UNLOCKED"
+              : "UNLOCK ALL MAZES"}
+          </button>
+        </div>
 
         <section className="level-choice-grid" aria-label="Level selection">
           {levels.map((level) => (

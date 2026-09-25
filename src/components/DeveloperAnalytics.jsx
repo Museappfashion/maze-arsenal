@@ -145,7 +145,7 @@ export function DeveloperAnalytics() {
 
         .developer-summary {
           display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
+          grid-template-columns: repeat(5, minmax(0, 1fr));
           gap: 10px;
           margin-bottom: 18px;
         }
@@ -219,6 +219,66 @@ export function DeveloperAnalytics() {
           color: #64748b;
           font-size: 11px;
           line-height: 1.5;
+        }
+
+        .developer-inbox {
+          margin-top: 28px;
+          padding: clamp(14px, 2.5vw, 24px);
+          border: 1px solid rgba(96, 165, 250, 0.22);
+          border-radius: 16px;
+          background: rgba(8, 15, 30, 0.9);
+        }
+
+        .developer-inbox h2 {
+          margin: 0;
+          color: #dbeafe;
+          font-size: clamp(20px, 3vw, 28px);
+        }
+
+        .developer-inbox-subtitle {
+          margin: 6px 0 16px;
+          color: #94a3b8;
+          font-size: 12px;
+        }
+
+        .developer-letter-list {
+          display: grid;
+          gap: 10px;
+        }
+
+        .developer-letter-card {
+          padding: 14px;
+          border: 1px solid rgba(96, 165, 250, 0.18);
+          border-radius: 13px;
+          background: rgba(15, 23, 42, 0.8);
+        }
+
+        .developer-letter-meta {
+          display: flex;
+          flex-wrap: wrap;
+          justify-content: space-between;
+          gap: 6px 14px;
+          color: #60a5fa;
+          font-size: 10px;
+          font-weight: 850;
+        }
+
+        .developer-letter-card p {
+          margin: 10px 0 0;
+          color: #e2e8f0;
+          font-size: 13px;
+          line-height: 1.6;
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
+        }
+
+        .developer-inbox-empty {
+          padding: 16px;
+          border: 1px dashed rgba(148, 163, 184, 0.2);
+          border-radius: 12px;
+          color: #64748b;
+          text-align: center;
+          font-size: 12px;
         }
 
 
@@ -432,6 +492,10 @@ export function DeveloperAnalytics() {
                 <strong>Donation clicks</strong>
                 <span>{data.totals.donationAttempts}</span>
               </div>
+              <div className="developer-card">
+                <strong>Letters</strong>
+                <span>{data.totals.letters ?? 0}</span>
+              </div>
             </section>
 
             <div className="developer-table-wrap">
@@ -482,6 +546,47 @@ export function DeveloperAnalytics() {
               Donation figures are support-button click attempts, not confirmed
               payments. User identifiers are anonymous Supabase account IDs.
             </p>
+
+            <section className="developer-inbox">
+              <h2>Developer Inbox</h2>
+              <p className="developer-inbox-subtitle">
+                Letters sent from the paper-and-pencil button on the main menu.
+              </p>
+
+              {data.diagnostics?.letters === "migration_required" ? (
+                <div className="developer-inbox-empty">
+                  Inbox storage is not installed yet. Run
+                  {" "}<code>supabase/developer-letters.sql</code>{" "}
+                  in the Supabase SQL Editor.
+                </div>
+              ) : data.letters?.length ? (
+                <div className="developer-letter-list">
+                  {data.letters.map((letter) => (
+                    <article className="developer-letter-card" key={letter.id}>
+                      <div className="developer-letter-meta">
+                        <span>
+                          {letter.playerName || "Anonymous player"}
+                          {" · "}
+                          <span title={letter.userId}>
+                            {shortUserId(letter.userId)}
+                          </span>
+                        </span>
+                        <time dateTime={letter.createdAt}>
+                          {letter.createdAt
+                            ? new Date(letter.createdAt).toLocaleString()
+                            : "Unknown time"}
+                        </time>
+                      </div>
+                      <p>{letter.message}</p>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="developer-inbox-empty">
+                  No letters yet.
+                </div>
+              )}
+            </section>
 
             <DeveloperMazeInspector />
           </>

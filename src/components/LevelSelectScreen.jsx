@@ -16,6 +16,10 @@ import {
   getHighestUnlockedLevel,
   unlockAllLevels,
 } from "../services/progression.js";
+import {
+  DEVELOPER_LETTER_LIMIT,
+  sendDeveloperLetter,
+} from "../services/developerLetters.js";
 import { formatLeaderboardTime } from "../utils/math.js";
 import { PLAYER_NAME_LIMIT, getPlayerDisplayName, sanitizePlayerName } from "../utils/player.js";
 
@@ -381,6 +385,30 @@ export function LeaderboardPanel({
   );
 }
 
+function DeveloperLetterIcon() {
+  return (
+    <svg
+      viewBox="0 0 32 32"
+      width="28"
+      height="28"
+      aria-hidden="true"
+    >
+      <path
+        d="M6 4.5h17a2.5 2.5 0 0 1 2.5 2.5v20H8.5A2.5 2.5 0 0 1 6 24.5z"
+        fill="#60a5fa"
+        stroke="#bfdbfe"
+        strokeWidth="1.5"
+      />
+      <path d="M10 10h11M10 14h9M10 18h7" stroke="#1e3a8a" strokeWidth="2" strokeLinecap="round" />
+      <g transform="rotate(-38 22 9)">
+        <path d="M20.5 2.5h3v14h-3z" fill="#fbbf24" stroke="#fef3c7" strokeWidth="1" />
+        <path d="m20.5 16.5 1.5 3 1.5-3z" fill="#dbeafe" stroke="#93c5fd" strokeWidth=".8" />
+        <path d="M20.5 2.5h3v2.7h-3z" fill="#fb7185" />
+      </g>
+    </svg>
+  );
+}
+
 export function LevelSelectScreen({
   onSelectLevel,
   leaderboards,
@@ -401,6 +429,10 @@ export function LevelSelectScreen({
   const levels = Object.values(LEVELS);
   const [pendingLevelKey, setPendingLevelKey] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [letterOpen, setLetterOpen] = useState(false);
+  const [letterMessage, setLetterMessage] = useState("");
+  const [letterStatus, setLetterStatus] = useState("");
+  const [letterSending, setLetterSending] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
   const [allLevelsUnlocked, setAllLevelsUnlocked] = useState(
     () =>
@@ -461,6 +493,30 @@ export function LevelSelectScreen({
     setAllLevelsUnlocked(true);
   };
 
+  const submitDeveloperLetter = async (event) => {
+    event.preventDefault();
+
+    if (letterSending) {
+      return;
+    }
+
+    setLetterSending(true);
+    setLetterStatus("Sending…");
+
+    try {
+      await sendDeveloperLetter({
+        message: letterMessage,
+        playerName: initialPlayerName,
+      });
+      setLetterMessage("");
+      setLetterStatus("✓ Your letter was delivered to the developer.");
+    } catch (error) {
+      setLetterStatus(error.message || "Your letter could not be sent.");
+    } finally {
+      setLetterSending(false);
+    }
+  };
+
   return (
     <div className="level-select-screen">
       <style>{LEVEL_SELECT_STYLES}</style>
@@ -481,10 +537,25 @@ export function LevelSelectScreen({
               aria-expanded={settingsOpen}
               onClick={() => {
                 setSettingsOpen((open) => !open);
+                setLetterOpen(false);
                 setSupportOpen(false);
               }}
             >
               ⚙
+            </button>
+            <button
+              type="button"
+              className="first-page-letter-button"
+              aria-label="Write to the developer"
+              title="Write to the developer"
+              aria-expanded={letterOpen}
+              onClick={() => {
+                setLetterOpen((open) => !open);
+                setSettingsOpen(false);
+                setSupportOpen(false);
+              }}
+            >
+              <DeveloperLetterIcon />
             </button>
             <button
               type="button"
@@ -493,6 +564,7 @@ export function LevelSelectScreen({
               onClick={() => {
                 setSupportOpen((open) => !open);
                 setSettingsOpen(false);
+                setLetterOpen(false);
               }}
             >
               ♥ SUPPORT MIST MAZE
@@ -516,6 +588,44 @@ export function LevelSelectScreen({
               onSfxVolumeChange={onSfxVolumeChange}
               audioStatus={audioStatus}
             />
+          </section>
+        )}
+
+        {letterOpen && (
+          <section className="first-page-expanded-panel developer-letter-expanded">
+            <form className="developer-letter-form" onSubmit={submitDeveloperLetter}>
+              <div className="developer-letter-heading">
+                <strong>LETTER TO THE DEVELOPER</strong>
+                <span>Share feedback, report a problem, or leave a note.</span>
+              </div>
+
+              <textarea
+                value={letterMessage}
+                maxLength={DEVELOPER_LETTER_LIMIT}
+                placeholder="Write your letter here…"
+                aria-label="Letter to the developer"
+                onChange={(event) => {
+                  setLetterMessage(event.target.value);
+                  if (letterStatus) setLetterStatus("");
+                }}
+              />
+
+              <div className="developer-letter-footer">
+                <span>{letterMessage.length}/{DEVELOPER_LETTER_LIMIT}</span>
+                <button
+                  type="submit"
+                  disabled={letterSending || !letterMessage.trim()}
+                >
+                  {letterSending ? "SENDING…" : "SEND LETTER"}
+                </button>
+              </div>
+
+              {letterStatus && (
+                <div className="developer-letter-status" role="status">
+                  {letterStatus}
+                </div>
+              )}
+            </form>
           </section>
         )}
 

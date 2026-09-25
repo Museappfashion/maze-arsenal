@@ -14,7 +14,8 @@ export const LEVEL_SELECT_STYLES = `
         }
 
         button,
-        input {
+        input,
+        textarea {
           font: inherit;
         }
 
@@ -77,6 +78,7 @@ export const LEVEL_SELECT_STYLES = `
         }
 
         .first-page-settings-button,
+        .first-page-letter-button,
         .first-page-support-button {
           min-height: 46px;
           padding: 10px 14px;
@@ -100,6 +102,18 @@ export const LEVEL_SELECT_STYLES = `
           line-height: 1;
         }
 
+        .first-page-letter-button {
+          width: 46px;
+          min-width: 46px;
+          padding: 0;
+          display: grid;
+          place-items: center;
+          border: 1px solid rgba(96, 165, 250, 0.68);
+          background: linear-gradient(145deg, rgba(30, 64, 175, 0.82), rgba(30, 58, 138, 0.7));
+          color: #dbeafe;
+          line-height: 1;
+        }
+
         .first-page-support-button {
           border: 1px solid rgba(244, 114, 182, 0.58);
           background: linear-gradient(
@@ -111,6 +125,7 @@ export const LEVEL_SELECT_STYLES = `
         }
 
         .first-page-settings-button:hover,
+        .first-page-letter-button:hover,
         .first-page-support-button:hover {
           transform: translateY(-2px);
           filter: brightness(1.08);
@@ -128,6 +143,90 @@ export const LEVEL_SELECT_STYLES = `
 
         .first-page-expanded-panel.support-expanded {
           border-color: rgba(244, 114, 182, 0.24);
+        }
+
+        .first-page-expanded-panel.developer-letter-expanded {
+          border-color: rgba(96, 165, 250, 0.34);
+        }
+
+        .developer-letter-form {
+          display: grid;
+          gap: 12px;
+        }
+
+        .developer-letter-heading {
+          display: grid;
+          gap: 4px;
+        }
+
+        .developer-letter-heading strong {
+          color: #93c5fd;
+          font-size: 12px;
+          font-weight: 950;
+          letter-spacing: 0.1em;
+        }
+
+        .developer-letter-heading span {
+          color: #94a3b8;
+          font-size: 11px;
+        }
+
+        .developer-letter-form textarea {
+          width: 100%;
+          min-height: 170px;
+          resize: vertical;
+          padding: 13px;
+          border: 1px solid rgba(96, 165, 250, 0.32);
+          border-radius: 12px;
+          outline: none;
+          background: rgba(15, 23, 42, 0.9);
+          color: #e2e8f0;
+          line-height: 1.55;
+        }
+
+        .developer-letter-form textarea:focus {
+          border-color: rgba(96, 165, 250, 0.78);
+          box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
+        }
+
+        .developer-letter-footer {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+        }
+
+        .developer-letter-footer > span {
+          color: #64748b;
+          font-size: 10px;
+          font-weight: 800;
+        }
+
+        .developer-letter-footer button {
+          min-height: 40px;
+          padding: 9px 16px;
+          border: 1px solid rgba(147, 197, 253, 0.68);
+          border-radius: 11px;
+          background: linear-gradient(135deg, #2563eb, #38bdf8);
+          color: #eff6ff;
+          font-weight: 950;
+          letter-spacing: 0.06em;
+          cursor: pointer;
+        }
+
+        .developer-letter-footer button:disabled {
+          cursor: default;
+          filter: grayscale(0.55);
+          opacity: 0.48;
+        }
+
+        .developer-letter-status {
+          padding: 8px 10px;
+          border-radius: 9px;
+          background: rgba(30, 64, 175, 0.2);
+          color: #bfdbfe;
+          font-size: 11px;
+          font-weight: 800;
         }
 
         .settings-controls {
@@ -848,11 +947,12 @@ export const LEVEL_SELECT_STYLES = `
 
           .first-page-header-actions {
             display: grid;
-            grid-template-columns: 46px minmax(0, 1fr);
+            grid-template-columns: 46px 46px minmax(0, 1fr);
             justify-content: stretch;
           }
 
-          .first-page-settings-button {
+          .first-page-settings-button,
+          .first-page-letter-button {
             width: 46px;
           }
 

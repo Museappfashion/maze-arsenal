@@ -82,6 +82,32 @@ async function listUsageRows(supabase) {
   }
 }
 
+async function listDeveloperLetters(supabase) {
+  const { data, error } = await supabase
+    .from("developer_letters")
+    .select("id,user_id,player_name,message,created_at")
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  if (error) {
+    return {
+      letters: [],
+      error: error.message,
+    };
+  }
+
+  return {
+    letters: (data ?? []).map((row) => ({
+      id: row.id,
+      userId: row.user_id,
+      playerName: row.player_name ?? "",
+      message: row.message,
+      createdAt: row.created_at,
+    })),
+    error: null,
+  };
+}
+
 function normalizeUsageRow(row) {
   return {
     userId: row.user_id,
@@ -105,8 +131,8 @@ function normalizeUsageRow(row) {
   };
 }
 
-function buildTotals(users) {
-  return users.reduce(
+function buildTotals(users, letterCount = 0) {
+  const totals = users.reduce(
     (totals, user) => {
       totals.gamesStarted += user.gamesStarted;
       totals.gamesFinished += user.gamesFinished;
@@ -127,6 +153,9 @@ function buildTotals(users) {
       donationAttempts: 0,
     },
   );
+
+  totals.letters = letterCount;
+  return totals;
 }
 
 export default async function handler(request, response) {
@@ -210,12 +239,20 @@ export default async function handler(request, response) {
       return rightTime - leftTime;
     });
 
+  const letterResult = await listDeveloperLetters(supabaseAdmin);
+
   return sendJson(response, 200, {
-    totals: buildTotals(users),
+    totals: buildTotals(users, letterResult.letters.length),
     users,
+    letters: letterResult.letters,
     diagnostics: {
       database: "ok",
       trackedRows: users.length,
+      letters:
+        letterResult.error == null
+          ? "ok"
+          : "migration_required",
+      letterError: letterResult.error,
     },
   });
 }

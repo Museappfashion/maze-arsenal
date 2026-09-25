@@ -29,7 +29,13 @@ function closeNativeExpandedPanels() {
       '.first-page-support-button[aria-expanded="true"]',
     );
 
+  const letterButton =
+    document.querySelector(
+      '.first-page-letter-button[aria-expanded="true"]',
+    );
+
   settingsButton?.click();
+  letterButton?.click();
   supportButton?.click();
 }
 
@@ -102,7 +108,7 @@ export function LevelSelectScreen(props) {
 
           if (
             target.closest(
-              ".first-page-settings-button, .first-page-support-button",
+              ".first-page-settings-button, .first-page-letter-button, .first-page-support-button",
             )
           ) {
             setShopOpen(false);

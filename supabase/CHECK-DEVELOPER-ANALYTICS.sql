@@ -24,3 +24,8 @@ select
     + coalesce(sum(donation_custom_attempts), 0)
       as donation_clicks
 from public.developer_usage_stats;
+
+select
+  to_regclass(
+    'public.developer_letters'
+  ) is not null as developer_letters_table_exists;

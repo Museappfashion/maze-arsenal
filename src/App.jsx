@@ -5,6 +5,7 @@ import { MazeAudioEngine, queueSfx } from "./audio/MazeAudioEngine.js";
 import { LabyrinthStatusPanel, MinimapPanel, MobileHudOverlay, SettingsControls, SidebarSettings, TouchControls, mergeInputKeys, selectNextOwnedWeapon } from "./components/GameUi.jsx";
 import { LevelSelectScreen } from "./components/LevelSelectScreen.jsx";
 import { StatCard } from "./components/StatCard.jsx";
+import { MizCounter } from "./components/MizCounter.jsx";
 import { MAX_AMMO } from "./config/ammo.js";
 import { getLabyrinthLight } from "./config/labyrinthLights.js";
 import { CANVAS_HEIGHT, CANVAS_WIDTH, DEFAULT_LEVEL_KEY, PASSAGE_WIDTH, VIEW_3D_MOUSE_SENSITIVITY, VIEW_3D_TOUCH_SENSITIVITY } from "./config/constants.js";
@@ -24,6 +25,7 @@ import {
 } from "./features/settingsToggleEnhancement.js";
 import { GLOBAL_LEADERBOARD_ENABLED, addLeaderboardTime, createEmptyUserRanks, detectCountryCode, fetchGlobalLeaderboards, loadLeaderboards, saveLeaderboards, submitGlobalLeaderboardTime } from "./services/leaderboard.js";
 import { recordGameFinished, recordGameStarted, recordPlaySeconds, recordVisitorSeen } from "./services/developerAnalytics.js";
+import { recordWorldExploration } from "./services/mizEconomy.js";
 import { clamp, formatTime } from "./utils/math.js";
 import { sanitizePlayerName } from "./utils/player.js";
 
@@ -53,7 +55,12 @@ function getRemainingExitDistancePercent(world) {
 
 export default function App() {
 const canvasRef = useRef(null);
-const worldRef = useRef(createWorld(DEFAULT_LEVEL_KEY));
+const worldRef = useRef(null);
+if (!worldRef.current) {
+  // Creating a world also publishes it to the visual overlays. Do this once,
+  // not on every HUD render, or the overlays start drawing a different maze.
+  worldRef.current = createWorld(DEFAULT_LEVEL_KEY);
+}
 const keysRef = useRef({});
 const touchKeysRef = useRef({});
 const touchAimActiveRef = useRef(false);
@@ -593,6 +600,7 @@ const startLevel = useCallback((
     runOptions,
   );
   worldRef.current = nextWorld;
+  recordWorldExploration(nextWorld);
   startLevelAudio(nextWorld);
   keysRef.current = {};
   clearTouchInput();
@@ -629,6 +637,7 @@ const resetWorld = useCallback(() => {
     runOptions,
   );
   worldRef.current = nextWorld;
+  recordWorldExploration(nextWorld);
   startLevelAudio(nextWorld);
   keysRef.current = {};
   clearTouchInput();
@@ -956,6 +965,7 @@ const loop = (timestamp) => {
       }
 
       revealAroundPlayer(world);
+      recordWorldExploration(world);
 
       const exitDistance = Math.hypot(
         world.player.x - (world.exit.x + 0.5),
@@ -1088,6 +1098,7 @@ return (
             imageRendering: "auto",
           }}
         />
+        <MizCounter />
 {touchControlsEnabled && (
           <TouchControls
             gameMode={gameMode}
@@ -1630,7 +1641,7 @@ return (
           }}
         >
           {storedPowerUps.map((powerUp, index) => {
-            const hotkey = index === 0 ? "Z" : "X";
+            const hotkey = ["Z", "X", "C"][index] ?? String(index + 1);
             const color = powerUp?.color ?? "#64748b";
 
             return (

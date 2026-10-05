@@ -295,6 +295,8 @@ let memoryState = {
   consumables: {},
 };
 
+const exploredTileHighWater = new WeakMap();
+
 function normalizeInteger(value) {
   const number =
     Number(value);
@@ -833,6 +835,36 @@ export function addExploredTiles(
     tilesAdded:
       tiles,
   };
+}
+
+/**
+ * Call once when a world is created, then after exploration updates.
+ * The spawn reveal is the baseline; only new floor discoveries earn miz.
+ * Keeping a high-water mark makes redraws, revisits and view switches safe.
+ */
+export function recordWorldExploration(world) {
+  if (
+    !world ||
+    typeof world !== "object" ||
+    !Number.isFinite(world.player?.discoveredFloor)
+  ) {
+    return null;
+  }
+
+  const discovered = normalizeInteger(world.player.discoveredFloor);
+  const previous = exploredTileHighWater.get(world);
+
+  if (previous === undefined) {
+    exploredTileHighWater.set(world, discovered);
+    return null;
+  }
+
+  if (discovered <= previous) {
+    return null;
+  }
+
+  exploredTileHighWater.set(world, discovered);
+  return addExploredTiles(discovered - previous);
 }
 
 export function getTilesUntilNextMiz(

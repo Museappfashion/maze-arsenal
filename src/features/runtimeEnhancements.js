@@ -14,13 +14,14 @@ import {
   isLevelUnlocked,
   recordLevelCompletion,
 } from "../services/progression.js";
+import {
+  getExitPointerDirection,
+  POINTER_DIRECTION_COUNT,
+} from "./exitPointer.js";
 
 const ROOT_ID = "mist-maze-runtime-hud";
 const STYLE_ID = "mist-maze-runtime-styles";
 const UPDATE_MS = 50;
-const POINTER_DIRECTION_COUNT = 16;
-const POINTER_DIRECTION_STEP =
-  Math.PI * 2 / POINTER_DIRECTION_COUNT;
 
 function getWorld() {
   return globalThis.__mistMazeWorld ?? null;
@@ -726,7 +727,7 @@ function timerHtml(world, second) {
   `;
 }
 
-function exitPointerHtml(world) {
+function exitPointerHtml(world, state) {
   if (
     world.gameOver ||
     world.victory ||
@@ -736,18 +737,17 @@ function exitPointerHtml(world) {
     world.exitPointerOn === false ||
     world.pointerGuideEnabled === false
   ) {
+    state.pointerIndex = null;
     return "";
   }
 
-  const bearing = Math.atan2(
-    world.exit.y + 0.5 - world.player.y,
-    world.exit.x + 0.5 - world.player.x,
-  );
-  const selectedIndex = (
-    (Math.round(bearing / POINTER_DIRECTION_STEP) %
-      POINTER_DIRECTION_COUNT) +
-    POINTER_DIRECTION_COUNT
-  ) % POINTER_DIRECTION_COUNT;
+  if (state.pointerViewMode !== world.viewMode) {
+    state.pointerIndex = null;
+    state.pointerViewMode = world.viewMode;
+  }
+  const selectedIndex = getExitPointerDirection(world, state.pointerIndex);
+  state.pointerIndex = selectedIndex;
+  if (selectedIndex === null) return "";
   const directionDegrees = selectedIndex * 22.5;
   const spokes = Array.from(
     { length: POINTER_DIRECTION_COUNT },
@@ -774,6 +774,8 @@ function exitPointerHtml(world) {
     <div
       role="img"
       aria-label="Exit direction ${selectedIndex + 1} of 16"
+      data-mist-exit-direction="${selectedIndex}"
+      title="${world.viewMode === "3d" ? "Exit relative to your view; up means ahead" : "Exit direction on the maze"}"
       style="
         position:absolute;
         top:8px;
@@ -1264,6 +1266,8 @@ function updateOverlay(root, state) {
     state.world = world;
     state.hiddenTerminalWorld = null;
     state.lastMarkup = "";
+    state.pointerIndex = null;
+    state.pointerViewMode = world.viewMode;
     state.timerWorld = world;
     state.lastTimerSecond =
       world.labyrinthMode
@@ -1298,15 +1302,26 @@ function updateOverlay(root, state) {
     state,
   );
 
-  const markup = [
-    timerHtml(world, second),
-    exitPointerHtml(world),
-    powerHudHtml(world),
-  ].join("");
-
-  if (markup !== state.lastMarkup) {
-    root.innerHTML = markup;
-    state.lastMarkup = markup;
+  // Keep independent HUD sections mounted. A timer or power-up update must
+  // not tear down the glowing pointer SVG and restart its rendering.
+  for (const [name, markup] of [
+    ["timer", timerHtml(world, second)],
+    ["pointer", exitPointerHtml(world, state)],
+    ["powers", powerHudHtml(world)],
+  ]) {
+    let section = state.sections[name];
+    if (!section || section.parentNode !== root) {
+      section = document.createElement("div");
+      section.dataset.mistHudSection = name;
+      section.style.position = "absolute";
+      section.style.inset = "0";
+      root.append(section);
+      state.sections[name] = section;
+    }
+    if (section.__mistMarkup !== markup) {
+      section.innerHTML = markup;
+      section.__mistMarkup = markup;
+    }
   }
 }
 
@@ -1329,6 +1344,9 @@ export function installRuntimeEnhancements() {
     timerWorld: null,
     lastTimerSecond: null,
     progressWorlds: new WeakSet(),
+    sections: {},
+    pointerIndex: null,
+    pointerViewMode: null,
   };
 
   document.addEventListener(

@@ -1,5 +1,6 @@
 // src/config/presentations-enhanced.js
 import * as core from "./presentations.js?core";
+import { LEVEL_THEMES } from "./constants-enhanced.js";
 import {
   ROBBIENATOR_LABEL,
   hasDavidChLoadout,
@@ -13,6 +14,10 @@ import {
 } from "./weapons-enhanced.js";
 
 export * from "./presentations.js?core";
+
+export function getTheme(world) {
+  return LEVEL_THEMES[world.level?.themeKey] ?? LEVEL_THEMES.space;
+}
 
 export function getWeaponPresentation(world, weaponKey) {
   if (

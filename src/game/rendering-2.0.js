@@ -6,6 +6,7 @@ import {
   FLOOR,
   VIEW_3D_FOV,
 } from "../config/constants-enhanced.js";
+import { isMedievalArcheryWeapon } from "../config/archery.js";
 import {
   ENEMY_PURSUIT_MAX_SPEED_MULTIPLIER,
   ENEMY_PURSUIT_RAMP_SECONDS,
@@ -5515,6 +5516,7 @@ function drawWeaponAnimationOverlay(ctx, world) {
 
   if (
     !definition ||
+    isMedievalArcheryWeapon(world, weaponKey) ||
     weaponKey === BLACK_SWORD_KEY ||
     weaponKey === PORTAL_GUN_KEY
   ) {

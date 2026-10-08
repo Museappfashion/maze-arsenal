@@ -1,4 +1,5 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useState } from "react";
+import { MizCoin, MIZ_COSMETIC_STYLES, mizCosmeticClasses } from "./MizCoin.jsx";
 import {
   MIZ_STATE_CHANGED_EVENT,
   MIZ_TILES_PER_COIN,
@@ -49,7 +50,6 @@ const STYLES = `
 
 export function MizCounter() {
   const [state, setState] = useState(loadMizState);
-  const gradientId = useId();
 
   useEffect(() => {
     const handleChange = (event) => {
@@ -67,22 +67,9 @@ export function MizCounter() {
 
   return (
     <>
-      <style>{STYLES}</style>
-      <aside className="miz-counter" aria-label="Miz wallet">
-        <svg viewBox="0 0 36 36" aria-hidden="true">
-          <defs>
-            <radialGradient id={gradientId} cx="34%" cy="27%">
-              <stop offset="0%" stopColor="#f8fafc" />
-              <stop offset="32%" stopColor="#d1d5db" />
-              <stop offset="70%" stopColor="#9ca3af" />
-              <stop offset="100%" stopColor="#4b5563" />
-            </radialGradient>
-          </defs>
-          <circle cx="18" cy="18" r="16" fill={`url(#${gradientId})`} stroke="#e9d5ff" strokeWidth="1.5" />
-          <circle cx="18" cy="18" r="11.5" fill="none" stroke="#6b647c" strokeWidth="1" />
-          <circle cx="18" cy="18" r="8.3" fill="#59546a" stroke="#c4b5fd" strokeWidth=".8" />
-          <text x="18" y="22.2" textAnchor="middle" fontFamily="Inter,system-ui,sans-serif" fontSize="12" fontWeight="900" fill="#fff">M</text>
-        </svg>
+      <style>{STYLES}{MIZ_COSMETIC_STYLES}</style>
+      <aside className={`miz-counter ${mizCosmeticClasses(state.cosmetics)}`} aria-label="Miz wallet">
+        <MizCoin cosmetics={state.cosmetics} />
         <div className="miz-counter-copy">
           <span className="miz-counter-balance" role="status" aria-live="polite" aria-atomic="true">
             {state.miz} <span className="miz-counter-unit">MIZ</span>

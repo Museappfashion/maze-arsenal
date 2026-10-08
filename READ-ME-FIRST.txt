@@ -1,18 +1,74 @@
-MIST MAZE — ABANDONED CITY STREET + SKYSCRAPER FIX
+MIST MAZE — COINS, DEVELOPER REPLIES, CITY 3D, ARROWS, WHITE CHAINS
+7 October 2026
 
-Replace:
+INSTALL
+1. In Supabase SQL Editor, run the COMPLETE included file:
+   supabase/developer-letters.sql
+   It adds developer replies, preserves existing letters, and can be rerun.
+   Uploading a SQL file to GitHub does not execute it in Supabase.
+
+2. Extract this ZIP. Copy the included files into the SAME paths in your
+   existing project/GitHub repository. Merge the src, api and supabase folders:
+   replace matching files and add new files. Do NOT replace whole folders,
+   do NOT delete your other files, and do NOT put src inside another src.
+   Commit/upload all included code files together so imports are present.
+
+3. Allow Vercel to deploy that commit, then reload the game.
+   No new environment variables or dependencies are required. Keep your
+   existing Supabase client/server variables and DEVELOPER_DASHBOARD_KEY.
+
+WHAT CHANGES
+- All ten purchased Myst cosmetics now combine on the in-game coin/counter.
+  Existing purchases activate automatically. The shop wallet also previews
+  them. Reduced-motion preferences disable the cosmetic animations.
+- The developer dashboard has SEND REPLY under each received letter.
+  Players open the main-menu paper/pencil button and look under YOUR INBOX.
+  REFRESH loads new replies. Inbox access uses the player's saved browser
+  identity; a different device/browser or cleared site data has another inbox.
+- Abandoned City's 3D roads and buildings follow the actual maze and camera.
+  The old fixed overlay no longer covers objects, and the city uses its own
+  gray/yellow colors instead of falling back to the space theme.
+- Fallen Keep arrows remain in walls for one second, then disappear.
+  Bows animate their string/arrow instead of displaying a gun recoil overlay.
+  Other mazes' guns and special weapons keep their existing behavior.
+- Locked maze cards use crossing, interlocking white chain links.
+
+FILES INCLUDED
+api/developer-analytics.js
+api/developer-letter.js
+src/App.jsx
+src/components/DeveloperAnalytics.jsx
+src/components/DeveloperLetterPanel.jsx          NEW
+src/components/LevelSelectScreen.jsx
+src/components/MizCoin.jsx                       NEW
+src/components/MizCounter.jsx
+src/components/MystStore.jsx
+src/config/archery.js                            NEW
+src/config/presentations-enhanced.js
+src/features/exitPointer.js
+src/features/runtimeEnhancements.js
+src/game/gameplay.js
+src/game/gameplay-2.0.js
+src/game/rendering.js
+src/game/rendering-2.0.js
 src/game/rendering-enhanced.js
+src/services/developerLetters.js
+src/services/mizEconomy.js
+supabase/developer-letters.sql
+supabase/DEVELOPER-REPLIES-SETUP.md
 
-This fixes:
-- city ground now looks more like a normal street road
-- city walls now look like packed skyscraper blocks
-- city enemies are redrawn so they are visible again
-- city pickups are redrawn so they remain visible over the custom road layer
+If a matching file is missing in your repository, add it at the listed path.
+The App, economy, counter and pointer support files are included so the new
+graphics have their existing runtime connections. No package.json, lockfile,
+node_modules, dist, credentials or complete repository replacement is included.
 
-Install:
-1. Open your repo in Finder
-2. Go to src/game
-3. Replace rendering-enhanced.js
-4. Commit in GitHub Desktop
-5. Push
-6. Let Vercel rebuild
+CHECKED LOCALLY
+- Production build and Vite import-cycle audit.
+- 14 automated tests covering arrows, reply authorization and recipient
+  isolation, coin awards, pointer directions and stable world/HUD rerenders.
+- Browser purchase/reload checks for all ten cosmetics and chain lock behavior.
+- Abandoned City 3D camera geometry and repeated-frame rendering.
+- Supabase reply migration tested in isolated PostgreSQL, including reruns,
+  access restrictions and preservation of letters. Not run on your live project.
+
+These files are ready to upload; this package has not been deployed for you.

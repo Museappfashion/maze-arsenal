@@ -1,10 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
+import { timingSafeEqual } from "node:crypto";
 
 const MAX_MESSAGE_LENGTH = 2000;
 const SEND_COOLDOWN_MS = 15_000;
 
 function getServerConfig() {
   return {
+    dashboardKey: process.env.DEVELOPER_DASHBOARD_KEY?.trim() || "",
     supabaseUrl:
       process.env.SUPABASE_URL?.trim() ||
       process.env.VITE_SUPABASE_URL?.trim() ||
@@ -47,16 +49,79 @@ function sendJson(response, status, data) {
   return response.status(status).json(data);
 }
 
+async function replyToLetter(request, response, supabaseAdmin, dashboardKey) {
+  if (!dashboardKey) {
+    return sendJson(response, 503, {
+      error: "Developer dashboard key is not configured.",
+    });
+  }
+
+  const suppliedKey = Buffer.from(getBearerToken(request));
+  const expectedKey = Buffer.from(dashboardKey);
+  if (suppliedKey.length !== expectedKey.length || !timingSafeEqual(suppliedKey, expectedKey)) {
+    return sendJson(response, 401, {
+      error: "Developer dashboard key is incorrect.",
+    });
+  }
+
+  let body;
+  try {
+    body = parseBody(request.body);
+  } catch {
+    return sendJson(response, 400, { error: "Invalid reply data." });
+  }
+
+  const letterId = String(body?.letterId ?? "");
+  const message = String(body?.message ?? "").trim();
+  if (!/^[1-9]\d{0,18}$/.test(letterId) || !message || message.length > MAX_MESSAGE_LENGTH) {
+    return sendJson(response, 400, {
+      error: `Choose a letter and write a reply of 1–${MAX_MESSAGE_LENGTH} characters.`,
+    });
+  }
+
+  const { data: letter, error: letterError } = await supabaseAdmin
+    .from("developer_letters")
+    .select("id")
+    .eq("id", letterId)
+    .maybeSingle();
+
+  if (letterError) {
+    return sendJson(response, 500, { error: "Could not find the original letter. Please try again." });
+  }
+  if (!letter) {
+    return sendJson(response, 404, { error: "This letter no longer exists." });
+  }
+
+  // The foreign key fixes the recipient to the original letter's owner.
+  // Never accept a recipient/user ID from the dashboard request.
+  const { data: reply, error } = await supabaseAdmin
+    .from("developer_letter_replies")
+    .insert({ letter_id: letter.id, message })
+    .select("id,message,created_at")
+    .single();
+
+  if (error) {
+    return sendJson(response, 500, {
+      error: "Could not save the reply. Make sure the updated supabase/developer-letters.sql has been run.",
+    });
+  }
+
+  return sendJson(response, 200, {
+    ok: true,
+    reply: { id: reply.id, message: reply.message, createdAt: reply.created_at },
+  });
+}
+
 export default async function handler(request, response) {
-  if (request.method !== "POST") {
-    response.setHeader("Allow", "POST");
+  if (!["GET", "POST", "PATCH"].includes(request.method)) {
+    response.setHeader("Allow", "GET, POST, PATCH");
     return sendJson(response, 405, {
       code: "METHOD_NOT_ALLOWED",
       error: "Method not allowed.",
     });
   }
 
-  const { supabaseUrl, supabaseSecret } = getServerConfig();
+  const { supabaseUrl, supabaseSecret, dashboardKey } = getServerConfig();
 
   if (!supabaseUrl || !supabaseSecret) {
     return sendJson(response, 503, {
@@ -70,7 +135,7 @@ export default async function handler(request, response) {
   if (!accessToken) {
     return sendJson(response, 401, {
       code: "MISSING_ACCESS_TOKEN",
-      error: "Sign-in is required to send a letter.",
+      error: "Sign-in is required to use your inbox.",
     });
   }
 
@@ -78,6 +143,10 @@ export default async function handler(request, response) {
     supabaseUrl,
     supabaseSecret,
   );
+
+  if (request.method === "PATCH") {
+    return replyToLetter(request, response, supabaseAdmin, dashboardKey);
+  }
 
   const {
     data: { user },
@@ -88,6 +157,32 @@ export default async function handler(request, response) {
     return sendJson(response, 401, {
       code: "INVALID_ACCESS_TOKEN",
       error: "Your session expired. Reload the game and try again.",
+    });
+  }
+
+  if (request.method === "GET") {
+    const { data, error } = await supabaseAdmin
+      .from("developer_letters")
+      .select("id,message,created_at,developer_letter_replies(id,message,created_at)")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(100);
+
+    if (error) {
+      return sendJson(response, 500, {
+        error: "Your inbox could not be loaded. The developer may need to run the updated supabase/developer-letters.sql.",
+      });
+    }
+
+    return sendJson(response, 200, {
+      letters: (data ?? []).map(letter => ({
+        id: letter.id,
+        message: letter.message,
+        createdAt: letter.created_at,
+        replies: (letter.developer_letter_replies ?? [])
+          .map(reply => ({ id: reply.id, message: reply.message, createdAt: reply.created_at }))
+          .sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt)),
+      })),
     });
   }
 

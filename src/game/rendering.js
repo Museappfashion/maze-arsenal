@@ -1,5 +1,6 @@
 // src/game/rendering.js
 import { MAX_AMMO } from "../config/ammo.js";
+import { getBowDrawProgress, isMedievalArcheryWeapon } from "../config/archery.js";
 import { CANVAS_HEIGHT, CANVAS_WIDTH, DRAW_TILE, FLOOR, STEEL_WALL, VIEW_3D_FOV, VIEW_3D_MAX_DISTANCE, VIEW_3D_RAY_WIDTH, WALL } from "../config/constants.js";
 import { ENEMY_TYPES } from "../config/enemies.js";
 import { getLabyrinthEquippedLightStrength, getLabyrinthLight } from "../config/labyrinthLights.js";
@@ -1057,12 +1058,12 @@ export function drawProjectile(ctx, projectile, camera) {
   ctx.save();
 
   if (projectile.isArrow) {
-    const angle = Math.atan2(projectile.vy, projectile.vx);
+    const angle = projectile.angle ?? Math.atan2(projectile.vy, projectile.vx);
     const arrowLength = 18;
 
     ctx.translate(x, y);
     ctx.rotate(angle);
-    ctx.shadowBlur = 6;
+    ctx.shadowBlur = 0;
     ctx.shadowColor = projectile.color ?? "#d6a85f";
     ctx.strokeStyle = projectile.color ?? "#d6a85f";
     ctx.lineWidth = 2;
@@ -1113,7 +1114,7 @@ export function drawProjectile(ctx, projectile, camera) {
   ctx.restore();
 }
 
-export function drawMedievalBowShape(ctx, weaponKey, size, wood, metal, glow) {
+export function drawMedievalBowShape(ctx, weaponKey, size, wood, metal, glow, drawProgress = 1) {
   const profiles = {
     pistol: { limb: 0.58, depth: 0.34, arrow: 0.82, layers: 1 },
     revolver: { limb: 0.72, depth: 0.4, arrow: 0.9, layers: 1 },
@@ -1147,45 +1148,51 @@ export function drawMedievalBowShape(ctx, weaponKey, size, wood, metal, glow) {
   ctx.lineWidth = Math.max(1, size * 0.025);
   ctx.beginPath();
   ctx.moveTo(-size * 0.02, -size * profile.limb);
-  ctx.lineTo(-size * 0.22, 0);
+  ctx.lineTo(-size * (0.02 + drawProgress * 0.2), 0);
   ctx.lineTo(-size * 0.02, size * profile.limb);
   ctx.stroke();
 
-  ctx.strokeStyle = metal;
-  ctx.lineWidth = Math.max(1.5, size * 0.04);
-  ctx.beginPath();
-  ctx.moveTo(-size * 0.34, 0);
-  ctx.lineTo(size * profile.arrow, 0);
-  ctx.stroke();
+  // Release the nocked arrow, then load and draw the next one during cooldown.
+  if (drawProgress >= 0.25) {
+    ctx.save();
+    ctx.translate(size * (1 - drawProgress) * 0.2, 0);
+    ctx.strokeStyle = metal;
+    ctx.lineWidth = Math.max(1.5, size * 0.04);
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.34, 0);
+    ctx.lineTo(size * profile.arrow, 0);
+    ctx.stroke();
 
-  ctx.fillStyle = metal;
-  ctx.beginPath();
-  ctx.moveTo(size * (profile.arrow + 0.12), 0);
-  ctx.lineTo(size * profile.arrow, -size * 0.08);
-  ctx.lineTo(size * profile.arrow, size * 0.08);
-  ctx.closePath();
-  ctx.fill();
+    ctx.fillStyle = metal;
+    ctx.beginPath();
+    ctx.moveTo(size * (profile.arrow + 0.12), 0);
+    ctx.lineTo(size * profile.arrow, -size * 0.08);
+    ctx.lineTo(size * profile.arrow, size * 0.08);
+    ctx.closePath();
+    ctx.fill();
 
-  ctx.strokeStyle = "#fef3c7";
-  ctx.lineWidth = Math.max(1, size * 0.025);
-  ctx.beginPath();
-  ctx.moveTo(-size * 0.28, 0);
-  ctx.lineTo(-size * 0.4, -size * 0.1);
-  ctx.moveTo(-size * 0.28, 0);
-  ctx.lineTo(-size * 0.4, size * 0.1);
-  ctx.stroke();
-
-  if (profile.layers > 1) {
-    ctx.strokeStyle = glow;
-    ctx.globalAlpha = 0.75;
+    ctx.strokeStyle = "#fef3c7";
     ctx.lineWidth = Math.max(1, size * 0.025);
-    for (let layer = 1; layer < profile.layers; layer += 1) {
-      const offset = (layer - (profile.layers - 1) / 2) * size * 0.1;
-      ctx.beginPath();
-      ctx.moveTo(-size * 0.2, offset);
-      ctx.lineTo(size * profile.arrow * 0.92, offset);
-      ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-size * 0.28, 0);
+    ctx.lineTo(-size * 0.4, -size * 0.1);
+    ctx.moveTo(-size * 0.28, 0);
+    ctx.lineTo(-size * 0.4, size * 0.1);
+    ctx.stroke();
+
+    if (profile.layers > 1) {
+      ctx.strokeStyle = glow;
+      ctx.globalAlpha = 0.75;
+      ctx.lineWidth = Math.max(1, size * 0.025);
+      for (let layer = 1; layer < profile.layers; layer += 1) {
+        const offset = (layer - (profile.layers - 1) / 2) * size * 0.1;
+        ctx.beginPath();
+        ctx.moveTo(-size * 0.2, offset);
+        ctx.lineTo(size * profile.arrow * 0.92, offset);
+        ctx.stroke();
+      }
     }
+    ctx.restore();
   }
 
   if (weaponKey === "dmr") {
@@ -1199,7 +1206,7 @@ export function drawMedievalBowShape(ctx, weaponKey, size, wood, metal, glow) {
   ctx.restore();
 }
 
-export function drawWeaponShape(ctx, world, weaponKey, size) {
+export function drawWeaponShape(ctx, world, weaponKey, size, archeryDrawProgress = 1) {
   const themeKey = world.level.themeKey;
   const metal =
     themeKey === "space"
@@ -1297,10 +1304,9 @@ export function drawWeaponShape(ctx, world, weaponKey, size) {
       ctx.stroke();
     }
   } else if (
-    themeKey === "medieval" &&
-    WEAPONS[weaponKey]?.type === "ranged"
+    isMedievalArcheryWeapon(world, weaponKey)
   ) {
-    drawMedievalBowShape(ctx, weaponKey, size, wood, metal, glow);
+    drawMedievalBowShape(ctx, weaponKey, size, wood, metal, glow, archeryDrawProgress);
   } else if (weaponKey === "pistol") {
     ctx.fillStyle = metal;
     ctx.fillRect(-size * 0.08, -size * 0.13, size * 0.66, size * 0.24);
@@ -1872,7 +1878,7 @@ export function drawPlayerBody(ctx, world, x, y) {
   } else {
     ctx.save();
     ctx.translate(radius * 0.5, radius * 0.5);
-    drawWeaponShape(ctx, world, player.weapon, radius * 1.2);
+    drawWeaponShape(ctx, world, player.weapon, radius * 1.2, getBowDrawProgress(world));
     ctx.restore();
   }
 
@@ -3299,7 +3305,7 @@ export function draw3DPickup(ctx, world, pickup, projection) {
   ctx.restore();
 }
 
-export function draw3DProjectile(ctx, projectile, projection) {
+export function draw3DProjectile(ctx, projectile, projection, world) {
   const size = clamp(
     projection.scale * 0.055,
     3,
@@ -3314,26 +3320,47 @@ export function draw3DProjectile(ctx, projectile, projection) {
   );
 
   if (projectile.isArrow) {
-    const centerY = CANVAS_HEIGHT * 0.46;
-    const arrowLength = clamp(size * 3.8, 12, 54);
+    const angle = projectile.angle ?? Math.atan2(projectile.vy, projectile.vx);
+    const plane = CANVAS_WIDTH / (2 * Math.tan(VIEW_3D_FOV / 2));
+    const tail = world && project3DSprite(world,
+      projectile.x - Math.cos(angle) * 0.28,
+      projectile.y - Math.sin(angle) * 0.28, plane);
+    const tip = world && project3DSprite(world,
+      projectile.x + Math.cos(angle) * 0.18,
+      projectile.y + Math.sin(angle) * 0.18, plane);
+    const tailX = tail?.screenX ?? projection.screenX - size;
+    const tailY = CANVAS_HEIGHT * 0.46 - (tail?.scale ?? projection.scale) * 0.06;
+    const tipX = tip?.screenX ?? projection.screenX + size;
+    const tipY = CANVAS_HEIGHT * 0.46 - (tip?.scale ?? projection.scale) * 0.06;
+    const screenAngle = Math.atan2(tipY - tailY, tipX - tailX);
+    const length = Math.max(2, Math.hypot(tipX - tailX, tipY - tailY));
 
-    ctx.shadowBlur = size * 0.8;
-    ctx.shadowColor = projectile.color ?? "#d6a85f";
+    ctx.translate(tailX, tailY);
+    ctx.rotate(screenAngle);
+    ctx.shadowBlur = 0;
     ctx.strokeStyle = projectile.color ?? "#d6a85f";
-    ctx.lineWidth = Math.max(1.5, size * 0.35);
+    ctx.lineWidth = Math.max(1.2, size * 0.18);
     ctx.lineCap = "round";
     ctx.beginPath();
-    ctx.moveTo(projection.screenX - arrowLength * 0.45, centerY);
-    ctx.lineTo(projection.screenX + arrowLength * 0.4, centerY);
+    ctx.moveTo(0, 0);
+    ctx.lineTo(length, 0);
     ctx.stroke();
 
     ctx.fillStyle = "#d1d5db";
     ctx.beginPath();
-    ctx.moveTo(projection.screenX + arrowLength * 0.58, centerY);
-    ctx.lineTo(projection.screenX + arrowLength * 0.34, centerY - size * 0.6);
-    ctx.lineTo(projection.screenX + arrowLength * 0.34, centerY + size * 0.6);
+    ctx.moveTo(length + size * 0.3, 0);
+    ctx.lineTo(length - size * 0.3, -size * 0.35);
+    ctx.lineTo(length - size * 0.3, size * 0.35);
     ctx.closePath();
     ctx.fill();
+
+    ctx.strokeStyle = "#fef3c7";
+    ctx.beginPath();
+    ctx.moveTo(size * 0.45, 0);
+    ctx.lineTo(0, -size * 0.45);
+    ctx.moveTo(size * 0.45, 0);
+    ctx.lineTo(0, size * 0.45);
+    ctx.stroke();
 
     ctx.restore();
     return;
@@ -3606,12 +3633,13 @@ export function draw3DSprites(
         ctx,
         sprite.entity,
         sprite.projection,
+        world,
       );
     }
   }
 }
 
-export function draw3DMedievalBow(ctx, world, recoil, theme) {
+export function draw3DMedievalBow(ctx, world, drawProgress, theme) {
   const profiles = {
     pistol: { width: 190, height: 150, thickness: 10 },
     revolver: { width: 218, height: 170, thickness: 12 },
@@ -3621,7 +3649,7 @@ export function draw3DMedievalBow(ctx, world, recoil, theme) {
     dmr: { width: 272, height: 202, thickness: 13 },
   };
   const profile = profiles[world.player.weapon] ?? profiles.rifle;
-  const stringPull = 22 + recoil * 26;
+  const stringPull = 20 + drawProgress * 42;
   const centerY = -96;
 
   ctx.save();
@@ -3651,45 +3679,50 @@ export function draw3DMedievalBow(ctx, world, recoil, theme) {
   ctx.globalAlpha = 0.9;
   ctx.beginPath();
   ctx.moveTo(-profile.width / 2, 20);
-  ctx.lineTo(0, -stringPull);
+  ctx.lineTo(0, stringPull);
   ctx.lineTo(profile.width / 2, 20);
   ctx.stroke();
 
-  ctx.globalAlpha = 1;
-  ctx.strokeStyle = "#d6a85f";
-  ctx.lineWidth = 5;
-  ctx.beginPath();
-  ctx.moveTo(0, -stringPull + 12);
-  ctx.lineTo(0, -profile.height - 62);
-  ctx.stroke();
+  if (drawProgress >= 0.25) {
+    ctx.save();
+    ctx.translate(0, -(1 - drawProgress) * 30);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = "#d6a85f";
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(0, stringPull + 12);
+    ctx.lineTo(0, -profile.height - 62);
+    ctx.stroke();
 
-  ctx.fillStyle = "#d1d5db";
-  ctx.beginPath();
-  ctx.moveTo(0, -profile.height - 82);
-  ctx.lineTo(-9, -profile.height - 58);
-  ctx.lineTo(9, -profile.height - 58);
-  ctx.closePath();
-  ctx.fill();
+    ctx.fillStyle = "#d1d5db";
+    ctx.beginPath();
+    ctx.moveTo(0, -profile.height - 82);
+    ctx.lineTo(-9, -profile.height - 58);
+    ctx.lineTo(9, -profile.height - 58);
+    ctx.closePath();
+    ctx.fill();
 
-  ctx.strokeStyle = "#fef3c7";
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(0, -stringPull + 8);
-  ctx.lineTo(-11, -stringPull + 22);
-  ctx.moveTo(0, -stringPull + 8);
-  ctx.lineTo(11, -stringPull + 22);
-  ctx.stroke();
+    ctx.strokeStyle = "#fef3c7";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, stringPull + 8);
+    ctx.lineTo(-11, stringPull + 22);
+    ctx.moveTo(0, stringPull + 8);
+    ctx.lineTo(11, stringPull + 22);
+    ctx.stroke();
 
-  if (world.player.weapon === "shotgun") {
-    ctx.strokeStyle = theme.playerGlow;
-    ctx.globalAlpha = 0.58;
-    ctx.lineWidth = 2;
-    for (const offset of [-8, 8]) {
-      ctx.beginPath();
-      ctx.moveTo(offset, -stringPull + 8);
-      ctx.lineTo(offset, -profile.height - 48);
-      ctx.stroke();
+    if (world.player.weapon === "shotgun") {
+      ctx.strokeStyle = theme.playerGlow;
+      ctx.globalAlpha = 0.58;
+      ctx.lineWidth = 2;
+      for (const offset of [-8, 8]) {
+        ctx.beginPath();
+        ctx.moveTo(offset, stringPull + 8);
+        ctx.lineTo(offset, -profile.height - 48);
+        ctx.stroke();
+      }
     }
+    ctx.restore();
   }
 
   if (world.player.weapon === "dmr") {
@@ -3803,8 +3836,9 @@ export function draw3DWeapon(ctx, world) {
     Math.sin(world.time * 7) *
     (world.gameOver || world.victory ? 0 : 3);
   const centerX = CANVAS_WIDTH / 2;
+  const archery = isMedievalArcheryWeapon(world);
   const baseY =
-    CANVAS_HEIGHT + recoil * 24 + bob;
+    CANVAS_HEIGHT + (archery ? 0 : recoil * 24) + bob;
 
   ctx.save();
   ctx.translate(centerX, baseY);
@@ -3868,8 +3902,8 @@ export function draw3DWeapon(ctx, world) {
       ctx.fillStyle = theme.playerAccent;
       ctx.fillRect(-52, -78, 104, 18);
     }
-  } else if (isMedievalTheme(world)) {
-    draw3DMedievalBow(ctx, world, recoil, theme);
+  } else if (archery) {
+    draw3DMedievalBow(ctx, world, getBowDrawProgress(world), theme);
   } else {
     const gunWidth =
       world.player.weapon === "shotgun" ||

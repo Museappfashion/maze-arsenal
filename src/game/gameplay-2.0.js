@@ -4,6 +4,7 @@ import {
   VIEW_3D_FOV,
   VIEW_3D_MAX_DISTANCE,
 } from "../config/constants-enhanced.js";
+import { isMedievalArcheryWeapon } from "../config/archery.js";
 import {
   isLegendaryPowerUpActive,
 } from "../config/legendaryPowerUps.js";
@@ -551,6 +552,9 @@ function registerWeaponKick(world, weaponKey) {
   }
 
   cinematic.lastRegisteredShotAt = world.time;
+
+  // Bowstring release is animated on the bow itself, without firearm kick.
+  if (isMedievalArcheryWeapon(world, weaponKey)) return;
 
   const profile =
     RECOIL[weaponKey] ??
@@ -2552,6 +2556,7 @@ function updateProjectilePortalTeleports(
   ) {
     if (
       projectile.portalPlacesPortal ||
+      projectile.stuckInWall ||
       world.time <
         (
           projectile
@@ -3019,4 +3024,3 @@ export function updateEnemies(world, dt) {
     );
   }
 }
-

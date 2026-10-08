@@ -85,6 +85,9 @@ function ensureStyles() {
 
     .mist-locked-level {
       position: relative !important;
+    }
+
+    .mist-locked-level > :not(.mist-lock-overlay) {
       filter: saturate(.48) brightness(.72);
     }
 
@@ -103,68 +106,14 @@ function ensureStyles() {
       left: -15%;
       top: 48%;
       width: 130%;
-      height: 16px;
+      height: 32px;
       transform-origin: center;
-      border-radius: 999px;
-      background:
-        repeating-linear-gradient(
-          90deg,
-          #1f2937 0 8px,
-          #94a3b8 8px 12px,
-          #334155 12px 20px,
-          #cbd5e1 20px 23px
-        );
-      border: 2px solid rgba(15, 23, 42, .95);
-      box-shadow:
-        0 4px 7px rgba(0,0,0,.65),
-        inset 0 2px 2px rgba(255,255,255,.22);
+      overflow: visible;
+      filter: drop-shadow(0 3px 3px rgba(0,0,0,.8));
     }
 
     .mist-chain-a { transform: rotate(32deg); }
     .mist-chain-b { transform: rotate(-32deg); }
-
-    .mist-padlock {
-      position: absolute;
-      left: 50%;
-      top: 50%;
-      width: 62px;
-      height: 52px;
-      transform: translate(-50%, -38%);
-      border-radius: 9px 9px 13px 13px;
-      border: 3px solid #111827;
-      background:
-        linear-gradient(145deg, #d1d5db, #64748b 46%, #334155 72%, #cbd5e1);
-      box-shadow:
-        0 8px 16px rgba(0,0,0,.65),
-        inset 0 2px 5px rgba(255,255,255,.42);
-    }
-
-    .mist-padlock::before {
-      content: "";
-      position: absolute;
-      left: 50%;
-      bottom: 36px;
-      width: 38px;
-      height: 38px;
-      transform: translateX(-50%);
-      border: 8px solid #94a3b8;
-      border-bottom: 0;
-      border-radius: 22px 22px 0 0;
-      box-shadow: inset 0 0 0 2px #334155;
-    }
-
-    .mist-padlock::after {
-      content: "";
-      position: absolute;
-      left: 50%;
-      top: 18px;
-      width: 7px;
-      height: 18px;
-      transform: translateX(-50%);
-      border-radius: 999px;
-      background: #111827;
-      box-shadow: 0 0 0 2px rgba(255,255,255,.1);
-    }
 
     .mist-city-preview {
       position: absolute;
@@ -310,10 +259,23 @@ function ensureLockOverlay(card) {
   const overlay = document.createElement("div");
   overlay.className = "mist-lock-overlay";
   overlay.setAttribute("aria-hidden", "true");
+  // Open oval links alternate with narrow, edge-on links. Drawing the front
+  // right arc last makes the connector visibly pass through each white link.
+  const links = Array.from({ length: 14 }, (_, index) => {
+    const x = index * 48 - 12;
+    return `
+      <g fill="none" stroke-linecap="round">
+        <rect x="${x}" y="6" width="38" height="24" rx="12" stroke="#334155" stroke-width="7" />
+        <rect x="${x}" y="6" width="38" height="24" rx="12" stroke="#f8fafc" stroke-width="4.5" />
+        <ellipse cx="${x + 43}" cy="18" rx="15" ry="4" stroke="#334155" stroke-width="6" />
+        <ellipse cx="${x + 43}" cy="18" rx="15" ry="4" stroke="#e2e8f0" stroke-width="3.5" />
+        <path d="M${x + 30} 7 A12 12 0 0 1 ${x + 38} 18" stroke="#334155" stroke-width="7" />
+        <path d="M${x + 30} 7 A12 12 0 0 1 ${x + 38} 18" stroke="#fff" stroke-width="4.5" />
+      </g>`;
+  }).join("");
   overlay.innerHTML = `
-    <div class="mist-chain mist-chain-a"></div>
-    <div class="mist-chain mist-chain-b"></div>
-    <div class="mist-padlock"></div>
+    <svg class="mist-chain mist-chain-a" viewBox="0 0 660 36" preserveAspectRatio="xMidYMid slice">${links}</svg>
+    <svg class="mist-chain mist-chain-b" viewBox="0 0 660 36" preserveAspectRatio="xMidYMid slice">${links}</svg>
   `;
   card.append(overlay);
 }

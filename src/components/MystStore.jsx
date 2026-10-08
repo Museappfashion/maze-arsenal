@@ -4,6 +4,7 @@ import {
   useEffect,
   useState,
 } from "react";
+import { MizCoin, MIZ_COSMETIC_STYLES, mizCosmeticClasses } from "./MizCoin.jsx";
 import {
   MIZ_STATE_CHANGED_EVENT,
   MIZ_TILES_PER_COIN,
@@ -14,89 +15,6 @@ import {
   purchaseMystItem,
   requestMizSound,
 } from "../services/mizEconomy.js";
-
-const COIN_SVG = (
-  <svg
-    viewBox="0 0 36 36"
-    aria-hidden="true"
-  >
-    <defs>
-      <radialGradient
-        id="mizCoinShopFace"
-        cx="34%"
-        cy="27%"
-      >
-        <stop
-          offset="0%"
-          stopColor="#f8fafc"
-        />
-        <stop
-          offset="32%"
-          stopColor="#d1d5db"
-        />
-        <stop
-          offset="70%"
-          stopColor="#9ca3af"
-        />
-        <stop
-          offset="100%"
-          stopColor="#4b5563"
-        />
-      </radialGradient>
-    </defs>
-
-    <circle
-      cx="18"
-      cy="18"
-      r="16"
-      fill="url(#mizCoinShopFace)"
-      stroke="#f3f4f6"
-      strokeWidth="1.5"
-    />
-
-    {[
-      [18, 5.8],
-      [26.6, 9.4],
-      [30.2, 18],
-      [26.6, 26.6],
-      [18, 30.2],
-      [9.4, 26.6],
-      [5.8, 18],
-      [9.4, 9.4],
-    ].map(
-      ([cx, cy], index) => (
-        <circle
-          key={index}
-          cx={cx}
-          cy={cy}
-          r="2"
-          fill="#4b5563"
-        />
-      ),
-    )}
-
-    <circle
-      cx="18"
-      cy="18"
-      r="8.3"
-      fill="rgba(31,41,55,.35)"
-      stroke="rgba(255,255,255,.3)"
-      strokeWidth="1"
-    />
-
-    <text
-      x="18"
-      y="22.2"
-      textAnchor="middle"
-      fontFamily="Inter,system-ui,sans-serif"
-      fontSize="12"
-      fontWeight="900"
-      fill="#fff"
-    >
-      M
-    </text>
-  </svg>
-);
 
 const STYLES = `
   .myst-store-panel {
@@ -516,12 +434,14 @@ function useMizState() {
         MIZ_STATE_CHANGED_EVENT,
         handleChange,
       );
+      window.addEventListener("storage", handleChange);
 
       return () => {
         window.removeEventListener(
           MIZ_STATE_CHANGED_EVENT,
           handleChange,
         );
+        window.removeEventListener("storage", handleChange);
       };
     },
     [],
@@ -542,7 +462,7 @@ function getItemStatus(
       item.key,
       state,
     )
-      ? "Owned"
+      ? "Owned · active"
       : "";
   }
 
@@ -569,7 +489,7 @@ function getBuyLabel(
       state,
     )
   ) {
-    return "Owned";
+    return "Active";
   }
 
   const count =
@@ -680,7 +600,7 @@ export function MystStore() {
 
   return (
     <div className="myst-store-shell">
-      <style>{STYLES}</style>
+      <style>{STYLES}{MIZ_COSMETIC_STYLES}</style>
 
       <div className="myst-store-head">
         <div
@@ -704,7 +624,7 @@ export function MystStore() {
           </div>
 
           <div className="myst-store-note">
-            10 cosmetics are permanent.
+            10 cosmetics are permanent and apply automatically together.
             10 one-use powers are activated
             manually from the Myst Powers button
             during a maze. Miz is earned at
@@ -715,8 +635,8 @@ export function MystStore() {
         </div>
 
         <div className="myst-store-wallet-wrap">
-          <div className="myst-store-wallet">
-            {COIN_SVG}
+          <div className={`myst-store-wallet ${mizCosmeticClasses(state.cosmetics)}`}>
+            <MizCoin cosmetics={state.cosmetics} />
             <strong>
               {state.miz}
             </strong>
@@ -757,7 +677,7 @@ export function MystStore() {
                   </div>
 
                   <div className="myst-item-price">
-                    {COIN_SVG}
+                    <MizCoin />
                     {item.price}
                   </div>
                 </div>

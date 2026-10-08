@@ -1,6 +1,7 @@
 // src/components/DeveloperAnalytics.jsx
 import { useCallback, useState } from "react";
 import { DeveloperMazeInspector } from "./DeveloperMazeInspector.jsx";
+import { DEVELOPER_LETTER_LIMIT, sendDeveloperReply } from "../services/developerLetters.js";
 
 function formatMinutes(seconds) {
   return (Number(seconds || 0) / 60).toFixed(1);
@@ -18,6 +19,28 @@ export function DeveloperAnalytics() {
   const [data, setData] = useState(null);
   const [status, setStatus] = useState("Enter the developer dashboard key.");
   const [loading, setLoading] = useState(false);
+  const [replyDrafts, setReplyDrafts] = useState({});
+  const [replyStatuses, setReplyStatuses] = useState({});
+  const [sendingReplies, setSendingReplies] = useState({});
+
+  async function submitReply(event, letterId) {
+    event.preventDefault();
+    if (sendingReplies[letterId]) return;
+    setSendingReplies(previous => ({ ...previous, [letterId]: true }));
+    setReplyStatuses(previous => ({ ...previous, [letterId]: "Sending…" }));
+    try {
+      const reply = await sendDeveloperReply({ developerKey, letterId, message: replyDrafts[letterId] });
+      setData(previous => previous && ({ ...previous, letters: previous.letters.map(letter =>
+        letter.id === letterId ? { ...letter, replies: [...(letter.replies ?? []), reply] } : letter,
+      ) }));
+      setReplyDrafts(previous => ({ ...previous, [letterId]: "" }));
+      setReplyStatuses(previous => ({ ...previous, [letterId]: "Reply delivered to the player’s inbox." }));
+    } catch (error) {
+      setReplyStatuses(previous => ({ ...previous, [letterId]: error.message || "Could not send reply." }));
+    } finally {
+      setSendingReplies(previous => ({ ...previous, [letterId]: false }));
+    }
+  }
 
   const loadAnalytics = useCallback(async () => {
     const key = developerKey.trim();
@@ -280,6 +303,29 @@ export function DeveloperAnalytics() {
           text-align: center;
           font-size: 12px;
         }
+
+        .developer-reply {
+          border-left: 3px solid #60a5fa;
+          margin-top: 12px;
+          padding: 10px 12px;
+          background: rgba(30, 58, 138, 0.22);
+          border-radius: 6px;
+        }
+
+        .developer-reply-form { display: grid; gap: 9px; margin-top: 14px; }
+        .developer-reply-form textarea {
+          width: 100%; min-height: 85px; resize: vertical; padding: 11px;
+          border: 1px solid #334155; border-radius: 9px;
+          background: #020617; color: #e2e8f0; font: inherit;
+        }
+        .developer-reply-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .developer-reply-actions span { font-size: 11px; color: #94a3b8; }
+        .developer-reply-actions button {
+          padding: 9px 14px; border-radius: 9px; border: 1px solid #60a5fa;
+          background: #1d4ed8; color: #eff6ff; font-weight: 800; cursor: pointer;
+        }
+        .developer-reply-actions button:disabled { opacity: .5; cursor: default; }
+        .developer-reply-status { color: #bfdbfe; font-size: 12px; }
 
 
         .developer-maze-inspector {
@@ -550,7 +596,7 @@ export function DeveloperAnalytics() {
             <section className="developer-inbox">
               <h2>Developer Inbox</h2>
               <p className="developer-inbox-subtitle">
-                Letters sent from the paper-and-pencil button on the main menu.
+                Reply below each letter. Players can read your replies using the paper-and-pencil button on the main menu.
               </p>
 
               {data.diagnostics?.letters === "migration_required" ? (
@@ -578,6 +624,35 @@ export function DeveloperAnalytics() {
                         </time>
                       </div>
                       <p>{letter.message}</p>
+                      {(letter.replies ?? []).map(reply => (
+                        <div className="developer-reply" key={reply.id}>
+                          <div className="developer-letter-meta">
+                            <strong>YOUR REPLY</strong>
+                            <time dateTime={reply.createdAt}>{new Date(reply.createdAt).toLocaleString()}</time>
+                          </div>
+                          <p>{reply.message}</p>
+                        </div>
+                      ))}
+                      <form className="developer-reply-form" onSubmit={event => void submitReply(event, letter.id)}>
+                        <textarea
+                          aria-label={`Reply to ${letter.playerName || "anonymous player"}, letter ${letter.id}`}
+                          placeholder="Write a reply to this player…"
+                          maxLength={DEVELOPER_LETTER_LIMIT}
+                          value={replyDrafts[letter.id] ?? ""}
+                          disabled={Boolean(sendingReplies[letter.id])}
+                          onChange={event => {
+                            setReplyDrafts(previous => ({ ...previous, [letter.id]: event.target.value }));
+                            setReplyStatuses(previous => ({ ...previous, [letter.id]: "" }));
+                          }}
+                        />
+                        <div className="developer-reply-actions">
+                          <span>{(replyDrafts[letter.id] ?? "").length}/{DEVELOPER_LETTER_LIMIT}</span>
+                          <button type="submit" disabled={sendingReplies[letter.id] || !replyDrafts[letter.id]?.trim()}>
+                            {sendingReplies[letter.id] ? "SENDING…" : "SEND REPLY"}
+                          </button>
+                        </div>
+                        {replyStatuses[letter.id] && <div className="developer-reply-status" role="status">{replyStatuses[letter.id]}</div>}
+                      </form>
                     </article>
                   ))}
                 </div>

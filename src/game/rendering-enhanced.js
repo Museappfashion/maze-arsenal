@@ -7,6 +7,7 @@ import {
   PASSAGE_WIDTH,
   VIEW_3D_FOV,
   VIEW_3D_MAX_DISTANCE,
+  VIEW_3D_RAY_WIDTH,
 } from "../config/constants.js";
 import {
   LEGENDARY_GOLD,
@@ -28,6 +29,11 @@ import {
 } from "./gameplay.js";
 import { hasLineOfSight } from "./maze.js";
 import {
+  cast3DRay,
+  draw3DEnvironment,
+  draw3DOverlay,
+  draw3DSprites,
+  draw3DWeapon,
   drawEffects as drawEffectsCore,
   drawEntityLabels as drawEntityLabelsCore,
   drawExitPortal as drawExitPortalCore,
@@ -37,7 +43,7 @@ import {
   drawWeaponShape as drawWeaponShapeCore,
   drawWorld as drawWorldCore,
 } from "./rendering.js?core";
-import { angleDelta } from "../utils/math.js";
+import { angleDelta, clamp } from "../utils/math.js";
 
 export * from "./rendering.js?core";
 
@@ -2161,143 +2167,102 @@ function drawCityPlayer2D(ctx, world) {
   ctx.restore();
 }
 
-function drawCityRoadPerspective3D(ctx) {
+// City details share the raycaster's horizon/depth. They are painted before
+// sprites, so a road or facade can never cover an enemy, pickup or held weapon.
+function drawCityRoadPerspective3D(ctx, world, zBuffer, plane) {
+  const horizon = CANVAS_HEIGHT * 0.46;
+  const stride = PASSAGE_WIDTH + 1;
+  const forwardX = Math.cos(world.player.facing);
+  const forwardY = Math.sin(world.player.facing);
+  const halfRoad = PASSAGE_WIDTH / 2;
+  const connections = new Map();
   ctx.save();
+  ctx.fillStyle = "#d4b443";
 
-  const horizon = CANVAS_HEIGHT * 0.56;
-
-  ctx.fillStyle = "#3d4348";
-  ctx.beginPath();
-  ctx.moveTo(CANVAS_WIDTH * 0.18, CANVAS_HEIGHT);
-  ctx.lineTo(CANVAS_WIDTH * 0.38, horizon);
-  ctx.lineTo(CANVAS_WIDTH * 0.62, horizon);
-  ctx.lineTo(CANVAS_WIDTH * 0.82, CANVAS_HEIGHT);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.fillStyle = "#70767c";
-  ctx.beginPath();
-  ctx.moveTo(0, CANVAS_HEIGHT);
-  ctx.lineTo(CANVAS_WIDTH * 0.28, horizon);
-  ctx.lineTo(CANVAS_WIDTH * 0.38, horizon);
-  ctx.lineTo(CANVAS_WIDTH * 0.18, CANVAS_HEIGHT);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.moveTo(CANVAS_WIDTH, CANVAS_HEIGHT);
-  ctx.lineTo(CANVAS_WIDTH * 0.72, horizon);
-  ctx.lineTo(CANVAS_WIDTH * 0.62, horizon);
-  ctx.lineTo(CANVAS_WIDTH * 0.82, CANVAS_HEIGHT);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.strokeStyle = "#facc15";
-  ctx.lineCap = "round";
-
-  for (let segment = 0; segment < 8; segment += 1) {
-    const start = segment / 8;
-    const end = (segment + 0.34) / 8;
-    const y1 = horizon + (CANVAS_HEIGHT - horizon) * start;
-    const y2 = horizon + (CANVAS_HEIGHT - horizon) * end;
-    const lineWidth = 2 + start * 7;
-
-    for (const offset of [-9, 9]) {
-      ctx.lineWidth = lineWidth;
-      ctx.beginPath();
-      ctx.moveTo(CANVAS_WIDTH * 0.5 + offset, y1);
-      ctx.lineTo(CANVAS_WIDTH * 0.5 + offset, y2);
-      ctx.stroke();
-    }
-  }
-
-  ctx.strokeStyle = "rgba(241, 245, 249, 0.26)";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(CANVAS_WIDTH * 0.38, horizon);
-  ctx.lineTo(CANVAS_WIDTH * 0.2, CANVAS_HEIGHT);
-  ctx.moveTo(CANVAS_WIDTH * 0.62, horizon);
-  ctx.lineTo(CANVAS_WIDTH * 0.8, CANVAS_HEIGHT);
-  ctx.stroke();
-
-  ctx.restore();
-}
-
-function drawCityWallFacade3D(ctx, world) {
-  if (
-    world.level?.themeKey !== "city" ||
-    world.viewMode !== "3d"
-  ) {
-    return;
-  }
-
-  ctx.save();
-
-  const horizon = CANVAS_HEIGHT * 0.56;
-  const leftWall = [
-    [0, CANVAS_HEIGHT],
-    [0, CANVAS_HEIGHT * 0.08],
-    [CANVAS_WIDTH * 0.38, horizon],
-    [CANVAS_WIDTH * 0.18, CANVAS_HEIGHT],
-  ];
-  const rightWall = [
-    [CANVAS_WIDTH, CANVAS_HEIGHT],
-    [CANVAS_WIDTH, CANVAS_HEIGHT * 0.08],
-    [CANVAS_WIDTH * 0.62, horizon],
-    [CANVAS_WIDTH * 0.82, CANVAS_HEIGHT],
-  ];
-
-  for (const polygon of [leftWall, rightWall]) {
-    ctx.fillStyle = "rgba(17, 24, 39, 0.24)";
-    ctx.beginPath();
-    ctx.moveTo(polygon[0][0], polygon[0][1]);
-    for (let index = 1; index < polygon.length; index += 1) {
-      ctx.lineTo(polygon[index][0], polygon[index][1]);
-    }
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  const drawWindows = (startX, direction) => {
-    for (let row = 0; row < 10; row += 1) {
-      for (let col = 0; col < 5; col += 1) {
-        const x = startX + direction * (col * 28 + row * 2);
-        const y = 96 + row * 30 + col * 4;
-        const lit = citySeed(row, col, direction > 0 ? 41 : 42) > 0.72;
-
-        ctx.fillStyle = lit
-          ? "rgba(250, 204, 21, 0.28)"
-          : "rgba(226, 232, 240, 0.12)";
-        ctx.fillRect(x, y, 10, 14);
+  for (let y = Math.ceil(horizon) + 3; y < CANVAS_HEIGHT; y += 3) {
+    const depth = plane * 0.5 / (y + 1.5 - horizon);
+    if (depth > VIEW_3D_MAX_DISTANCE) continue;
+    ctx.globalAlpha = Math.max(0.15, 0.8 - depth / VIEW_3D_MAX_DISTANCE);
+    for (let ray = 0; ray < zBuffer.length; ray += 1) {
+      // Floor paint stops at the actual wall in each screen column.
+      if (depth >= zBuffer[ray]) continue;
+      const x = ray * VIEW_3D_RAY_WIDTH;
+      const sideways = (x + VIEW_3D_RAY_WIDTH / 2 - CANVAS_WIDTH / 2) / plane * depth;
+      const wx = world.player.x + forwardX * depth - forwardY * sideways;
+      const wy = world.player.y + forwardY * depth + forwardX * sideways;
+      if (!isFloorTile(world, Math.floor(wx), Math.floor(wy))) continue;
+      const cellX = Math.floor((wx - 1) / stride);
+      const cellY = Math.floor((wy - 1) / stride);
+      const localX = wx - (1 + cellX * stride);
+      const localY = wy - (1 + cellY * stride);
+      const vertical = Math.abs(localX - halfRoad) < 0.065;
+      const horizontal = Math.abs(localY - halfRoad) < 0.065;
+      if (!vertical && !horizontal) continue;
+      const key = cellY * world.width + cellX;
+      if (!connections.has(key)) connections.set(key, cityLogicalConnections(world, cellX, cellY));
+      const road = connections.get(key);
+      if ((vertical && (localY < halfRoad ? road.north : road.south)) ||
+          (horizontal && (localX < halfRoad ? road.west : road.east))) {
+        const wallBottom = horizon + plane / Math.max(0.08, zBuffer[ray]) / 2;
+        const top = Math.max(y, wallBottom);
+        if (top < y + 3) ctx.fillRect(x, top, VIEW_3D_RAY_WIDTH, y + 3 - top);
       }
     }
-  };
-
-  drawWindows(20, 1);
-  drawWindows(CANVAS_WIDTH - 30, -1);
-
-  const skylineBase = CANVAS_HEIGHT * 0.32;
-  ctx.fillStyle = "rgba(30, 41, 59, 0.6)";
-  ctx.beginPath();
-  ctx.moveTo(0, skylineBase + 40);
-  for (let x = 0; x <= CANVAS_WIDTH + 24; x += 24) {
-    const seed = citySeed(x, 0, 44);
-    const height = 36 + seed * 110;
-    ctx.lineTo(x, skylineBase + 40);
-    ctx.lineTo(x, skylineBase - height);
-    ctx.lineTo(x + 12, skylineBase - height + seed * 10);
   }
-  ctx.lineTo(CANVAS_WIDTH, skylineBase + 40);
-  ctx.closePath();
-  ctx.fill();
-
   ctx.restore();
 }
 
+function drawCityWallFacade3D(ctx, world, plane) {
+  const horizon = CANVAS_HEIGHT * 0.46;
+  const rayCount = Math.ceil(CANVAS_WIDTH / VIEW_3D_RAY_WIDTH);
+  ctx.save();
+  for (let ray = 0; ray < rayCount; ray += 1) {
+    const x = ray * VIEW_3D_RAY_WIDTH;
+    const offset = Math.atan((x + VIEW_3D_RAY_WIDTH / 2 - CANVAS_WIDTH / 2) / plane);
+    const hit = cast3DRay(world, world.player.facing + offset);
+    if (hit.wallType == null) continue;
+    const depth = Math.max(0.08, hit.distance * Math.cos(offset));
+    const height = Math.min(CANVAS_HEIGHT * 2.4, plane / depth);
+    const top = horizon - height / 2;
+    const fade = Math.max(0.12, 1 - depth / VIEW_3D_MAX_DISTANCE);
+    // Texture coordinates come from the hit wall, never from the screen/time.
+    const seed = citySeed(hit.mapX, hit.mapY, hit.side);
+    const edge = hit.wallOffset < 0.055 || hit.wallOffset > 0.945;
+    ctx.globalAlpha = fade * (hit.side ? 0.65 : 0.85);
+    ctx.fillStyle = edge ? "#c0c4c8" : seed > 0.55 ? "#7f858b" : "#535d68";
+    ctx.fillRect(x, top, VIEW_3D_RAY_WIDTH, height);
+    if (!edge && hit.wallOffset > 0.18 && hit.wallOffset < 0.82) {
+      for (let row = 0; row < 2; row += 1) {
+        const lit = citySeed(hit.mapX, hit.mapY, row + 31) > 0.78;
+        ctx.fillStyle = lit ? "#c2a863" : "#182633";
+        ctx.fillRect(x, top + height * (0.17 + row * 0.32), VIEW_3D_RAY_WIDTH, height * 0.2);
+        ctx.fillStyle = "#87939c";
+        ctx.fillRect(x, top + height * (0.37 + row * 0.32), VIEW_3D_RAY_WIDTH, Math.max(1, height * 0.025));
+      }
+    }
+    ctx.fillStyle = "#262e35";
+    ctx.fillRect(x, top + height * 0.88, VIEW_3D_RAY_WIDTH, height * 0.12);
+  }
+  ctx.restore();
+}
 
-
-
-
+function drawCityWorld3D(ctx, world) {
+  ctx.save();
+  ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  const zBuffer = new Float32Array(Math.ceil(CANVAS_WIDTH / VIEW_3D_RAY_WIDTH));
+  zBuffer.fill(VIEW_3D_MAX_DISTANCE);
+  const shake = clamp(world.damageKick ?? 0, 0, 1);
+  ctx.save();
+  ctx.translate(Math.sin(world.time * 97) * shake * 9, Math.cos(world.time * 83) * shake * 6);
+  const plane = draw3DEnvironment(ctx, world, zBuffer);
+  drawCityRoadPerspective3D(ctx, world, zBuffer, plane);
+  drawCityWallFacade3D(ctx, world, plane);
+  draw3DSprites(ctx, world, zBuffer, plane);
+  draw3DWeapon(ctx, world);
+  ctx.restore();
+  draw3DOverlay(ctx, world);
+  ctx.restore();
+}
 
 function drawUrbanFog(ctx, world) {
   if (world.level?.themeKey !== "city") {
@@ -2367,78 +2332,15 @@ function drawUrbanFog(ctx, world) {
   ctx.restore();
 }
 
-function drawCityPlayer3DAccent(ctx, world) {
-  if (
-    world.level?.themeKey !== "city" ||
-    world.viewMode !== "3d"
-  ) {
-    return;
+export function drawWorld(ctx, world) {
+  if (world.level?.themeKey === "city" && world.viewMode === "3d") {
+    drawCityWorld3D(ctx, world);
+  } else {
+    drawWorldCore(ctx, world);
   }
 
-  ctx.save();
-
-  const bottom = CANVAS_HEIGHT - 8;
-
-  ctx.fillStyle = "rgba(17, 24, 39, 0.9)";
-  ctx.beginPath();
-  ctx.moveTo(CANVAS_WIDTH * 0.14, bottom);
-  ctx.quadraticCurveTo(
-    CANVAS_WIDTH * 0.2,
-    CANVAS_HEIGHT * 0.75,
-    CANVAS_WIDTH * 0.31,
-    CANVAS_HEIGHT * 0.83,
-  );
-  ctx.lineTo(CANVAS_WIDTH * 0.36, bottom);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.moveTo(CANVAS_WIDTH * 0.86, bottom);
-  ctx.quadraticCurveTo(
-    CANVAS_WIDTH * 0.8,
-    CANVAS_HEIGHT * 0.75,
-    CANVAS_WIDTH * 0.69,
-    CANVAS_HEIGHT * 0.83,
-  );
-  ctx.lineTo(CANVAS_WIDTH * 0.64, bottom);
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.fillStyle = "rgba(241, 194, 125, 0.94)";
-  ctx.beginPath();
-  ctx.ellipse(
-    CANVAS_WIDTH * 0.34,
-    CANVAS_HEIGHT * 0.84,
-    20,
-    14,
-    0.3,
-    0,
-    Math.PI * 2,
-  );
-  ctx.ellipse(
-    CANVAS_WIDTH * 0.66,
-    CANVAS_HEIGHT * 0.84,
-    20,
-    14,
-    -0.3,
-    0,
-    Math.PI * 2,
-  );
-  ctx.fill();
-
-  ctx.restore();
-}
-
-
-export function drawWorld(ctx, world) {
-  drawWorldCore(ctx, world);
-
   if (world.level?.themeKey === "city") {
-    if (world.viewMode === "3d") {
-      drawCityRoadPerspective3D(ctx);
-      drawCityWallFacade3D(ctx, world);
-      drawCityPlayer3DAccent(ctx, world);
-    } else {
+    if (world.viewMode !== "3d") {
       drawCityRoads2D(ctx, world);
       drawCityBuildingBlocks2D(ctx, world);
       drawCoreCityLayer2D(ctx, world);

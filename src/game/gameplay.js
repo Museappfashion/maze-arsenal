@@ -1,5 +1,6 @@
 // src/game/gameplay.js
 import { queueSfx } from "../audio/MazeAudioEngine.js";
+import { isMedievalArcheryWeapon, WALL_ARROW_LIFETIME } from "../config/archery.js";
 import { AMMO_DROP_MIN_TILE_SPACING, AMMO_EXTRA_MAX_AMOUNT, AMMO_EXTRA_MIN_AMOUNT, AMMO_ROUTE_SPACING, AMMO_SUPPORT_MAX_AMOUNT, AMMO_SUPPORT_MELEE_CHANCE, AMMO_SUPPORT_MIN_AMOUNT, AMMO_SUPPORT_RANGED_CHANCE, MAX_AMMO } from "../config/ammo.js";
 import { CANVAS_HEIGHT, CANVAS_WIDTH, DRAW_TILE, FLOOR, MAX_EFFECTS, MOBILE_2D_ZOOM, STEEL_WALL, VIEW_3D_TURN_SPEED, WALL } from "../config/constants.js";
 import {
@@ -12,7 +13,7 @@ import {
 } from "../config/enemies.js";
 import { getLabyrinthLightStrength } from "../config/labyrinthLights.js";
 import { POWER_UPS, POWER_UP_PICKUP_COUNT, POWER_UP_SPAWN_ORDER, POWER_UP_WALL_BREAK_CHARGES, getPowerUpDuration } from "../config/powerUps.js";
-import { getAmmoLabel, getAmmoMessageLabel, getAmmoPickupLabel, getPowerUpPresentation, getWeaponLabel, isMedievalTheme } from "../config/presentations.js";
+import { getAmmoLabel, getAmmoMessageLabel, getAmmoPickupLabel, getPowerUpPresentation, getWeaponLabel } from "../config/presentations.js";
 import { VISION_MARGIN } from "../config/runtime.js";
 import { WEAPONS, WEAPON_ORDER, WEAPON_SPAWN_PLAN } from "../config/weapons.js";
 import { addPickup, bfsDistances, circleHitsWall, findNearbyOpenTiles, findSpacedSpawnTile, findSpawnTile, findTileNearPercent, hasLineOfSight, isWalkable, moveWithCollisions, spawnProjectile } from "./maze.js";
@@ -813,7 +814,14 @@ if (player.ammo < ammoCost) {
 player.ammo -= ammoCost;
 queueSfx(world, "weaponAttack", { weaponKey: player.weapon });
 
-const medievalArchery = isMedievalTheme(world);
+const medievalArchery = isMedievalArcheryWeapon(world);
+if (medievalArchery) {
+  player.bowShot = {
+    startedAt: world.time,
+    duration: getWeaponCooldown(world, weapon),
+    weaponKey: player.weapon,
+  };
+}
 if (!medievalArchery) {
   const muzzleAngle = Math.atan2(direction.y, direction.x);
   const muzzleX = player.x + direction.x * 0.5;
@@ -1359,21 +1367,32 @@ if (projectile.ttl <= 0) {
   continue;
 }
 
+// Embedded arrows are visual only: do not move, hit enemies, or collide again.
+if (projectile.stuckInWall) {
+  nextProjectiles.push(projectile);
+  continue;
+}
+
 const distance = Math.hypot(projectile.vx * dt, projectile.vy * dt);
 const steps = Math.max(1, Math.ceil(distance / 0.08));
 let destroyed = false;
 
 for (let step = 0; step < steps; step += 1) {
+  const previousX = projectile.x;
+  const previousY = projectile.y;
   projectile.x += (projectile.vx * dt) / steps;
   projectile.y += (projectile.vy * dt) / steps;
 
   if (circleHitsWall(world, projectile.x, projectile.y, projectile.radius)) {
     const impactAngle = Math.atan2(-projectile.vy, -projectile.vx);
-    spawnSparks(world, projectile.x, projectile.y, impactAngle, 0.85);
-    spawnImpact(world, projectile.x, projectile.y, projectile.color, 0.65);
+    if (!projectile.isArrow) {
+      spawnSparks(world, projectile.x, projectile.y, impactAngle, 0.85);
+      spawnImpact(world, projectile.x, projectile.y, projectile.color, 0.65);
+    }
 
+    let wallBroken = false;
     if (projectile.owner === "player" && projectile.breaksWalls) {
-      const wallBroken = smashWallTile(
+      wallBroken = smashWallTile(
         world,
         Math.floor(projectile.x),
         Math.floor(projectile.y),
@@ -1386,6 +1405,19 @@ for (let step = 0; step < steps; step += 1) {
           colors: ["#f97316", "#facc15", "#94a3b8"],
         });
       }
+    }
+
+    if (projectile.isArrow && !wallBroken) {
+      // Keep the center in the corridor so wall occlusion does not hide the
+      // shaft. The front of the arrow reaches the wall; its tail points back.
+      projectile.angle = Math.atan2(projectile.vy, projectile.vx);
+      projectile.x = previousX - Math.cos(projectile.angle) * 0.12;
+      projectile.y = previousY - Math.sin(projectile.angle) * 0.12;
+      projectile.vx = 0;
+      projectile.vy = 0;
+      projectile.stuckInWall = true;
+      projectile.ttl = WALL_ARROW_LIFETIME;
+      break;
     }
 
     destroyed = true;

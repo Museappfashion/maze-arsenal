@@ -85,7 +85,7 @@ async function listUsageRows(supabase) {
 async function listDeveloperLetters(supabase) {
   const { data, error } = await supabase
     .from("developer_letters")
-    .select("id,user_id,player_name,message,created_at")
+    .select("id,user_id,player_name,message,created_at,developer_letter_replies(id,message,created_at)")
     .order("created_at", { ascending: false })
     .limit(500);
 
@@ -103,6 +103,9 @@ async function listDeveloperLetters(supabase) {
       playerName: row.player_name ?? "",
       message: row.message,
       createdAt: row.created_at,
+      replies: (row.developer_letter_replies ?? [])
+        .map(reply => ({ id: reply.id, message: reply.message, createdAt: reply.created_at }))
+        .sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt)),
     })),
     error: null,
   };

@@ -5,17 +5,57 @@ import {
 
 export const DEVELOPER_LETTER_LIMIT = 2000;
 
-async function postLetter(session, payload) {
+async function requestLetter(session, method, payload) {
   return fetch("/api/developer-letter", {
-    method: "POST",
+    method,
     headers: {
       Accept: "application/json",
       Authorization: `Bearer ${session.access_token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(payload),
+    ...(payload ? { body: JSON.stringify(payload) } : {}),
     cache: "no-store",
   });
+}
+
+async function playerRequest(method, payload) {
+  if (!supabase) {
+    throw new Error("Letters are unavailable while the game is offline.");
+  }
+
+  let session = await ensureGlobalLeaderboardSession();
+  let response = await requestLetter(session, method, payload);
+  if (response.status === 401) {
+    const { data, error } = await supabase.auth.refreshSession();
+    if (!error && data.session?.access_token) {
+      session = data.session;
+      response = await requestLetter(session, method, payload);
+    }
+  }
+
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(result.error || `Could not access letters (${response.status}).`);
+  }
+  return result;
+}
+
+export async function loadDeveloperLetterInbox() {
+  const result = await playerRequest("GET");
+  return result.letters ?? [];
+}
+
+export async function sendDeveloperReply({ developerKey, letterId, message }) {
+  const response = await requestLetter(
+    { access_token: String(developerKey ?? "").trim() },
+    "PATCH",
+    { letterId, message: String(message ?? "").trim() },
+  );
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(result.error || `Could not send reply (${response.status}).`);
+  }
+  return result.reply;
 }
 
 export async function sendDeveloperLetter({
@@ -34,35 +74,8 @@ export async function sendDeveloperLetter({
     );
   }
 
-  if (!supabase) {
-    throw new Error("Letters are unavailable while the game is offline.");
-  }
-
-  let session = await ensureGlobalLeaderboardSession();
-  let response = await postLetter(session, {
+  return playerRequest("POST", {
     message: cleanMessage,
     playerName: String(playerName ?? "").trim().slice(0, 20),
   });
-
-  if (response.status === 401) {
-    const { data, error } = await supabase.auth.refreshSession();
-
-    if (!error && data.session?.access_token) {
-      session = data.session;
-      response = await postLetter(session, {
-        message: cleanMessage,
-        playerName: String(playerName ?? "").trim().slice(0, 20),
-      });
-    }
-  }
-
-  const payload = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    throw new Error(
-      payload.error || `Could not send letter (${response.status}).`,
-    );
-  }
-
-  return payload;
 }

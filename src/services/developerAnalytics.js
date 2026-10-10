@@ -2,7 +2,7 @@
 import {
   ensureGlobalLeaderboardSession,
   supabase,
-} from "./leaderboard.js";
+} from "./leaderboard-enhanced.js";
 
 const PLAYTIME_HEARTBEAT_LIMIT_SECONDS = 120;
 const DEVELOPER_USAGE_ENDPOINT = "/api/developer-usage";

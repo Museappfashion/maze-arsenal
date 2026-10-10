@@ -427,6 +427,7 @@ export function LevelSelectScreen({
   const [pendingLevelKey, setPendingLevelKey] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [letterOpen, setLetterOpen] = useState(false);
+  const [replyCount, setReplyCount] = useState(0);
   const [supportOpen, setSupportOpen] = useState(false);
   const [allLevelsUnlocked, setAllLevelsUnlocked] = useState(
     () =>
@@ -516,8 +517,8 @@ export function LevelSelectScreen({
             <button
               type="button"
               className="first-page-letter-button"
-              aria-label="Letters and developer replies"
-              title="Letters and developer replies"
+              aria-label={`Inbox${replyCount ? `, ${replyCount} developer ${replyCount === 1 ? "reply" : "replies"}` : " and letters to the developer"}`}
+              title="Open your inbox to read the developer’s replies"
               aria-expanded={letterOpen}
               onClick={() => {
                 setLetterOpen((open) => !open);
@@ -526,6 +527,8 @@ export function LevelSelectScreen({
               }}
             >
               <DeveloperLetterIcon />
+              <span>INBOX</span>
+              {replyCount > 0 && <span className="letter-reply-count" aria-hidden="true">{replyCount}</span>}
             </button>
             <button
               type="button"
@@ -561,7 +564,7 @@ export function LevelSelectScreen({
           </section>
         )}
 
-        <DeveloperLetterPanel playerName={initialPlayerName} open={letterOpen} />
+        <DeveloperLetterPanel playerName={initialPlayerName} open={letterOpen} onReplyCountChange={setReplyCount} />
 
         {supportOpen && (
           <section className="first-page-expanded-panel support-expanded">

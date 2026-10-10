@@ -30,6 +30,8 @@ export const supabase = GLOBAL_LEADERBOARD_ENABLED
     })
   : null;
 
+let pendingSession = null;
+
 export function normalizeCountryCode(value) {
   const normalized = String(value ?? "").trim().toUpperCase();
   return COUNTRY_CODE_PATTERN.test(normalized) ? normalized : "";
@@ -152,7 +154,7 @@ export function normalizeLeaderboardEntries(entries) {
         typeof entry?.completedAt === "string" ? entry.completedAt : "",
       playerName: getPlayerDisplayName(entry?.playerName),
       countryCode: normalizeCountryCode(entry?.countryCode),
-      globalRank: Number.isFinite(Number(entry?.globalRank))
+      globalRank: Number.isFinite(Number(entry?.globalRank)) && Number(entry.globalRank) > 0
         ? Number(entry.globalRank)
         : null,
       isCurrentUser: Boolean(entry?.isCurrentUser),
@@ -165,14 +167,14 @@ export function normalizeLeaderboardEntries(entries) {
 export function normalizeLevelLeaderboards(levelBoards) {
   if (Array.isArray(levelBoards)) {
     return {
-      "2d": normalizeLeaderboardEntries(levelBoards).slice(0, 1),
+      "2d": normalizeLeaderboardEntries(levelBoards),
       "3d": [],
     };
   }
 
   return {
-    "2d": normalizeLeaderboardEntries(levelBoards?.["2d"]).slice(0, 1),
-    "3d": normalizeLeaderboardEntries(levelBoards?.["3d"]).slice(0, 1),
+    "2d": normalizeLeaderboardEntries(levelBoards?.["2d"]),
+    "3d": normalizeLeaderboardEntries(levelBoards?.["3d"]),
   };
 }
 
@@ -256,7 +258,10 @@ export function addLeaderboardTime(
   }
 
   const levelBoards = normalizeLevelLeaderboards(leaderboards[levelKey]);
-  const currentBest = levelBoards[mode][0] ?? null;
+  // A completed run updates this player's best, not the entire cached global
+  // list. Unranked entries are this browser's local scores from before sync.
+  const isOwnScore = (entry) => entry.isCurrentUser || entry.globalRank === null;
+  const currentBest = levelBoards[mode].find(isOwnScore) ?? null;
 
   if (currentBest && currentBest.time <= time) {
     return leaderboards;
@@ -266,7 +271,8 @@ export function addLeaderboardTime(
     ...leaderboards,
     [levelKey]: {
       ...levelBoards,
-      [mode]: [
+      [mode]: normalizeLeaderboardEntries([
+        ...levelBoards[mode].filter((entry) => !isOwnScore(entry)),
         {
           time,
           completedAt: new Date().toISOString(),
@@ -275,7 +281,7 @@ export function addLeaderboardTime(
           globalRank: null,
           isCurrentUser: true,
         },
-      ],
+      ]),
     },
   };
 }
@@ -285,30 +291,40 @@ export async function ensureGlobalLeaderboardSession() {
     throw new Error("Global leaderboard is not configured.");
   }
 
-  const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession();
+  // The inbox, analytics, and leaderboard can initialize together. Share the
+  // whole sign-in operation so they cannot create different anonymous users.
+  if (!pendingSession) {
+    pendingSession = (async () => {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
 
-  if (sessionError) {
-    throw sessionError;
+      if (sessionError) {
+        throw sessionError;
+      }
+
+      if (session) {
+        return session;
+      }
+
+      const { data, error } = await supabase.auth.signInAnonymously();
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data.session) {
+        throw new Error("Supabase did not create an anonymous session.");
+      }
+
+      return data.session;
+    })().finally(() => {
+      pendingSession = null;
+    });
   }
 
-  if (session) {
-    return session;
-  }
-
-  const { data, error } = await supabase.auth.signInAnonymously();
-
-  if (error) {
-    throw error;
-  }
-
-  if (!data.session) {
-    throw new Error("Supabase did not create an anonymous session.");
-  }
-
-  return data.session;
+  return pendingSession;
 }
 
 export async function fetchGlobalLeaderboards() {
@@ -347,7 +363,7 @@ export async function fetchGlobalLeaderboards() {
       completedAt: row.created_at ?? "",
       playerName: row.player_name,
       countryCode: normalizeCountryCode(row.country_code),
-      globalRank: Number.isFinite(globalRank) ? globalRank : null,
+      globalRank: Number.isFinite(globalRank) && globalRank > 0 ? globalRank : null,
       isCurrentUser: Boolean(row.is_current_user),
     };
 

@@ -1,74 +1,48 @@
-MIST MAZE — COINS, DEVELOPER REPLIES, CITY 3D, ARROWS, WHITE CHAINS
-7 October 2026
+MIST MAZE — PLAYER INBOX AND TOP 10 LEADERBOARDS
+9 October 2026
 
-INSTALL
-1. In Supabase SQL Editor, run the COMPLETE included file:
-   supabase/developer-letters.sql
-   It adds developer replies, preserves existing letters, and can be rerun.
-   Uploading a SQL file to GitHub does not execute it in Supabase.
+Apply this update to your existing game (including the October 7 fixes).
 
-2. Extract this ZIP. Copy the included files into the SAME paths in your
-   existing project/GitHub repository. Merge the src, api and supabase folders:
-   replace matching files and add new files. Do NOT replace whole folders,
-   do NOT delete your other files, and do NOT put src inside another src.
-   Commit/upload all included code files together so imports are present.
+1. Replace/add only the included files at the matching paths in GitHub.
+   Keep all other files. Merge folder contents; do not replace whole folders.
+2. Deploy the updated commit in Vercel and reload the game.
+3. If the previous developer-letters.sql ran successfully, no SQL change is
+   needed. If it failed, run the complete included supabase/developer-letters.sql
+   in Supabase SQL Editor. The last line is commit; with nothing after it.
+   No leaderboard SQL migration or new environment keys are needed for this fix.
 
-3. Allow Vercel to deploy that commit, then reload the game.
-   No new environment variables or dependencies are required. Keep your
-   existing Supabase client/server variables and DEVELOPER_DASHBOARD_KEY.
+PLAYER REPLIES
+The main-menu paper/pencil button now says INBOX and shows the number of
+developer replies. Open it to read the replies at the TOP of the panel.
+Your original letter is expandable underneath; the writing form is below.
+While the menu is visible, replies refresh every 30 seconds, when the tab
+regains focus, and when the inbox opens. REFRESH also checks immediately.
+Players must use the same browser profile that sent the letter; replies are
+private to their saved anonymous sign-in. The inbox, leaderboard and analytics
+now share one sign-in operation and one client instead of racing to create
+separate anonymous users at startup.
 
-WHAT CHANGES
-- All ten purchased Myst cosmetics now combine on the in-game coin/counter.
-  Existing purchases activate automatically. The shop wallet also previews
-  them. Reduced-motion preferences disable the cosmetic animations.
-- The developer dashboard has SEND REPLY under each received letter.
-  Players open the main-menu paper/pencil button and look under YOUR INBOX.
-  REFRESH loads new replies. Inbox access uses the player's saved browser
-  identity; a different device/browser or cleared site data has another inbox.
-- Abandoned City's 3D roads and buildings follow the actual maze and camera.
-  The old fixed overlay no longer covers objects, and the city uses its own
-  gray/yellow colors instead of falling back to the space theme.
-- Fallen Keep arrows remain in walls for one second, then disappear.
-  Bows animate their string/arrow instead of displaying a gun recoil overlay.
-  Other mazes' guns and special weapons keep their existing behavior.
-- Locked maze cards use crossing, interlocking white chain links.
+LEADERBOARDS
+Fixed the code that cut every list to its first entry. Every eligible maze
+now retains/displays its top 10, with separate 2D and 3D lists. A player's
+personal rank below the list is still shown even when outside the top 10.
+Fewer than 10 recorded scores will leave unfilled places blank. A new personal
+best no longer replaces the other players' entries. Saved caches keep all 10.
+Older locally discarded entries cannot be recovered from that cache, but
+global records reload from Supabase on the next successful connection.
 
-FILES INCLUDED
+FILES
 api/developer-analytics.js
 api/developer-letter.js
-src/App.jsx
 src/components/DeveloperAnalytics.jsx
-src/components/DeveloperLetterPanel.jsx          NEW
+src/components/DeveloperLetterPanel.jsx
 src/components/LevelSelectScreen.jsx
-src/components/MizCoin.jsx                       NEW
-src/components/MizCounter.jsx
-src/components/MystStore.jsx
-src/config/archery.js                            NEW
-src/config/presentations-enhanced.js
-src/features/exitPointer.js
-src/features/runtimeEnhancements.js
-src/game/gameplay.js
-src/game/gameplay-2.0.js
-src/game/rendering.js
-src/game/rendering-2.0.js
-src/game/rendering-enhanced.js
+src/services/developerAnalytics.js
 src/services/developerLetters.js
-src/services/mizEconomy.js
+src/services/leaderboard.js
+src/styles/levelSelectStyles.js
 supabase/developer-letters.sql
-supabase/DEVELOPER-REPLIES-SETUP.md
 
-If a matching file is missing in your repository, add it at the listed path.
-The App, economy, counter and pointer support files are included so the new
-graphics have their existing runtime connections. No package.json, lockfile,
-node_modules, dist, credentials or complete repository replacement is included.
-
-CHECKED LOCALLY
-- Production build and Vite import-cycle audit.
-- 14 automated tests covering arrows, reply authorization and recipient
-  isolation, coin awards, pointer directions and stable world/HUD rerenders.
-- Browser purchase/reload checks for all ten cosmetics and chain lock behavior.
-- Abandoned City 3D camera geometry and repeated-frame rendering.
-- Supabase reply migration tested in isolated PostgreSQL, including reruns,
-  access restrictions and preservation of letters. Not run on your live project.
-
-These files are ready to upload; this package has not been deployed for you.
+The API files and SQL are included to ensure the complete reply feature is
+present if a previous upload was incomplete. Existing letters are preserved.
+This update has not been uploaded to GitHub or deployed for you.

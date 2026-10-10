@@ -103,15 +103,29 @@ export const LEVEL_SELECT_STYLES = `
         }
 
         .first-page-letter-button {
-          width: 46px;
+          width: auto;
           min-width: 46px;
-          padding: 0;
-          display: grid;
-          place-items: center;
+          padding: 0 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
           border: 1px solid rgba(96, 165, 250, 0.68);
           background: linear-gradient(145deg, rgba(30, 64, 175, 0.82), rgba(30, 58, 138, 0.7));
           color: #dbeafe;
           line-height: 1;
+        }
+
+        .letter-reply-count {
+          display: grid;
+          place-items: center;
+          min-width: 22px;
+          height: 22px;
+          padding: 0 5px;
+          border-radius: 999px;
+          background: #dbeafe;
+          color: #1e3a8a;
+          font-size: 11px;
         }
 
         .first-page-support-button {

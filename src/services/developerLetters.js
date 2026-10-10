@@ -1,7 +1,7 @@
 import {
   ensureGlobalLeaderboardSession,
   supabase,
-} from "./leaderboard.js";
+} from "./leaderboard-enhanced.js";
 
 export const DEVELOPER_LETTER_LIMIT = 2000;
 

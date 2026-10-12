@@ -17,6 +17,8 @@ import {
   unlockAllLevels,
 } from "../services/progression.js";
 import { DeveloperLetterPanel } from "./DeveloperLetterPanel.jsx";
+import { ThanksgivingArtwork } from "./ThanksgivingArtwork.jsx";
+import { isThanksgivingOpen } from "../services/thanksgivingSeason.js";
 import { formatLeaderboardTime } from "../utils/math.js";
 import { PLAYER_NAME_LIMIT, getPlayerDisplayName, sanitizePlayerName } from "../utils/player.js";
 
@@ -408,6 +410,7 @@ function DeveloperLetterIcon() {
 
 export function LevelSelectScreen({
   onSelectLevel,
+  onOpenThanksgiving,
   leaderboards,
   leaderboardStatus = "local",
   userRanks,
@@ -612,6 +615,16 @@ export function LevelSelectScreen({
         </div>
 
         <section className="level-choice-grid" aria-label="Level selection">
+          {onOpenThanksgiving && isThanksgivingOpen() && (
+            <button type="button" className="thanksgiving-entry" onClick={onOpenThanksgiving}>
+              <ThanksgivingArtwork className="thanksgiving-entry-art" />
+              <span className="thanksgiving-entry-copy">
+                <span>Only until Thanksgiving</span>
+                <strong>Free the flock</strong>
+                <span>Visit the farm, free the turkeys, and gather corn for hux. Enter the harvest event →</span>
+              </span>
+            </button>
+          )}
           {levels.map((level) => (
             <button
               key={level.key}

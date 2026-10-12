@@ -90,6 +90,41 @@ deployment is live, visit the production site and Vercel will begin collecting
 traffic data.
 
 
+## Thanksgiving: Free the flock
+
+The **Only until Thanksgiving** card on the opening page leads to a separate
+farm lobby and farm supply store, with a **Back to first page** button. This
+season runs through U.S. Thanksgiving, **November 26, 2026**, in the player's
+local time. New runs close at midnight afterward; a run already in progress
+can finish. The deadline lives in `src/services/thanksgivingSeason.js`.
+
+The farm is a 66 × 66 connected street network, matching Abandoned City's
+footprint. Chicken-wire fences enclose crop fields, barns, and hay. You play
+as a turkey; you and the farmer start at random, safely separated locations.
+The farmer follows the streets at 1.1× the turkey's normal movement speed.
+Rescue as many caged turkeys as possible before being caught. Cages, corn, and
+power-ups continuously replenish in random open locations, with population
+caps to keep long runs stable.
+
+- Move with **WASD / arrows** or the touch joystick.
+- Hold **E / Space** or **FREE** near a cage to rescue its turkey.
+- Walk over corn to earn **1 hux per piece**.
+- Press **1–5** or tap a supply to use speed, stun, teleport, decoy, or camouflage.
+- Press **Escape** to pause; losing focus also pauses the chase.
+
+Hux buys single-use farm supplies. Free supplies also appear during play.
+Hux, unused supplies, best rescue count, and total rescued turkeys are saved
+in browser storage separately from Miz and the original game's progression.
+Getting caught or returning to the menu keeps all earned rewards.
+
+Farm regression checks:
+
+```bash
+node --test scripts/tests/thanksgiving.test.mjs scripts/tests/hux-economy.test.mjs
+# With the dev server running and Playwright available:
+GAME_TEST_URL=http://127.0.0.1:5189 node scripts/tests/thanksgiving-browser.mjs
+```
+
 ## Touch controls
 
 Touchscreen devices automatically receive an in-game control overlay:
@@ -199,6 +234,11 @@ The dashboard shows per anonymous Supabase user:
 - total active play minutes,
 - `$1`, `$2`, `$5`, and custom support-button click attempts,
 - latest in-game player name and last-seen time.
+
+The paper-and-pencil button beside Settings lets players send private letters
+to the developer. Existing Supabase projects must run
+`supabase/developer-letters.sql` once. Letters then appear in the Developer
+Inbox on `/?developer=1`.
 
 Support counts are click attempts, not confirmed payments. The client has no
 SELECT permission on the analytics table; dashboard reads go through the

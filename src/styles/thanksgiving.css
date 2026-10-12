@@ -1,0 +1,77 @@
+.farm-page, .farm-game { color: #f4e7cc; font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif; }
+.farm-page *, .farm-game * { box-sizing: border-box; }
+.farm-page button, .farm-game button { font: inherit; }
+.farm-page { position: fixed; inset: 0; overflow-y: auto; background: radial-gradient(ellipse at 10% 0%, #5d41254d, transparent 55%), repeating-linear-gradient(2deg, transparent 0 80px, #d5a86804 81px 82px), #171e16; }
+.farm-content { max-width: 1550px; margin: auto; padding: clamp(22px, 4vw, 54px); display: grid; gap: 30px; }
+.farm-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+.farm-eyebrow { display: block; color: #d8b56c; font-size: 10px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+.farm-header h1 { font-size: clamp(34px, 4vw, 64px); line-height: 1.02; letter-spacing: -.055em; margin: 12px 0 0; }
+.farm-header-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.farm-wallet { display: inline-flex; align-items: center; gap: 8px; color: #f7d775; background: #2a2c1b; padding: 12px 15px; border: 1px solid #8e793d; border-radius: 10px; font-size: 20px; font-weight: 800; }
+.farm-wallet small { font-size: 12px; font-weight: 600; }
+.farm-button { min-height: 44px; border: 1px solid #8d7955; background: #4a5133; color: #fcf0d6; padding: 11px 16px; border-radius: 9px; cursor: pointer; font-size: 13px !important; font-weight: 750 !important; transition: background .15s, border-color .15s; }
+.farm-button:hover:not(:disabled) { background: #667043; border-color: #e9c886; }
+.farm-button:focus-visible, .farm-power:focus-visible, .thanksgiving-entry:focus-visible, .farm-rescue-button:focus-visible { outline: 3px solid #ffdb8b; outline-offset: 4px; }
+.farm-button:disabled { opacity: .5; cursor: not-allowed; }
+.farm-quiet { background: transparent; border-color: #b39d784d; }
+.farm-primary { background: #dfb564; color: #292514; border-color: #f2cc81; }
+.farm-primary:hover:not(:disabled) { background: #f3d292; color: #292514; }
+.farm-season-strip { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; font-size: 12px; color: #bab7a4; border-top: 1px solid #c1a47b26; padding-top: 24px; }
+.farm-season-badge { color: #f3cb84; border: 1px solid #b486465c; border-radius: 30px; padding: 7px 12px; background: #91602d20; font-size: 11px; font-weight: 750; }
+.farm-lobby-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(290px, 1fr); gap: 28px; }
+.farm-adventure { overflow: hidden; background: #252c21; border: 1px solid #b498613f; border-radius: 16px; box-shadow: 0 18px 60px #0003; }
+.farm-art-wrap { position: relative; height: clamp(220px, 24vw, 325px); overflow: hidden; }
+.farm-art-wrap svg { width: 100%; height: 100%; display: block; }
+.farm-art-tag { position: absolute; top: 18px; left: 18px; font-size: 10px; letter-spacing: .12em; color: #fff2cd; background: #32271fcf; padding: 8px 12px; border-radius: 6px; }
+.farm-adventure-copy { padding: clamp(22px, 3vw, 32px); }
+.farm-adventure h2 { margin: 8px 0 12px; font-size: 38px; letter-spacing: -.045em; }
+.farm-adventure p { color: #ccc7b3; font-size: 14px; line-height: 1.75; max-width: 590px; margin: 0; }
+.farm-tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0; }
+.farm-tags span { color: #d2cbb4; border: 1px solid #b4b09235; border-radius: 5px; padding: 6px 9px; font-size: 10px; }
+.farm-start { width: 100%; min-height: 50px; }
+.farm-field-notes { padding: 25px 14px 10px; }
+.farm-field-notes h2 { font-size: clamp(25px, 2.4vw, 36px); letter-spacing: -.04em; margin: 11px 0 24px; }
+.farm-field-notes ol { padding: 0; list-style: none; counter-reset: notes; display: grid; gap: 25px; }
+.farm-field-notes li { counter-increment: notes; position: relative; padding-left: 42px; }
+.farm-field-notes li::before { content: "0" counter(notes); position: absolute; left: 0; top: 0; font-size: 12px; color: #d8b56c; font-weight: 700; padding-top: 4px; }
+.farm-field-notes li strong { display: block; font-size: 15px; margin-bottom: 7px; }
+.farm-field-notes li span { display: block; font-size: 13px; color: #b9bbaa; line-height: 1.75; }
+.farm-records { display: flex; gap: 40px; border-top: 1px solid #c1a47b26; padding-top: 22px; margin-top: 28px; }
+.farm-records strong { display: block; font-size: 34px; font-weight: 600; color: #e3c07b; }
+.farm-records span { display: block; font-size: 11px; margin-top: 3px; color: #c4c0ad; }
+.farm-save-note { font-size: 11px; color: #989d89; margin-top: 22px; }
+.farm-bag-preview { padding: 24px; border: 1px solid #b4986130; background: #20271c; border-radius: 13px; display: grid; gap: 20px; }
+.farm-bag-preview h2 { margin: 7px 0 0; font-size: 22px; letter-spacing: -.025em; }
+.farm-bag-items { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+.farm-bag-items > div { display: flex; align-items: center; gap: 12px; font-size: 13px; }
+.farm-bag-items > div > span:first-child { font-size: 25px; }
+.farm-bag-items small { display: block; color: #a6ad94; font-size: 11px; margin-top: 5px; }
+.farm-bag-preview p { font-size: 11px; color: #a6ad94; margin: 0; }
+.farm-store { background: #313425; border: 1px solid #b4986166; border-radius: 14px; padding: 24px; }
+.farm-store header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.farm-store h2 { margin: 7px 0 0; font-size: 28px; letter-spacing: -.035em; }
+.farm-store > p { font-size: 13px; line-height: 1.6; color: #c4c0ad; }
+.farm-store-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 13px; margin-top: 24px; }
+.farm-store-item { display: flex; flex-direction: column; padding: 18px; background: #20271c; border-radius: 10px; border: 1px solid #b4986138; }
+.farm-supply-icon { font-size: 30px; }
+.farm-store-item h3 { font-size: 15px; margin: 16px 0 8px; }
+.farm-store-item p { font-size: 12px; line-height: 1.7; color: #b7bca5; flex: 1; margin: 0 0 15px; }
+.farm-item-meta { display: flex; flex-wrap: wrap; gap: 6px; justify-content: space-between; font-size: 11px; margin-bottom: 12px; }
+.farm-item-meta strong { color: #e8c271; }.farm-item-meta span { color: #a6ad94; }
+.farm-store-message { margin-bottom: 0; min-height: 21px; }
+.thanksgiving-entry { overflow: hidden; padding: 0; text-align: left; border: 1px solid #c9a56880; border-radius: 20px; background: linear-gradient(135deg, #39402a, #232a1b); color: #f5e8c8; cursor: pointer; font: inherit; box-shadow: 0 12px 36px #0004; }
+.thanksgiving-entry-art { height: 220px; width: 100%; display: block; }
+.thanksgiving-entry-copy { display: grid; gap: 9px; padding: 22px; }.thanksgiving-entry-copy > span:first-child { text-transform: uppercase; font-size: 10px; font-weight: 800; letter-spacing: .13em; color: #edc678; }.thanksgiving-entry-copy strong { font-size: 27px; letter-spacing: -.035em; }.thanksgiving-entry-copy > span:last-child { color: #c4c9ad; font-size: 12px; line-height: 1.6; }.thanksgiving-entry:hover { border-color: #f1c978; filter: brightness(1.06); }
+.farm-game { position: fixed; inset: 0; display: flex; flex-direction: column; background: #171e16; overscroll-behavior: none; }
+.farm-game-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 20px; border-bottom: 1px solid #b498613f; flex-shrink: 0; }
+.farm-game-title strong { display: block; margin-top: 4px; font-size: 22px; letter-spacing: -.04em; }
+.farm-run-stats { display: flex; align-items: center; gap: 24px; font-size: 13px; color: #bebda7; font-variant-numeric: tabular-nums; }.farm-run-stats strong { color: #f3d48a; font-size: 22px; }.farm-run-stats small { font-size: 10px; }.farm-game-actions { display: flex; gap: 8px; }
+.farm-canvas-wrap { position: relative; flex: 1; min-height: 0; overflow: hidden; }.farm-canvas { display: block; width: 100%; height: 100%; touch-action: none; outline: none; }
+.farm-run-message { position: absolute; top: 14px; left: 14px; max-width: min(440px, calc(100% - 200px)); pointer-events: none; font-size: 12px; line-height: 1.5; background: #21241beb; padding: 9px 13px; border: 1px solid #d3b87845; border-radius: 8px; color: #fce8ba; }
+.farm-game-footer { padding: 11px 20px 8px; flex-shrink: 0; background: #1d2519; border-top: 1px solid #b498613f; }.farm-power-bar { display: flex; justify-content: center; gap: 9px; }.farm-power { display: flex; align-items: center; gap: 8px; min-height: 52px; border: 1px solid #9e986052; background: #303823; color: #f4e7cc; padding: 8px 12px; border-radius: 8px; font-size: 12px !important; cursor: pointer; }.farm-power:disabled { opacity: .48; cursor: default; }.farm-power small { display: block; color: #c4bd98; font-size: 10px; margin-top: 3px; }.farm-power kbd { font-size: 10px; color: #bdc49c; }.farm-power-icon { font-size: 23px; }.farm-key-guide { text-align: center; font-size: 10px; color: #acb195; margin: 8px 0 0; }.farm-key-guide span { margin-left: 16px; color: #dbb978; }
+.farm-touch-controls { display: none; position: absolute; bottom: 20px; left: 20px; right: 20px; justify-content: space-between; align-items: flex-end; pointer-events: none; }.farm-joystick { width: 106px; height: 106px; display: grid; place-items: center; border: 2px solid #f6dd9d88; background: #23301a73; border-radius: 50%; position: relative; touch-action: none; pointer-events: auto; user-select: none; }.farm-joystick > span { display: block; width: 40px; height: 40px; background: #f4d499b0; border: 2px solid #fff0b9; border-radius: 50%; }.farm-joystick small { position: absolute; bottom: -16px; font-size: 9px; letter-spacing: .13em; color: #fff0c7; text-shadow: 0 1px 3px #000; }.farm-rescue-button { min-width: 77px; min-height: 77px; border-radius: 50%; border: 2px solid #d9cda388; background: #34462fda; color: #f6ebca; font-size: 14px !important; font-weight: 800 !important; touch-action: none; pointer-events: auto; user-select: none; }.farm-rescue-button small { display: block; font-size: 9px; margin-top: 5px; }.farm-rescue-button.nearby { background: #c29543; border-color: #fff4b9; color: #241f10; box-shadow: 0 0 25px #ffd77366; }
+.farm-run-overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: 18px; z-index: 10; background: #11180cbb; backdrop-filter: blur(5px); overflow: auto; }.farm-result { width: min(510px, 100%); border: 1px solid #bda36688; border-radius: 18px; padding: clamp(22px, 4vw, 38px); background: #252d1f; text-align: center; box-shadow: 0 20px 80px #0008; }.farm-result h1 { font-size: clamp(26px, 3vw, 38px); letter-spacing: -.05em; margin: 12px 0; }.farm-result p { font-size: 13px; line-height: 1.7; color: #c1c5ad; }.farm-result-stats { display: flex; justify-content: space-around; gap: 10px; margin: 28px 0; }.farm-result-stats span { font-size: 10px; color: #bbbfa6; }.farm-result-stats strong { display: block; font-size: 30px; color: #eaca7d; margin-bottom: 5px; }.farm-result-actions { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+@media (pointer: coarse), (any-pointer: coarse) { .farm-touch-controls { display: flex; } }
+@media (max-width: 1050px) { .farm-store-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }.farm-bag-items { gap: 15px; }.farm-bag-items > div { gap: 6px; font-size: 11px; }.farm-header h1 { font-size: 44px; } }
+@media (max-width: 760px) { .farm-content { padding: 24px 18px; gap: 24px; }.farm-lobby-grid { grid-template-columns: 1fr; gap: 14px; }.farm-header h1 { font-size: 39px; }.farm-header-actions { gap: 8px; }.farm-header-actions .farm-button { font-size: 11px !important; padding: 10px; }.farm-wallet { font-size: 17px; padding: 9px 12px; }.farm-season-strip { font-size: 11px; gap: 10px; padding-top: 20px; }.farm-bag-items { grid-template-columns: repeat(2, 1fr); gap: 20px; }.farm-store { padding: 18px; }.farm-store-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.farm-store-item { padding: 14px; }.farm-field-notes { padding: 18px 4px; }.farm-game-header { padding: 8px 10px; flex-wrap: wrap; gap: 8px; }.farm-game-title strong { font-size: 18px; }.farm-game-title .farm-eyebrow { font-size: 8px; }.farm-run-stats { gap: 11px; font-size: 11px; }.farm-run-stats strong { font-size: 17px; }.farm-game-actions { margin-left: auto; }.farm-game-actions .farm-button { min-height: 34px; padding: 6px 9px; font-size: 11px !important; }.farm-game-footer { padding: 7px; }.farm-power-bar { gap: 5px; }.farm-power { flex: 1; flex-direction: column; gap: 3px; min-width: 0; padding: 6px 3px; font-size: 8px !important; position: relative; }.farm-power kbd { position: absolute; left: 5px; top: 5px; font-size: 8px; }.farm-power-icon { font-size: 20px; }.farm-power small { font-size: 8px; }.farm-key-guide { font-size: 8px; line-height: 1.6; }.farm-key-guide span { display: block; margin: 0; }.farm-run-message { max-width: calc(100% - 150px); font-size: 10px; padding: 7px 9px; left: 9px; top: 9px; } }
+@media (max-height: 500px) and (orientation: landscape) { .farm-game-header { padding: 5px 12px; }.farm-game-title .farm-eyebrow { display: none; }.farm-game-title strong { margin: 0; font-size: 16px; }.farm-game-actions .farm-button { min-height: 30px; padding: 5px 10px; }.farm-game-footer { padding: 5px 12px; }.farm-power { min-height: 36px; padding: 4px 10px; flex-direction: row; }.farm-power kbd { position: static; }.farm-key-guide { display: none; }.farm-touch-controls { bottom: 16px; }.farm-joystick { width: 82px; height: 82px; }.farm-result { padding: 14px 25px; }.farm-result h1 { font-size: 26px; margin: 7px 0; }.farm-result p { margin: 5px 0; }.farm-result-stats { margin: 12px 0; } }

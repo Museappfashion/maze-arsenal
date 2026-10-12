@@ -4,6 +4,7 @@ import { GAME_STYLES } from "./styles/gameStyles.js";
 import { MazeAudioEngine, queueSfx } from "./audio/MazeAudioEngine.js";
 import { LabyrinthStatusPanel, MinimapPanel, MobileHudOverlay, SettingsControls, SidebarSettings, TouchControls, mergeInputKeys, selectNextOwnedWeapon } from "./components/GameUi.jsx";
 import { LevelSelectScreen } from "./components/LevelSelectScreen.jsx";
+import { ThanksgivingEvent } from "./components/ThanksgivingEvent.jsx";
 import { StatCard } from "./components/StatCard.jsx";
 import { MizCounter } from "./components/MizCounter.jsx";
 import { MAX_AMMO } from "./config/ammo.js";
@@ -75,6 +76,7 @@ const [audioEnabled, setAudioEnabled] = useState(true);
 const [musicVolume, setMusicVolume] = useState(0.75);
 const [sfxVolume, setSfxVolume] = useState(0.85);
 const [selectedLevel, setSelectedLevel] = useState(null);
+const [thanksgivingOpen, setThanksgivingOpen] = useState(false);
 const [selectionMode, setSelectionMode] = useState("2d");
 const [gameMode, setGameMode] = useState("2d");
 const [playerName, setPlayerName] = useState("");
@@ -1041,9 +1043,14 @@ return () => {
   selectedLevel,
 ]);
 
+if (thanksgivingOpen && !selectedLevel) {
+  return <ThanksgivingEvent onBack={() => setThanksgivingOpen(false)} />;
+}
+
 if (!selectedLevel) {
   return (
     <LevelSelectScreen
+      onOpenThanksgiving={() => setThanksgivingOpen(true)}
       onSelectLevel={startLevel}
       leaderboards={leaderboards}
       leaderboardStatus={leaderboardStatus}

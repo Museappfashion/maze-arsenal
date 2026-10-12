@@ -1,0 +1,16 @@
+MIST MAZE — THANKSGIVING UPDATE
+
+Install into your existing maze-arsenal-ready project (the folder containing package.json).
+
+1. Unzip this download.
+2. Copy the src and scripts folders into your project, merging matching folders and replacing matching files. Copy README.md too if you want the updated documentation.
+3. Run npm run verify, then use your normal deployment process.
+
+This ZIP contains the Thanksgiving update files, not a standalone project. It uses your existing Vite configuration and game files. There are no new package dependencies or database changes.
+
+The event is labeled Only until Thanksgiving. It includes the farm lobby and store, a separate saved hux wallet, a city-sized farm street network, turkey rescues, the farmer chase, five power-ups, and keyboard/touch controls.
+
+The event remains available through November 26, 2026 in the player's local time. Existing runs may finish after the deadline.
+
+Files replaced: src/App.jsx, src/components/LevelSelectScreen.jsx, README.md.
+All other included files are additions for the Thanksgiving feature and its regression tests.

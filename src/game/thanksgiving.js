@@ -58,26 +58,105 @@ function setMessage(world, message, duration = 3) {
   world._messageUntil = world.time + duration;
 }
 
-export function createThanksgivingWorld({ random = Math.random, inventory = {} } = {}) {
-  // Broad, crossing streets surround fenced farm plots. Every intersection is open;
-  // there are no generated maze dead ends and every road joins the same network.
+function generateFarmLayout(random) {
+  // Irregular obstacles divide an open yard into a mesh of short paths. Each
+  // placement must preserve connectivity, including pockets behind bent fences.
+  let seed = (Math.floor(random() * 4294967296) >>> 0) || 7189;
+  const integer = (min, max) => {
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    return min + Math.floor(seed / 4294967296 * (max - min + 1));
+  };
   const grid = Array.from({ length: FARM_HEIGHT }, (_, y) =>
-    Array.from({ length: FARM_WIDTH }, (_, x) => {
-      if (x === 0 || y === 0 || x === FARM_WIDTH - 1 || y === FARM_HEIGHT - 1) return 1;
-      return (x - 1) % 10 < 4 || (y - 1) % 10 < 4 ? 0 : 1;
-    }));
+    Array.from({ length: FARM_WIDTH }, (_, x) =>
+      x === 0 || y === 0 || x === FARM_WIDTH - 1 || y === FARM_HEIGHT - 1 ? 1 : 0));
+  const terrain = grid.map(row => row.map(() => 4));
+  const farmProps = [];
+  const obstacleTiles = new Set();
+  const queue = new Int32Array(FARM_WIDTH * FARM_HEIGHT);
+  const visited = new Int32Array(queue.length);
+  let visit = 0;
+  let floorCount = (FARM_WIDTH - 2) * (FARM_HEIGHT - 2);
+  const connected = (expected) => {
+    visit += 1;
+    let head = 0;
+    let tail = 1;
+    queue[0] = FARM_WIDTH + 1;
+    visited[queue[0]] = visit;
+    while (head < tail) {
+      const cell = queue[head++];
+      const x = cell % FARM_WIDTH;
+      const y = Math.floor(cell / FARM_WIDTH);
+      for (const next of [cell - 1, cell + 1, cell - FARM_WIDTH, cell + FARM_WIDTH]) {
+        const nx = next % FARM_WIDTH;
+        const ny = Math.floor(next / FARM_WIDTH);
+        if (Math.abs(nx - x) + Math.abs(ny - y) !== 1 || grid[ny]?.[nx] !== 0 || visited[next] === visit) continue;
+        visited[next] = visit;
+        queue[tail++] = next;
+      }
+    }
+    return tail === expected;
+  };
+  const place = (cells, style, prop) => {
+    if (cells.some(([x, y]) => grid[y]?.[x] !== 0)) return false;
+    for (const [x, y] of cells) grid[y][x] = 1;
+    if (!connected(floorCount - cells.length)) {
+      for (const [x, y] of cells) grid[y][x] = 0;
+      return false;
+    }
+    floorCount -= cells.length;
+    for (const [x, y] of cells) {
+      terrain[y][x] = style;
+      if (prop) obstacleTiles.add(y * FARM_WIDTH + x);
+    }
+    if (prop) farmProps.push(prop);
+    return true;
+  };
+  const rectangles = (count, minW, maxW, minH, maxH, types) => {
+    let placed = 0;
+    for (let attempt = 0; attempt < count * 18 && placed < count; attempt += 1) {
+      const width = integer(minW, maxW);
+      const height = integer(minH, maxH);
+      const x = integer(2, FARM_WIDTH - width - 2);
+      const y = integer(2, FARM_HEIGHT - height - 2);
+      const cells = [];
+      for (let dy = 0; dy < height; dy++) for (let dx = 0; dx < width; dx++) cells.push([x + dx, y + dy]);
+      const type = types?.[integer(0, types.length - 1)];
+      if (place(cells, type ? 5 : integer(0, 3), type ? { x, y, width, height, type } : null)) placed += 1;
+    }
+  };
+  rectangles(32, 3, 8, 3, 7); // Uneven crop pens, offset from one another.
+  rectangles(8, 4, 6, 4, 5, ['barn']);
+  let fences = 0;
+  for (let attempt = 0; attempt < 1800 && fences < 90; attempt += 1) {
+    const x = integer(2, FARM_WIDTH - 12);
+    const y = integer(2, FARM_HEIGHT - 12);
+    const length = integer(3, 10);
+    const bend = integer(0, 1) ? integer(2, 6) : 0;
+    const vertical = integer(0, 1);
+    const cells = [];
+    for (let n = 0; n < length; n++) cells.push([x + (vertical ? 0 : n), y + (vertical ? n : 0)]);
+    for (let n = 1; n <= bend; n++) cells.push([x + (vertical ? n : length - 1), y + (vertical ? length - 1 : n)]);
+    if (place(cells, 4, null)) fences += 1;
+  }
+  rectangles(75, 1, 3, 1, 2, ['hay', 'crates', 'barrels', 'wagon']);
+  return { grid, terrain, farmProps, obstacleTiles };
+}
+
+export function createThanksgivingWorld({ random = Math.random, inventory = {} } = {}) {
+  const randomSource = typeof random === "function" ? random : Math.random;
+  const { grid, terrain, farmProps, obstacleTiles } = generateFarmLayout(randomSource);
   const roads = [];
   for (let y = 0; y < FARM_HEIGHT; y += 1) {
     for (let x = 0; x < FARM_WIDTH; x += 1) if (grid[y][x] === 0) roads.push({ x: x + 0.5, y: y + 0.5 });
   }
   const world = {
-    width: FARM_WIDTH, height: FARM_HEIGHT, grid,
+    width: FARM_WIDTH, height: FARM_HEIGHT, grid, terrain, farmProps, obstacleTiles,
     player: null, farmer: null, cages: [], corn: [], pickups: [], freed: [],
     time: 0, rescued: 0, cornCollected: 0, caught: false,
     inventory: Object.fromEntries(POWER_IDS.map(id => [id, Math.min(99, Math.max(0, Math.floor(Number(inventory[id]) || 0)))])),
     effects: { speed: 0, stun: 0, camouflage: 0, decoy: 0 }, decoy: null,
     message: "Free the turkeys. Gather corn for Hux. Keep moving!",
-    _random: typeof random === "function" ? random : Math.random,
+    _random: randomSource,
     _roads: roads, _nextId: 1, _path: [], _pathTarget: "", _pathUntil: 0,
     _spawnTimers: { cages: 0, corn: 0, pickups: 0 }, _messageUntil: 6,
   };

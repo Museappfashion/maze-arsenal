@@ -18,6 +18,11 @@ function makeWorld(options = {}) {
 }
 function clearStreetWorld(options = {}) {
   const world = makeWorld(options);
+  // Controlled collision fixture; mechanics do not depend on generated roads.
+  world.grid = Array.from({ length: world.height }, (_, y) => Array.from({ length: world.width }, (_, x) =>
+    x === 0 || y === 0 || x === world.width - 1 || y === world.height - 1 || (x >= 5 && x <= 10 && y >= 5 && y <= 10) ? 1 : 0));
+  world._roads = [];
+  world.grid.forEach((row, y) => row.forEach((cell, x) => { if (cell === 0) world._roads.push({ x: x + .5, y: y + .5 }); }));
   Object.assign(world.player, { x: 3.5, y: 2.5 });
   Object.assign(world.farmer, { x: 40.5, y: 2.5 });
   world.cages = [];
@@ -39,7 +44,7 @@ function approx(actual, expected, precision = 1e-8) {
   assert.ok(Math.abs(actual - expected) < precision, `${actual} differs from ${expected}`);
 }
 
-test("farm streets match the real Abandoned City dimensions and form one connected network with loops", () => {
+test("farm paths match Abandoned City dimensions and form one connected mesh with loops", () => {
   const world = makeWorld();
   assert.equal(FARM_WIDTH, LEVELS.level0.logicalCols * (PASSAGE_WIDTH + 1) + 1);
   assert.equal(FARM_HEIGHT, LEVELS.level0.logicalRows * (PASSAGE_WIDTH + 1) + 1);
@@ -58,7 +63,6 @@ test("farm streets match the real Abandoned City dimensions and form one connect
     for (const [nx, ny] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]) {
       if (world.grid[ny]?.[nx] === 0) { pending.push([nx, ny]); exits += 1; }
     }
-    assert.ok(exits >= 2, "farm roads have no dead ends");
     edges += exits;
   }
   assert.equal(visited.size, roads.length);
@@ -233,4 +237,47 @@ test("capture ends updates and power usage, while snapshots cannot mutate live s
   updateThanksgivingWorld(world, 1, { x: 1, rescue: true });
   for (const power of FARM_POWERUPS) assert.equal(activateThanksgivingPower(world, power.id), false);
   assert.deepEqual(getThanksgivingSnapshot(world), end);
+});
+
+
+test("busy randomized layouts stay connected with solid props and irregular paths across seeds", () => {
+  const layouts = new Set();
+  for (let seed = 1; seed <= 20; seed++) {
+    const world = makeWorld({ random: seeded(seed) });
+    layouts.add(JSON.stringify(world.grid));
+    const start = world._roads[0];
+    const pending = [[Math.floor(start.x), Math.floor(start.y)]];
+    const seen = new Set([pending[0].join(',')]);
+    for (let i = 0; i < pending.length; i++) {
+      const [x, y] = pending[i];
+      for (const [nx, ny] of [[x-1,y],[x+1,y],[x,y-1],[x,y+1]]) {
+        const key = `${nx},${ny}`;
+        if (world.grid[ny]?.[nx] === 0 && !seen.has(key)) { seen.add(key); pending.push([nx, ny]); }
+      }
+    }
+    assert.equal(seen.size, world._roads.length, 'no blocked-off rescue pockets');
+    assert.ok(seen.size > 1500 && seen.size < 3000, 'a busy layout balances clutter and traversable ground');
+    assert.ok(world.farmProps.length >= 60);
+    assert.equal(new Set(world.farmProps.map(prop => prop.type)).size, 5);
+    for (const prop of world.farmProps) {
+      for (let y = prop.y; y < prop.y + prop.height; y++) for (let x = prop.x; x < prop.x + prop.width; x++) {
+        assert.equal(world.grid[y][x], 1, 'props really block movement');
+        assert.ok(world.obstacleTiles.has(y * world.width + x));
+      }
+    }
+    const straightRows = world.grid.filter(row => row.slice(1, -1).every(cell => cell === 0));
+    assert.ok(straightRows.length <= 4, 'no repeated full-width street grid');
+  }
+  assert.equal(layouts.size, 20, 'each seed produces a different arrangement');
+});
+
+test("the farmer finds the turkey through generated clutter without crossing solid tiles", () => {
+  for (let seed = 1; seed <= 12; seed++) {
+    const world = makeWorld({ random: seeded(seed) });
+    for (let step = 0; step < 1400 && !world.caught; step++) {
+      updateThanksgivingWorld(world, .1);
+      onRoad(world, world.farmer);
+    }
+    assert.equal(world.caught, true, `farmer must navigate generated layout ${seed}`);
+  }
 });

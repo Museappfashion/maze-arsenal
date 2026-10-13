@@ -24,7 +24,8 @@ try {
   const localRoute = async route => {
     const url = new URL(route.request().url());
     if (url.origin !== origin) return route.abort();
-    if (url.pathname === "/src/game/thanksgiving.js" && !url.search) {
+    // Vite adds a timestamp query after hot updates; instrument those too.
+    if (url.pathname === "/src/game/thanksgiving.js") {
       const response = await route.fetch();
       const original = await response.text();
       assert.ok(original.includes("return world;"), "the create-world return is available for test instrumentation");
@@ -79,6 +80,10 @@ try {
   const firstSpawns = await page.evaluate(() => {
     const world = globalThis.__farmTestWorld;
     const initial = [world.player.x, world.player.y, world.farmer.x, world.farmer.y];
+    // Use a controlled clear patch for input checks, independent of random terrain.
+    world.grid = world.grid.map(row => [...row]);
+    for (let y = 1; y <= 4; y++) for (let x = 1; x <= 12; x++) world.grid[y][x] = 0;
+    world.grid[62][60] = 0;
     Object.assign(world.player, { x: 3.5, y: 2.5 });
     Object.assign(world.farmer, { x: 60.5, y: 62.5 });
     world.cages = [];
@@ -190,6 +195,10 @@ try {
   await mobile.waitForFunction(() => globalThis.__farmTestWorld?.time > 0);
   await mobile.evaluate(() => {
     const world = globalThis.__farmTestWorld;
+    // Use a controlled clear patch for input checks, independent of random terrain.
+    world.grid = world.grid.map(row => [...row]);
+    for (let y = 1; y <= 4; y++) for (let x = 1; x <= 12; x++) world.grid[y][x] = 0;
+    world.grid[62][60] = 0;
     Object.assign(world.player, { x: 3.5, y: 2.5 });
     Object.assign(world.farmer, { x: 60.5, y: 62.5 });
     world.cages = []; world.corn = []; world.pickups = [];

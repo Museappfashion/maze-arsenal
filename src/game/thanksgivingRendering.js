@@ -157,22 +157,25 @@ function drawGround(ctx, world, bounds, tile) {
           ctx.fillStyle = n % 2 ? '#ddc29955' : '#796e5029';
           ctx.fillRect(px + a * tile, py + b * tile, 1 + a * 2.5, 1 + b);
         }
-        // Quiet wheel ruts make the lanes read as country streets.
-        ctx.strokeStyle = '#8f805520';
-        ctx.lineWidth = 1.6;
-        if (isRoad(world, x - 1, y) && isRoad(world, x + 1, y)) {
+        // Broken scuffs give the dirt texture without implying regular lanes.
+        if (seed(x, y, 40) > .6) {
+          const scuffX = px + tile * (.2 + seed(x, y, 41) * .5);
+          const scuffY = py + tile * (.2 + seed(x, y, 42) * .5);
+          const angle = seed(x, y, 43) * TAU;
+          const length = tile * .2;
+          ctx.strokeStyle = '#8f805529';
+          ctx.lineWidth = 1.4;
           ctx.beginPath();
-          ctx.moveTo(px, py + tile * .22);
-          ctx.lineTo(px + tile, py + tile * .22);
-          ctx.moveTo(px, py + tile * .76);
-          ctx.lineTo(px + tile, py + tile * .76);
+          ctx.moveTo(scuffX, scuffY);
+          ctx.quadraticCurveTo(scuffX + Math.cos(angle + .3) * length,
+            scuffY + Math.sin(angle + .3) * length,
+            scuffX + Math.cos(angle) * length * 2,
+            scuffY + Math.sin(angle) * length * 2);
           ctx.stroke();
         }
       } else {
-        const fieldX = Math.floor((x - 5) / 10);
-        const fieldY = Math.floor((y - 5) / 10);
-        const style = Math.floor(seed(fieldX, fieldY, 3) * 4);
-        ctx.fillStyle = ['#9b8d4f', '#827849', '#7f8550', '#939161'][style];
+        const style = world.terrain?.[y]?.[x] ?? 4;
+        ctx.fillStyle = ['#9b8d4f', '#827849', '#7f8550', '#939161', '#6f7950', '#b69b70'][style];
         ctx.fillRect(px, py, tile + .4, tile + .4);
         if (style === 0 || style === 1) {
           for (let row = 0; row < 3; row++) {
@@ -212,30 +215,68 @@ function drawGround(ctx, world, bounds, tile) {
       }
     }
   }
-  // Buildings occupy the centers of the six-tile farm plots, clear of lanes.
-  for (let y = 7; y < world.height - 2; y += 10) {
-    for (let x = 7; x < world.width - 2; x += 10) {
-      if (x + 3 < bounds.minX || x - 3 > bounds.maxX || y + 3 < bounds.minY || y - 3 > bounds.maxY) continue;
-      if (isRoad(world, x, y) || isRoad(world, x + 2, y + 2)) continue;
-      const fieldX = Math.floor((x - 5) / 10);
-      const fieldY = Math.floor((y - 5) / 10);
-      const style = Math.floor(seed(fieldX, fieldY, 3) * 4);
-      if (style === 3) {
-        drawBarn(ctx, (x + 1) * tile, (y + .6) * tile, tile, seed(x, y) > .5);
-        drawHay(ctx, (x - .8) * tile, (y + 2.2) * tile, tile * .65);
-        drawHay(ctx, (x + .05) * tile, (y + 2.25) * tile, tile * .65);
-      } else if (style === 2) {
-        drawHay(ctx, (x + .1) * tile, (y + .7) * tile, tile * .9);
-        drawHay(ctx, (x + 1.2) * tile, (y + .9) * tile, tile * .9);
-        drawHay(ctx, (x + .7) * tile, (y + .1) * tile, tile * .85);
-        drawPumpkin(ctx, (x + 2.1) * tile, (y + 2) * tile, tile * .29);
+  // Every visible prop corresponds to an actual solid footprint in the grid.
+  for (const prop of world.farmProps || []) {
+    if (prop.x + prop.width < bounds.minX || prop.x > bounds.maxX || prop.y + prop.height < bounds.minY || prop.y > bounds.maxY) continue;
+    const x = prop.x * tile;
+    const y = prop.y * tile;
+    const w = prop.width * tile;
+    const h = prop.height * tile;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, w, h);
+    ctx.clip();
+    if (prop.type === 'barn') {
+      // The raised foundation marks the whole solid area, including the barn's
+      // margins, so apparent dirt never conceals an invisible collision box.
+      ctx.fillStyle = '#79664e';
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeStyle = '#bba780';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(x + 1.5, y + 1.5, w - 3, h - 3);
+      ctx.strokeStyle = '#4e473b';
+      ctx.lineWidth = 1;
+      for (let edge = tile * .5; edge < w; edge += tile * .7) {
+        ctx.beginPath(); ctx.moveTo(x + edge, y); ctx.lineTo(x + edge, y + 5);
+        ctx.moveTo(x + edge, y + h - 5); ctx.lineTo(x + edge, y + h); ctx.stroke();
+      }
+      drawBarn(ctx, x + w / 2, y + h * .57, Math.min(w / 3.5, h / 3.1), seed(x, y) > .5);
+    } else if (prop.type === 'wagon') {
+      roundRect(ctx, x + 2, y + 2, w - 4, h - 4, 3, '#4b4734');
+      roundRect(ctx, x + 5, y + 5, w - 10, h - 10, 2, '#9f7044');
+      ctx.strokeStyle = '#dbad70';
+      ctx.lineWidth = 2;
+      for (let n = 1; n < 5; n++) {
+        ctx.beginPath(); ctx.moveTo(x + 6, y + h * n / 5); ctx.lineTo(x + w - 6, y + h * n / 5); ctx.stroke();
+      }
+      for (const xx of [x + 4, x + w - 4]) for (const yy of [y + 6, y + h - 6]) ellipse(ctx, xx, yy, 3, 5, '#302f29');
+    } else {
+      for (let dy = 0; dy < prop.height; dy++) for (let dx = 0; dx < prop.width; dx++) {
+        const cx = x + (dx + .5) * tile;
+        const cy = y + (dy + .5) * tile;
+        if (prop.type === 'hay') drawHay(ctx, cx, cy, tile * .96);
+        else if (prop.type === 'barrels') {
+          ellipse(ctx, cx + 2, cy + 3, tile * .43, tile * .44, '#51412f');
+          ellipse(ctx, cx, cy, tile * .42, tile * .43, '#847351');
+          ctx.strokeStyle = '#c5b58d'; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.ellipse(cx, cy, tile * .33, tile * .34, 0, 0, TAU); ctx.stroke();
+          ellipse(ctx, cx + tile * .16, cy - tile * .15, 2, 2, '#322d23');
+        } else {
+          roundRect(ctx, cx - tile * .46, cy - tile * .46, tile * .92, tile * .92, 2, '#84603c');
+          ctx.strokeStyle = '#d1a873'; ctx.lineWidth = 2;
+          ctx.strokeRect(cx - tile * .36, cy - tile * .36, tile * .72, tile * .72);
+          ctx.beginPath(); ctx.moveTo(cx - tile * .36, cy - tile * .36); ctx.lineTo(cx + tile * .36, cy + tile * .36); ctx.stroke();
+        }
       }
     }
+    ctx.restore();
   }
 }
 
 function drawFenceSegment(ctx, ax, ay, bx, by, tile) {
   const lift = tile * .24;
+  // A slight sideways projection keeps vertical wire panels visible from above.
+  const lean = tile * .1;
   const length = Math.hypot(bx - ax, by - ay);
   const pieces = Math.max(3, Math.round(length / 6));
   ctx.beginPath();
@@ -247,8 +288,8 @@ function drawFenceSegment(ctx, ax, ay, bx, by, tile) {
   ctx.beginPath();
   ctx.moveTo(ax, ay);
   ctx.lineTo(bx, by);
-  ctx.lineTo(bx, by - lift);
-  ctx.lineTo(ax, ay - lift);
+  ctx.lineTo(bx + lean, by - lift);
+  ctx.lineTo(ax + lean, ay - lift);
   ctx.closePath();
   ctx.fillStyle = '#d8dbc221';
   ctx.fill();
@@ -264,23 +305,33 @@ function drawFenceSegment(ctx, ax, ay, bx, by, tile) {
     const x2 = ax + (bx - ax) * t2;
     const y2 = ay + (by - ay) * t2;
     ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2 - lift);
-    ctx.moveTo(x1, y1 - lift);
+    ctx.lineTo(x2 + lean, y2 - lift);
+    ctx.moveTo(x1 + lean, y1 - lift);
     ctx.lineTo(x2, y2);
   }
   ctx.strokeStyle = '#e4e4cc9c';
   ctx.lineWidth = .65;
   ctx.stroke();
-  ctx.fillStyle = '#695035';
-  ctx.fillRect(ax - 1.5, ay - lift - 3, 3, lift + 5);
-  ctx.fillStyle = '#a38a5c';
-  ctx.fillRect(ax - 1.5, ay - lift - 3, 1.1, lift + 3);
+  for (const [x, y] of [[ax, ay], [bx, by]]) {
+    ctx.strokeStyle = '#695035';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x, y + 2);
+    ctx.lineTo(x + lean, y - lift - 3);
+    ctx.stroke();
+    ctx.strokeStyle = '#a38a5c';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x - .7, y);
+    ctx.lineTo(x + lean - .7, y - lift - 3);
+    ctx.stroke();
+  }
 }
 
 function drawFences(ctx, world, bounds, tile) {
   for (let y = bounds.minY; y <= bounds.maxY; y++) {
     for (let x = bounds.minX; x <= bounds.maxX; x++) {
-      if (isRoad(world, x, y)) continue;
+      if (isRoad(world, x, y) || world.obstacleTiles?.has(y * world.width + x)) continue;
       const px = x * tile;
       const py = y * tile;
       if (isRoad(world, x, y - 1)) drawFenceSegment(ctx, px, py, px + tile, py, tile);

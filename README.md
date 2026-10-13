@@ -98,10 +98,12 @@ season runs through U.S. Thanksgiving, **November 26, 2026**, in the player's
 local time. New runs close at midnight afterward; a run already in progress
 can finish. The deadline lives in `src/services/thanksgivingSeason.js`.
 
-The farm is a 66 × 66 connected street network, matching Abandoned City's
-footprint. Chicken-wire fences enclose crop fields, barns, and hay. You play
+The farm is a randomized 66 × 66 mesh of tangled paths, matching Abandoned
+City's footprint. Irregular crop pens, bent chicken-wire walls, barns, hay
+bales, crates, barrels, and carts create tight turns and confusing junctions.
+Every open area remains connected; the layout changes on each run. You play
 as a turkey; you and the farmer start at random, safely separated locations.
-The farmer follows the streets at 1.1× the turkey's normal movement speed.
+The farmer navigates the obstacles at 1.1× the turkey's normal movement speed.
 Rescue as many caged turkeys as possible before being caught. Cages, corn, and
 power-ups continuously replenish in random open locations, with population
 caps to keep long runs stable.

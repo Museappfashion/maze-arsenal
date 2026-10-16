@@ -1,0 +1,35 @@
+MIST MAZE — OCTOBER 16, 2026 UPDATE
+
+INSTALL INTO YOUR EXISTING PROJECT
+1. Unzip this download.
+2. Open the existing project folder containing package.json (for example total/).
+3. Copy this download's src/ and scripts/ folders into that folder, merging them
+   and replacing matching files. Also copy the included root configuration files.
+4. Keep your existing .env files, api/ folder, and supabase/ folder.
+5. Run npm install, then npm run verify, then npm run dev.
+   For deployment, use your usual existing deployment process.
+
+This is a complete current frontend source snapshot, with project-relative paths.
+It does not include node_modules, private environment files, or generated builds.
+
+WHAT CHANGED
+- Blobby Alien: 10,000 MIZ. Turkey Disguise: 1,000 hux.
+- Plain alien/turkey in Abandoned City; themed headwear in the other combat mazes.
+- More affordable MIZ store and usable in-run powers. Null Pulse is now Mist Guard.
+- Free the Flock has more room and three replacement powers:
+  2: Mud Trap; 4: Feather Gust; 5: Fence Slip. Existing charges carry over.
+  1: Turkey Trot; 3: Haystack Hop.
+- 50 more ammo pickups AND 50 more medkits per combat maze.
+- Rankings show unnamed opponents as Random Player; your custom name gets (you).
+- Improved 3D materials and depth; corrected Abandoned City 3D surfaces.
+- Labyrinth shifts every 30 seconds at every difficulty.
+- Calm blue update notice board with bullet points on the first page.
+
+VALIDATION
+npm run verify: import audit and production build passed.
+62 automated tests passed, including currency separation, preserved ownership,
+new farm effects, pickups, Labyrinth timing, and MIZ power behavior.
+Chrome checks passed for purchases, gameplay, all four 3D renderers, mobile play,
+reload persistence, and zero browser errors.
+
+See README.md for full controls, powers, and test commands.

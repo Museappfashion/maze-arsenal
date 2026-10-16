@@ -1,4 +1,5 @@
 // src/game/rendering-enhanced.js
+import { drawWallMaterial } from "./materials3D.js";
 import {
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
@@ -30,6 +31,7 @@ import {
 import { hasLineOfSight } from "./maze.js";
 import {
   cast3DRay,
+  drawPlayerBody,
   draw3DEnvironment,
   draw3DOverlay,
   draw3DSprites,
@@ -2061,6 +2063,13 @@ function drawCityPlayer2D(ctx, world) {
   }
 
   const player = playerScreenPosition(world);
+  if (["turkey", "alien"].includes(world.player.cosmetic)) {
+    const zoom = getWorldRenderZoom(world);
+    ctx.save(); ctx.scale(zoom, zoom);
+    drawPlayerBody(ctx, world, player.x / zoom, player.y / zoom);
+    ctx.restore();
+    return;
+  }
   const swingState = getCitySwingState(world);
 
   ctx.save();
@@ -2213,35 +2222,18 @@ function drawCityRoadPerspective3D(ctx, world, zBuffer, plane) {
 }
 
 function drawCityWallFacade3D(ctx, world, plane) {
-  const horizon = CANVAS_HEIGHT * 0.46;
+  const horizon = CANVAS_HEIGHT * .46;
   const rayCount = Math.ceil(CANVAS_WIDTH / VIEW_3D_RAY_WIDTH);
   ctx.save();
-  for (let ray = 0; ray < rayCount; ray += 1) {
+  for (let ray = 0; ray < rayCount; ray++) {
     const x = ray * VIEW_3D_RAY_WIDTH;
     const offset = Math.atan((x + VIEW_3D_RAY_WIDTH / 2 - CANVAS_WIDTH / 2) / plane);
     const hit = cast3DRay(world, world.player.facing + offset);
     if (hit.wallType == null) continue;
-    const depth = Math.max(0.08, hit.distance * Math.cos(offset));
+    const depth = Math.max(.08, hit.distance * Math.cos(offset));
     const height = Math.min(CANVAS_HEIGHT * 2.4, plane / depth);
-    const top = horizon - height / 2;
-    const fade = Math.max(0.12, 1 - depth / VIEW_3D_MAX_DISTANCE);
-    // Texture coordinates come from the hit wall, never from the screen/time.
-    const seed = citySeed(hit.mapX, hit.mapY, hit.side);
-    const edge = hit.wallOffset < 0.055 || hit.wallOffset > 0.945;
-    ctx.globalAlpha = fade * (hit.side ? 0.65 : 0.85);
-    ctx.fillStyle = edge ? "#c0c4c8" : seed > 0.55 ? "#7f858b" : "#535d68";
-    ctx.fillRect(x, top, VIEW_3D_RAY_WIDTH, height);
-    if (!edge && hit.wallOffset > 0.18 && hit.wallOffset < 0.82) {
-      for (let row = 0; row < 2; row += 1) {
-        const lit = citySeed(hit.mapX, hit.mapY, row + 31) > 0.78;
-        ctx.fillStyle = lit ? "#c2a863" : "#182633";
-        ctx.fillRect(x, top + height * (0.17 + row * 0.32), VIEW_3D_RAY_WIDTH, height * 0.2);
-        ctx.fillStyle = "#87939c";
-        ctx.fillRect(x, top + height * (0.37 + row * 0.32), VIEW_3D_RAY_WIDTH, Math.max(1, height * 0.025));
-      }
-    }
-    ctx.fillStyle = "#262e35";
-    ctx.fillRect(x, top + height * 0.88, VIEW_3D_RAY_WIDTH, height * 0.12);
+    const brightness = Math.max(.18, 1 - depth / VIEW_3D_MAX_DISTANCE) * (hit.side ? .78 : 1);
+    drawWallMaterial(ctx, world, hit, x, horizon - height / 2, VIEW_3D_RAY_WIDTH + 1, height, brightness);
   }
   ctx.restore();
 }

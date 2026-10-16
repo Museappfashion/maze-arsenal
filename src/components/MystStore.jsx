@@ -6,7 +6,7 @@ import {
 } from "react";
 import { MizCoin, MIZ_COSMETIC_STYLES, mizCosmeticClasses } from "./MizCoin.jsx";
 import { TurkeyCosmeticCard } from "./TurkeyCosmeticCard.jsx";
-import { useHuxWallet } from "./useHuxWallet.js";
+
 import {
   MIZ_STATE_CHANGED_EVENT,
   MIZ_TILES_PER_COIN,
@@ -562,7 +562,7 @@ function isBuyDisabled(
 }
 
 export function MystStore() {
-  const huxWallet = useHuxWallet();
+
   const state =
     useMizState();
 
@@ -627,7 +627,7 @@ export function MystStore() {
           </div>
 
           <div className="myst-store-note">
-            10 cosmetics are permanent and apply automatically together.
+            Coin cosmetics are permanent and apply together; equip one character cosmetic at a time.
             10 one-use powers are activated
             manually from the Myst Powers button
             during a maze. Miz is earned at
@@ -655,8 +655,9 @@ export function MystStore() {
       </div>
 
       <div className="myst-store-items">
-        {huxWallet.cosmetics.turkey && <TurkeyCosmeticCard wallet={huxWallet} onMessage={setStatus} variant="myst" />}
-        {MYST_SHOP_ITEMS.map(
+        <TurkeyCosmeticCard onMessage={setStatus} variant="myst" />
+        <TurkeyCosmeticCard onMessage={setStatus} variant="myst" cosmetic="alien" />
+        {MYST_SHOP_ITEMS.filter((item) => item.kind !== "character").map(
           (item) => {
             const itemStatus =
               getItemStatus(

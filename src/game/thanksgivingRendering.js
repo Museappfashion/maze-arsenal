@@ -1,17 +1,17 @@
 const TAU = Math.PI * 2;
 const POWER_COLORS = {
   speed: '#ffc54a',
-  stun: '#8eddf4',
+  stun: '#b48b63',
   teleport: '#c5a1ff',
   decoy: '#ffab85',
   camouflage: '#a6d68c',
 };
 const POWER_LABELS = {
   speed: 'DASH',
-  stun: 'STUN',
+  stun: 'MUD',
   teleport: 'WARP',
-  decoy: 'DECOY',
-  camouflage: 'HIDE',
+  decoy: 'GUST',
+  camouflage: 'SLIP',
 };
 const landscapeCache = new WeakMap();
 
@@ -490,14 +490,8 @@ function powerSymbol(ctx, type, x, y, radius) {
     ctx.closePath();
     ctx.fill();
   } else if (type === 'stun') {
-    ctx.beginPath();
-    ctx.arc(0, 0, radius * .28, 0, TAU);
-    for (let n = 0; n < 6; n++) {
-      const a = n * TAU / 6;
-      ctx.moveTo(Math.cos(a) * radius * .48, Math.sin(a) * radius * .48);
-      ctx.lineTo(Math.cos(a) * radius * .78, Math.sin(a) * radius * .78);
-    }
-    ctx.stroke();
+    ellipse(ctx, 0, radius * .2, radius * .75, radius * .4, '#664b35');
+    ellipse(ctx, -radius * .2, 0, radius * .3, radius * .12, '#d5b48f');
   } else if (type === 'teleport') {
     ctx.beginPath();
     for (let n = 0; n < 34; n++) {
@@ -508,16 +502,15 @@ function powerSymbol(ctx, type, x, y, radius) {
     }
     ctx.stroke();
   } else if (type === 'decoy') {
-    ellipse(ctx, -radius * .3, radius * .12, radius * .3, radius * .43, '#374132');
-    ellipse(ctx, radius * .32, -radius * .15, radius * .26, radius * .38, '#374132');
+    for (let n = -1; n <= 1; n++) {
+      ctx.beginPath(); ctx.moveTo(-radius * .7, n * radius * .4);
+      ctx.quadraticCurveTo(radius, n * radius * .4, radius * .4, n * radius * .4 - radius * .2); ctx.stroke();
+    }
   } else {
-    ellipse(ctx, 0, 0, radius * .38, radius * .7, '#374132', .55);
-    ctx.strokeStyle = '#accf8c';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(-radius * .28, radius * .5);
-    ctx.lineTo(radius * .24, -radius * .45);
-    ctx.stroke();
+    for (const n of [-.5, 0, .5]) {
+      ctx.beginPath(); ctx.moveTo(n * radius, -radius * .7); ctx.lineTo(n * radius, radius * .7); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.moveTo(-radius * .8, radius * .2); ctx.lineTo(radius * .8, -radius * .2); ctx.stroke();
   }
   ctx.restore();
 }
@@ -723,12 +716,16 @@ export function drawThanksgivingWorld(ctx, world, viewportWidth, viewportHeight,
     ctx.fillText('FREE!', turkey.x * tile, turkey.y * tile - tile * .65 - (turkey.age || 0) * 7);
     ctx.restore();
   }
-  if (world.decoy && visible(world.decoy)) {
-    drawTurkey(ctx, world.decoy.x * tile, world.decoy.y * tile, tile * .49, -.4, { ghost: true });
-    ctx.fillStyle = '#ffe2b2';
-    ctx.font = '700 8px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('DECOY', world.decoy.x * tile, world.decoy.y * tile - 23);
+  for (const trap of world.traps || []) {
+    if (trap.remaining <= 0 || !visible(trap)) continue;
+    ellipse(ctx, trap.x * tile, trap.y * tile, tile * .7, tile * .4, '#755438bb');
+    ellipse(ctx, trap.x * tile - 3, trap.y * tile - 2, tile * .35, tile * .12, '#bd936c99');
+  }
+  if (effects.gust > 0) {
+    ctx.strokeStyle = '#fff4dbbb'; ctx.lineWidth = 2;
+    for (let n = 0; n < 3; n++) {
+      ctx.beginPath(); ctx.arc(player.x * tile, player.y * tile, tile * (1 + n * .7 + (0.7 - effects.gust) * 4), (player.facing || 0) - .6, (player.facing || 0) + .6); ctx.stroke();
+    }
   }
   if (effects.speed > 0) {
     const a = player.facing || 0;
@@ -736,10 +733,11 @@ export function drawThanksgivingWorld(ctx, world, viewportWidth, viewportHeight,
       ellipse(ctx, player.x * tile - Math.cos(a) * n * 8, player.y * tile - Math.sin(a) * n * 8, 5 - n, 5 - n, `rgba(255,228,122,${.45 - n * .1})`);
     }
   }
-  if (world.farmer && visible(world.farmer)) drawFarmer(ctx, world.farmer, tile, time, effects.stun > 0);
+  if (world.farmer && visible(world.farmer)) drawFarmer(ctx, world.farmer, tile, time, false);
+  if (effects.mudSlow > 0 && world.farmer && visible(world.farmer)) ellipse(ctx, world.farmer.x * tile, world.farmer.y * tile + 9, tile * .45, tile * .15, "#795335aa");
   if (world.player) {
-    drawTurkey(ctx, player.x * tile, player.y * tile, tile * .52, player.facing || 0, { player: true, ghost: effects.camouflage > 0, time });
-    if (effects.camouflage > 0) {
+    drawTurkey(ctx, player.x * tile, player.y * tile, tile * .52, player.facing || 0, { player: true, ghost: effects.fenceSlip > 0, time });
+    if (effects.fenceSlip > 0) {
       ctx.strokeStyle = '#bedfa699';
       ctx.lineWidth = 2;
       ctx.setLineDash([3, 4]);
@@ -755,7 +753,7 @@ export function drawThanksgivingWorld(ctx, world, viewportWidth, viewportHeight,
   glow.addColorStop(1, '#302e2333');
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, viewportWidth, viewportHeight);
-  if (world.farmer && !world.caught && !effects.stun && !effects.camouflage) {
+  if (world.farmer && !world.caught) {
     const distance = Math.hypot(world.farmer.x - player.x, world.farmer.y - player.y);
     if (distance < 5) {
       ctx.strokeStyle = `rgba(185,66,38,${(.14 + Math.sin(time * 5) * .05) * (1 - distance / 5)})`;

@@ -7,6 +7,7 @@ import { LevelSelectScreen } from "./components/LevelSelectScreen.jsx";
 import { ThanksgivingEvent } from "./components/ThanksgivingEvent.jsx";
 import { StatCard } from "./components/StatCard.jsx";
 import { MizCounter } from "./components/MizCounter.jsx";
+import { MystPowersPanel } from "./components/MystPowersPanel.jsx";
 import { MAX_AMMO } from "./config/ammo.js";
 import { getLabyrinthLight } from "./config/labyrinthLights.js";
 import { CANVAS_HEIGHT, CANVAS_WIDTH, DEFAULT_LEVEL_KEY, PASSAGE_WIDTH, VIEW_3D_MOUSE_SENSITIVITY, VIEW_3D_TOUCH_SENSITIVITY } from "./config/constants.js";
@@ -1106,6 +1107,7 @@ return (
           }}
         />
         <MizCounter />
+        <MystPowersPanel key={selectedLevel} world={world} onUse={forceRefresh} />
 {touchControlsEnabled && (
           <TouchControls
             gameMode={gameMode}

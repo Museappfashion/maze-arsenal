@@ -16,7 +16,7 @@ function FarmStore({ wallet, onClose }) {
   return (
     <section className="farm-store" aria-label="Farm supply store">
       <header><div><span className="farm-eyebrow">The harvest trading post</span><h2>Farm supply store</h2></div><button className="farm-button farm-quiet" onClick={onClose} type="button" aria-label="Close farm store">Close ×</button></header>
-      <p>Trade corn-earned hux for a little breathing room. Each purchase adds one use to your bag. Unused supplies stay with you.</p>
+      <p>Trade corn-earned hux for farm supplies. Each supply purchase adds one use to your bag. Character cosmetics below use MIZ and are permanent.</p>
       <div className="farm-store-grid">
         {FARM_POWERUPS.map((item) => (
           <article className="farm-store-item" key={item.id}>
@@ -27,7 +27,8 @@ function FarmStore({ wallet, onClose }) {
           </article>
         ))}
       </div>
-      <TurkeyCosmeticCard wallet={wallet} onMessage={setMessage} />
+      <TurkeyCosmeticCard onMessage={setMessage} />
+      <TurkeyCosmeticCard onMessage={setMessage} cosmetic="alien" />
       <p className="farm-store-message" role="status">{message || "You can also find free power-ups along the farm lanes."}</p>
     </section>
   );
@@ -172,7 +173,7 @@ function ThanksgivingRun({ onLeave, onRestart, wallet }) {
         <div className="farm-game-actions"><button type="button" className="farm-button farm-quiet" onClick={() => setPause(!pausedRef.current)} disabled={snapshot.caught}>{paused ? "Resume" : "Pause"}</button><button type="button" className="farm-button farm-quiet" onClick={onLeave}>Farm menu</button></div>
       </header>
       <div className="farm-canvas-wrap">
-        <canvas ref={canvasRef} className="farm-canvas" aria-label="Turkey rescue farm. Use WASD or arrow keys to move, hold E near a cage to rescue, and press 1 through 5 for power-ups." tabIndex="0"/>
+        <canvas ref={canvasRef} className="farm-canvas" aria-label="Turkey rescue farm. Use WASD or arrow keys to move, hold E near a cage to rescue, and press 1 and 2 for power-ups." tabIndex="0"/>
         <div className="farm-run-message" role="status">{snapshot.nearCage ? "Hold E or FREE to open this cage" : snapshot.message || "Find a cage. Free a friend. Keep moving."}</div>
         <div className="farm-touch-controls">
           <FarmJoystick key={paused ? "paused" : "moving"} onMove={(position) => { joystick.current = position; }}/>

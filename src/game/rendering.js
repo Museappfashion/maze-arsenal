@@ -13,7 +13,8 @@ import { getDiscoveredPercent, hashNoise } from "./maze.js";
 import { getLabyrinthTimeRemaining, labyrinthBreakerActive } from "./labyrinth.js";
 import { angleDelta, clamp, formatTime, indexOfTile, lerp, normalize, tileCenter } from "../utils/math.js";
 import { getPlayerDisplayName } from "../utils/player.js";
-import { drawTurkeyCosmeticBody } from "./turkeyCosmetic.js";
+import { drawCharacterCosmeticBody } from "./characterCosmetic.js";
+import { drawPerspectiveFloor, drawWallMaterial } from "./materials3D.js";
 
 export function drawEffects(ctx, world, camera) {
   for (const effect of world.effects ?? []) {
@@ -1475,8 +1476,8 @@ export function drawPlayerBody(ctx, world, x, y) {
   ctx.strokeStyle = outline;
   ctx.lineWidth = Math.max(2.2, radius * 0.24);
 
-  if (player.cosmetic === "turkey" && ["space", "jungle", "medieval"].includes(themeKey)) {
-    drawTurkeyCosmeticBody(ctx, themeKey, radius);
+  if (["turkey", "alien"].includes(player.cosmetic) && ["city", "space", "jungle", "medieval"].includes(themeKey)) {
+    drawCharacterCosmeticBody(ctx, themeKey, radius, player.cosmetic);
   } else if (themeKey === "space") {
     // Twin animated engines make this read as a spaceship instead of an arrow.
     ctx.save();
@@ -2637,32 +2638,9 @@ export function draw3DEnvironment(ctx, world, zBuffer) {
   ctx.fillStyle = floor;
   ctx.fillRect(0, horizon, CANVAS_WIDTH, CANVAS_HEIGHT - horizon);
 
-  ctx.strokeStyle = theme.floorLine;
-  ctx.lineWidth = 1;
-
-  for (let row = 0; row < 9; row += 1) {
-    const t = row / 8;
-    const y =
-      horizon + 14 + t * t * (CANVAS_HEIGHT - horizon - 20);
-    ctx.globalAlpha = 0.16 + t * 0.16;
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(CANVAS_WIDTH, y);
-    ctx.stroke();
-  }
-
-  ctx.globalAlpha = 0.12;
-  for (let x = -CANVAS_WIDTH; x <= CANVAS_WIDTH * 2; x += 96) {
-    ctx.beginPath();
-    ctx.moveTo(CANVAS_WIDTH / 2, horizon);
-    ctx.lineTo(x, CANVAS_HEIGHT);
-    ctx.stroke();
-  }
-  ctx.globalAlpha = 1;
-
-  const projectionPlane =
-    CANVAS_WIDTH / 2 / Math.tan(VIEW_3D_FOV / 2);
+  const projectionPlane = CANVAS_WIDTH / 2 / Math.tan(VIEW_3D_FOV / 2);
   const rayCount = Math.ceil(CANVAS_WIDTH / VIEW_3D_RAY_WIDTH);
+  drawPerspectiveFloor(ctx, world, projectionPlane, CANVAS_WIDTH, CANVAS_HEIGHT, horizon, VIEW_3D_MAX_DISTANCE);
 
   for (let rayIndex = 0; rayIndex < rayCount; rayIndex += 1) {
     const screenX =
@@ -2677,6 +2655,7 @@ export function draw3DEnvironment(ctx, world, zBuffer) {
       hit.distance * Math.cos(angleOffset),
     );
     zBuffer[rayIndex] = perpendicularDistance;
+    if (hit.wallType == null) continue;
 
     const wallHeight = Math.min(
       CANVAS_HEIGHT * 2.4,
@@ -2723,6 +2702,9 @@ export function draw3DEnvironment(ctx, world, zBuffer) {
       wallBottom - wallTop,
     );
 
+    if (!steelWall && !world.labyrinthMode) drawWallMaterial(ctx, world, hit,
+      rayIndex * VIEW_3D_RAY_WIDTH, wallTop, VIEW_3D_RAY_WIDTH + 1, wallBottom - wallTop, distanceFade * sideShade);
+
     if (steelWall) {
       const brace =
         hit.wallOffset < 0.055 ||
@@ -2754,7 +2736,7 @@ export function draw3DEnvironment(ctx, world, zBuffer) {
 
     if (
       world.level.themeKey === "jungle" &&
-      hashNoise(hit.mapX * 5 + rayIndex, hit.mapY * 7) > 0.92
+      hashNoise(hit.mapX * 5 + Math.floor(hit.wallOffset * 12), hit.mapY * 7) > 0.92
     ) {
       ctx.globalAlpha = distanceFade * 0.18;
       ctx.fillStyle = "#84cc16";
@@ -3609,6 +3591,12 @@ export function draw3DSprites(
       continue;
     }
 
+    ctx.save();
+    ctx.beginPath();
+    for (let ray = 0; ray < zBuffer.length; ray++) {
+      if (sprite.projection.depth < zBuffer[ray] + .04) ctx.rect(ray * VIEW_3D_RAY_WIDTH, 0, VIEW_3D_RAY_WIDTH + .5, CANVAS_HEIGHT);
+    }
+    ctx.clip();
     if (sprite.type === "exit") {
       draw3DExit(ctx, sprite.projection);
     } else if (sprite.type === "enemy") {
@@ -3639,6 +3627,7 @@ export function draw3DSprites(
         world,
       );
     }
+    ctx.restore();
   }
 }
 
@@ -4030,7 +4019,7 @@ export function draw3DOverlay(ctx, world) {
       world.player.weapon,
     );
 
-    const turkeyEquipped = world.player.cosmetic === "turkey";
+    const turkeyEquipped = ["turkey", "alien"].includes(world.player.cosmetic);
     const hudWidth = turkeyEquipped ? 362 : 286;
     ctx.fillStyle = "rgba(2, 6, 23, 0.72)";
     ctx.fillRect(14, 14, hudWidth, 78);
@@ -4057,12 +4046,12 @@ export function draw3DOverlay(ctx, world) {
     if (turkeyEquipped) {
       ctx.save();
       ctx.translate(337, 48);
-      drawTurkeyCosmeticBody(ctx, world.level.themeKey, 16);
+      drawCharacterCosmeticBody(ctx, world.level.themeKey, 16, world.player.cosmetic);
       ctx.restore();
       ctx.fillStyle = "#cbd5e1";
       ctx.font = "700 10px system-ui, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("TURKEY", 337, 80);
+      ctx.fillText(world.player.cosmetic.toUpperCase(), 337, 80);
       ctx.textAlign = "left";
     }
 

@@ -21,6 +21,7 @@ function clearStreetWorld(options = {}) {
   // Controlled collision fixture; mechanics do not depend on generated roads.
   world.grid = Array.from({ length: world.height }, (_, y) => Array.from({ length: world.width }, (_, x) =>
     x === 0 || y === 0 || x === world.width - 1 || y === world.height - 1 || (x >= 5 && x <= 10 && y >= 5 && y <= 10) ? 1 : 0));
+  world.terrain = world.grid.map(row => row.map(cell => cell ? 4 : 0));
   world._roads = [];
   world.grid.forEach((row, y) => row.forEach((cell, x) => { if (cell === 0) world._roads.push({ x: x + .5, y: y + .5 }); }));
   Object.assign(world.player, { x: 3.5, y: 2.5 });
@@ -145,20 +146,23 @@ test("holding rescue near a cage frees one turkey; interruption resets progress 
 test("corn earns one Hux each and ground powerups enter the matching inventory once", () => {
   const world = clearStreetWorld();
   world.corn = [{ id: 1, x: world.player.x, y: world.player.y }];
-  world.pickups = [{ id: 2, x: world.player.x, y: world.player.y, type: "stun" }];
+  world.pickups = [{ id: 2, x: world.player.x, y: world.player.y, type: "teleport" }];
   updateThanksgivingWorld(world, 0.1);
   assert.equal(world.cornCollected, 1);
-  assert.equal(world.inventory.stun, 1);
+  assert.equal(world.inventory.teleport, 1);
   assert.equal(world.corn.length, 0);
   assert.equal(world.pickups.length, 0);
   updateThanksgivingWorld(world, 0.1);
   assert.equal(world.cornCollected, 1);
-  assert.equal(world.inventory.stun, 1);
+  assert.equal(world.inventory.teleport, 1);
 });
 
 test("cages, corn, and powers keep spawning in random valid places and respect population caps", () => {
   const world = clearStreetWorld();
-  world.effects.camouflage = 1000;
+  // Isolate long-run spawning from the chase.
+  world.grid[2][40] = 1;
+  world.grid[2][39] = 1; world.grid[2][41] = 1;
+  world.grid[1][40] = 1; world.grid[3][40] = 1;
   advance(world, 61);
   for (const kind of ["cages", "corn", "pickups"]) {
     assert.equal(world[kind].length, FARM_SPAWN_LIMITS[kind]);
@@ -169,7 +173,7 @@ test("cages, corn, and powers keep spawning in random valid places and respect p
   advance(world, 6);
   assert.equal(world.cages.length, FARM_SPAWN_LIMITS.cages);
   assert.ok(world.cages.some(cage => !cageIds.has(cage.id)), "new cages replace freed cages indefinitely");
-  assert.equal(new Set(world.pickups.map(pickup => pickup.type)).size, 5);
+  assert.equal(new Set(world.pickups.map(pickup => pickup.type)).size, FARM_POWERUPS.length);
 });
 
 test("speed power increases travel speed and spends exactly one supplied charge", () => {
@@ -183,21 +187,6 @@ test("speed power increases travel speed and spends exactly one supplied charge"
   assert.equal(activateThanksgivingPower(world, "unknown"), false);
 });
 
-test("stun and camouflage pause the farmer, protect the turkey, and expire", () => {
-  for (const id of ["stun", "camouflage"]) {
-    const world = clearStreetWorld({ inventory: { [id]: 1 } });
-    Object.assign(world.farmer, { x: world.player.x + 0.2, y: world.player.y });
-    assert.equal(activateThanksgivingPower(world, id), true);
-    const initial = { ...world.farmer };
-    advance(world, 0.2);
-    assert.deepEqual(world.farmer, initial);
-    assert.equal(world.caught, false);
-    advance(world, 6.1);
-    assert.equal(world.caught, true);
-    assert.equal(world.effects[id], 0);
-  }
-});
-
 test("teleport relocates the turkey far from the farmer onto a clear road", () => {
   const world = clearStreetWorld({ inventory: { teleport: 1 } });
   const from = { ...world.player };
@@ -209,18 +198,57 @@ test("teleport relocates the turkey far from the farmer onto a clear road", () =
   assert.equal(activateThanksgivingPower(world, "teleport"), false);
 });
 
-test("a decoy attracts the farmer away from the moving turkey and expires", () => {
-  const world = clearStreetWorld({ inventory: { decoy: 1 } });
-  Object.assign(world.player, { x: 10.5, y: 2.5 });
-  Object.assign(world.farmer, { x: 15.5, y: 2.5 });
+test("Mud Trap slows only after the farmer crosses it and then expires", () => {
+  const world = clearStreetWorld({ inventory: { stun: 1 } });
+  assert.equal(activateThanksgivingPower(world, "stun"), true);
+  assert.equal(world.effects.mudSlow, 0);
+  assert.equal(world.traps.length, 1);
+  Object.assign(world.player, { x: 20.5, y: 2.5 });
+  Object.assign(world.farmer, { x: 3.5, y: 2.5 });
+  const start = world.farmer.x;
+  updateThanksgivingWorld(world, .1);
+  approx(world.farmer.x - start, FARM_FARMER_SPEED * .35 * .1);
+  assert.ok(world.effects.mudSlow > 4.8);
+  updateThanksgivingWorld(world, .1); assert.equal(world.traps.length, 0);
+  advance(world, 5); assert.equal(world.effects.mudSlow, 0);
+  const expired = clearStreetWorld({ inventory: { stun: 1 } });
+  activateThanksgivingPower(expired, "stun");
+  Object.assign(expired.player, { x: 3.5, y: 40.5 });
+  for (const [x, y] of [[39,2], [41,2], [40,1], [40,3]]) expired.grid[y][x] = 1;
+  advance(expired, 14.1); assert.equal(expired.traps.length, 0);
+});
+
+test("Feather Gust needs a nearby clear path, pushes safely, and keeps unusable charges", () => {
+  const world = clearStreetWorld({ inventory: { decoy: 2 } });
+  assert.equal(activateThanksgivingPower(world, "decoy"), false);
+  assert.equal(world.inventory.decoy, 2);
+  Object.assign(world.farmer, { x: 5.5, y: 2.5 });
+  world.grid[2][9] = 1;
   assert.equal(activateThanksgivingPower(world, "decoy"), true);
-  Object.assign(world.player, { x: 30.5, y: 2.5 });
-  updateThanksgivingWorld(world, 0.1);
-  assert.ok(world.farmer.x < 15.5, "farmer heads left toward the decoy while turkey is right");
-  assert.deepEqual(world.decoy, { x: 10.5, y: 2.5 });
-  advance(world, 8);
-  assert.equal(world.decoy, null);
-  assert.equal(world.effects.decoy, 0);
+  assert.ok(world.farmer.x > 8 && world.farmer.x < 8.7);
+  onRoad(world, world.farmer);
+  assert.equal(world.inventory.decoy, 1);
+  world.grid[2][6] = 1;
+  assert.equal(activateThanksgivingPower(world, "decoy"), false);
+  assert.equal(world.inventory.decoy, 1);
+});
+
+test("Fence Slip crosses wire, respects solid props and outer bounds, and expires onto open ground", () => {
+  const world = clearStreetWorld({ inventory: { camouflage: 1 } });
+  world.grid[2][4] = 1; world.terrain[2][4] = 4;
+  updateThanksgivingWorld(world, .3, { x: 1 }); assert.ok(world.player.x < 3.71);
+  assert.equal(activateThanksgivingPower(world, "camouflage"), true);
+  updateThanksgivingWorld(world, .2, { x: 1 }); assert.ok(world.player.x > 4);
+  world.effects.fenceSlip = .01;
+  updateThanksgivingWorld(world, .1); onRoad(world, world.player);
+  world.effects.fenceSlip = 5;
+  Object.assign(world.player, { x: 3.5, y: 2.5 }); world.terrain[2][4] = "barn";
+  updateThanksgivingWorld(world, .3, { x: 1 }); assert.ok(world.player.x < 3.71);
+  Object.assign(world.player, { x: 1.5, y: 2.5 });
+  updateThanksgivingWorld(world, .5, { x: -1 }); assert.ok(world.player.x >= 1.3);
+  // Passing through fences does not hide you from a farmer on the same road.
+  Object.assign(world.farmer, { x: world.player.x, y: world.player.y });
+  updateThanksgivingWorld(world, .1); assert.equal(world.caught, true);
 });
 
 test("capture ends updates and power usage, while snapshots cannot mutate live supplies", () => {

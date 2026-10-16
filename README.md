@@ -111,7 +111,8 @@ caps to keep long runs stable.
 - Move with **WASD / arrows** or the touch joystick.
 - Hold **E / Space** or **FREE** near a cage to rescue its turkey.
 - Walk over corn to earn **1 hux per piece**.
-- Press **1–5** or tap a supply to use speed, stun, teleport, decoy, or camouflage.
+- Press **1–5** or tap a supply: Turkey Trot, Mud Trap, Haystack Hop, Feather Gust, or Fence Slip.
+- Mud Trap slows the farmer when crossed; Feather Gust pushes a nearby farmer away; Fence Slip crosses chicken wire briefly. These replace Farmer Stunner, Scarecrow Decoy, and Cornfield Cover, keeping saved charges.
 - Press **Escape** to pause; losing focus also pauses the chase.
 
 Hux buys single-use farm supplies. Free supplies also appear during play.
@@ -119,14 +120,16 @@ Hux, unused supplies, best rescue count, and total rescued turkeys are saved
 in browser storage separately from Miz and the original game's progression.
 Getting caught or returning to the menu keeps all earned rewards.
 
-The farm store also sells **Turkey Disguise** for **1,000 hux**. One purchase
-permanently unlocks a full turkey with a space helmet in Orbital Ruins, a
-jungle hat in Emerald Wilds, and a metal helmet in Fallen Keep. Buying it
-equips it automatically. Equip or unequip it in the farm store or, once
-owned, in Myst's Store on the first page. Those controls remain available
-after the Thanksgiving event ends. In 2D it replaces the player sprite; in
-3D the themed turkey appears in the existing status display. This cosmetic
-does not change movement, collision, combat, or leaderboard eligibility.
+**Turkey Disguise costs 1,000 hux; Blobby Alien costs 10,000 MIZ**, with one character equipped at a time. Both are plain in Abandoned
+City, wear a space helmet in Orbital Ruins, a jungle hat in Emerald Wilds,
+and a metal helmet in Fallen Keep. Buy and equip them in Myst's Store or the
+farm store. In 2D they replace the character sprite; 3D shows the character
+in the existing status display. Characters never change movement, collision,
+combat, or leaderboard eligibility. Existing hux-bought turkey unlocks and
+their equipped state migrate automatically without charging again.
+
+The farm retains its autumn style and randomized connected paths, with fewer
+pens, walls, and solid obstacles to create more room for evasion.
 
 Farm regression checks:
 
@@ -135,7 +138,40 @@ node --test scripts/tests/thanksgiving.test.mjs scripts/tests/hux-economy.test.m
 # With the dev server running and Playwright available:
 GAME_TEST_URL=http://127.0.0.1:5189 node scripts/tests/thanksgiving-browser.mjs
 GAME_TEST_URL=http://127.0.0.1:5189 node scripts/tests/turkey-cosmetic-browser.mjs
+GAME_TEST_URL=http://127.0.0.1:5189 node scripts/tests/october-update-browser.mjs
 ```
+
+## October update
+
+The calm blue update board on the first page lists the current release's
+changes. The existing menus, themes, and Free the Flock artwork are retained.
+
+- Every combat maze has **50 additional ammo pickups and 50 additional medkits**, on distinct reachable tiles. Labyrinth remains free of combat supplies.
+- Every Labyrinth difficulty now shifts at **30-second intervals**.
+- Rankings show unnamed opponents as **Random Player**. Your custom name includes **(you)**; an entry already named You does not repeat the suffix.
+- 3D environments use perspective floor textures, stable world-anchored wall materials, and wall-depth clipping for sprites. Abandoned City has window frames, glass, building foundations, and textured asphalt.
+- Coin cosmetics cost **20–180 MIZ**. Blobby Alien costs **10,000 MIZ**; Turkey Disguise costs **1,000 hux**. One-use powers cost **10–100 MIZ**.
+
+The **MYST POWERS** control in a combat run activates purchased charges. A
+charge is spent only when its effect can apply. Mist Guard replaces Null
+Pulse; existing Null Pulse inventory becomes Mist Guard inventory.
+
+| Power | MIZ | Effect |
+| --- | ---: | --- |
+| Vital Restore | 12 | Restore health to maximum |
+| Ammo Refill | 10 | Refill ammo to maximum |
+| Mist Guard | 25 | Eight seconds of immunity and clear hostile projectiles |
+| Velocity Bloom | 20 | 75% faster movement for 30 seconds |
+| Field Armor | 25 | Half incoming damage for 30 seconds |
+| Cartographer Flash | 35 | Reveal the map without awarding exploration coins |
+| Arsenal Key | 60 | Unlock standard weapons for this run |
+| Purge Orb | 40 | Defeat the eight nearest standard enemies; bosses are excluded |
+| Phoenix Spark | 50 | Revive after defeat at half health with eight seconds of protection |
+| Exit Fold | 100 | Move directly to the exit |
+
+Phoenix Spark is available through MYST POWERS on the defeat screen. Revival
+and Exit Fold make the run unranked. All purchased and unused charges remain
+saved between runs.
 
 ## Touch controls
 

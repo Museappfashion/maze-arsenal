@@ -1,4 +1,5 @@
 // src/services/mizEconomy.js
+import { CHARACTER_COSMETICS } from "../config/turkeyCosmetic.js";
 
 export const MIZ_TILES_PER_COIN = 43;
 
@@ -34,11 +35,12 @@ const LEGACY_V2_CONSUMABLE_REFUNDS =
 
 export const MYST_SHOP_ITEMS =
   Object.freeze([
+    ...CHARACTER_COSMETICS.map((item) => Object.freeze({ ...item, kind: "character", rarity: "Permanent character cosmetic", effectLabel: "Permanent · one equipped character at a time." })),
     Object.freeze({
       key: "violetCoinEdge",
       kind: "cosmetic",
       name: "Violet Coin Edge",
-      price: 1200,
+      price: 20,
       rarity: "Permanent cosmetic",
       description:
         "A violet enamel ring around the edge of the miz coin.",
@@ -49,7 +51,7 @@ export const MYST_SHOP_ITEMS =
       key: "smokeCoinFace",
       kind: "cosmetic",
       name: "Smoke Coin Face",
-      price: 1800,
+      price: 30,
       rarity: "Permanent cosmetic",
       description:
         "A smoky gray-purple finish over the coin center.",
@@ -60,7 +62,7 @@ export const MYST_SHOP_ITEMS =
       key: "mystCounterFrame",
       kind: "cosmetic",
       name: "Myst Counter Frame",
-      price: 2600,
+      price: 45,
       rarity: "Permanent cosmetic",
       description:
         "A forged gray frame with muted purple enamel.",
@@ -71,7 +73,7 @@ export const MYST_SHOP_ITEMS =
       key: "orbitingSpecks",
       kind: "cosmetic",
       name: "Orbiting Specks",
-      price: 3400,
+      price: 60,
       rarity: "Permanent cosmetic",
       description:
         "Two tiny gray-purple motes circling the miz icon.",
@@ -82,7 +84,7 @@ export const MYST_SHOP_ITEMS =
       key: "starGlint",
       kind: "cosmetic",
       name: "Star Glint",
-      price: 4200,
+      price: 75,
       rarity: "Permanent cosmetic",
       description:
         "A small silver flare that catches the coin edge.",
@@ -93,7 +95,7 @@ export const MYST_SHOP_ITEMS =
       key: "engravedM",
       kind: "cosmetic",
       name: "Engraved M",
-      price: 5000,
+      price: 90,
       rarity: "Permanent cosmetic",
       description:
         "A deeper, polished engraving for the M stamp.",
@@ -104,7 +106,7 @@ export const MYST_SHOP_ITEMS =
       key: "frostedCoin",
       kind: "cosmetic",
       name: "Frosted Coin",
-      price: 5800,
+      price: 110,
       rarity: "Permanent cosmetic",
       description:
         "A cold brushed-metal sheen over the miz coin.",
@@ -115,7 +117,7 @@ export const MYST_SHOP_ITEMS =
       key: "shadowHalo",
       kind: "cosmetic",
       name: "Shadow Halo",
-      price: 6600,
+      price: 130,
       rarity: "Permanent cosmetic",
       description:
         "A soft gray-violet halo sitting behind the miz icon.",
@@ -126,7 +128,7 @@ export const MYST_SHOP_ITEMS =
       key: "doubleRim",
       kind: "cosmetic",
       name: "Double Rim",
-      price: 7600,
+      price: 150,
       rarity: "Permanent cosmetic",
       description:
         "A second thin ring etched just inside the coin edge.",
@@ -137,7 +139,7 @@ export const MYST_SHOP_ITEMS =
       key: "pulseAura",
       kind: "cosmetic",
       name: "Pulse Aura",
-      price: 8800,
+      price: 180,
       rarity: "Permanent cosmetic",
       description:
         "A slow low-intensity pulse around the complete counter.",
@@ -149,7 +151,7 @@ export const MYST_SHOP_ITEMS =
       key: "healPulse",
       kind: "oneTime",
       name: "Vital Restore",
-      price: 500,
+      price: 12,
       rarity: "One-use power",
       description:
         "A sealed pulse that reconstructs lost health.",
@@ -161,7 +163,7 @@ export const MYST_SHOP_ITEMS =
       key: "ammoPulse",
       kind: "oneTime",
       name: "Ammo Refill",
-      price: 600,
+      price: 10,
       rarity: "One-use power",
       description:
         "A compressed supply imprint for emergency ammunition.",
@@ -172,44 +174,44 @@ export const MYST_SHOP_ITEMS =
     Object.freeze({
       key: "nullPulse",
       kind: "oneTime",
-      name: "Null Pulse",
-      price: 700,
+      name: "Mist Guard",
+      price: 25,
       rarity: "One-use power",
       description:
-        "A short-range collapse wave that erases active projectiles.",
+        "An emergency barrier that clears hostile shots and lets you escape danger.",
       effectLabel:
-        "Activate in-game · clears every active projectile.",
+        "Activate in-game · 8 seconds of immunity and clears hostile projectiles.",
       maxStack: 9,
     }),
     Object.freeze({
       key: "velocityBloom",
       kind: "oneTime",
       name: "Velocity Bloom",
-      price: 800,
+      price: 20,
       rarity: "One-use power",
       description:
         "A brief kinetic distortion around the player.",
       effectLabel:
-        "Activate in-game · +25% movement speed for 30 seconds.",
+        "Activate in-game · +75% movement speed for 30 seconds.",
       maxStack: 9,
     }),
     Object.freeze({
       key: "vitalBloom",
       kind: "oneTime",
-      name: "Vital Bloom",
-      price: 900,
+      name: "Field Armor",
+      price: 25,
       rarity: "One-use power",
       description:
-        "A temporary reinforcement of the player's physical reserve.",
+        "A protective field that absorbs incoming damage while you push forward.",
       effectLabel:
-        "Activate in-game · +50 max HP for the current run and heal 50.",
+        "Activate in-game · halves incoming damage for 30 seconds.",
       maxStack: 9,
     }),
     Object.freeze({
       key: "mapFlash",
       kind: "oneTime",
       name: "Cartographer Flash",
-      price: 1000,
+      price: 35,
       rarity: "One-use power",
       description:
         "A violent burst of spatial memory across the maze.",
@@ -221,7 +223,7 @@ export const MYST_SHOP_ITEMS =
       key: "arsenalKey",
       kind: "oneTime",
       name: "Arsenal Key",
-      price: 1100,
+      price: 60,
       rarity: "One-use power",
       description:
         "A temporary authorization imprint for standard weapons.",
@@ -233,7 +235,7 @@ export const MYST_SHOP_ITEMS =
       key: "purgeOrb",
       kind: "oneTime",
       name: "Purge Orb",
-      price: 1200,
+      price: 40,
       rarity: "One-use power",
       description:
         "A dense gray sphere that collapses nearby hostile signatures.",
@@ -245,24 +247,24 @@ export const MYST_SHOP_ITEMS =
       key: "phoenixSpark",
       kind: "oneTime",
       name: "Phoenix Spark",
-      price: 1300,
+      price: 50,
       rarity: "One-use power",
       description:
         "A one-shot emergency spark held until defeat.",
       effectLabel:
-        "Activate after defeat · revive at 50% health.",
+        "Activate after defeat · revive at 50% health with 8 seconds of protection.",
       maxStack: 9,
     }),
     Object.freeze({
       key: "exitFold",
       kind: "oneTime",
       name: "Exit Fold",
-      price: 1500,
+      price: 100,
       rarity: "One-use power",
       description:
         "A single-use spatial fold keyed to the maze exit.",
       effectLabel:
-        "Activate in-game · moves you directly to the exit.",
+        "Activate in-game · moves to the exit; this run becomes unranked.",
       maxStack: 9,
     }),
   ]);
@@ -287,6 +289,8 @@ const DEFAULT_STATE =
     lifetimeMizEarned: 0,
     cosmetics: {},
     consumables: {},
+    equippedCharacter: null,
+    legacyTurkeyMigrated: false,
   });
 
 let memoryState = {
@@ -316,8 +320,7 @@ function getCosmeticKeys() {
     MYST_SHOP_ITEMS
       .filter(
         (item) =>
-          item.kind ===
-          "cosmetic",
+          ["cosmetic", "character"].includes(item.kind),
       )
       .map(
         (item) =>
@@ -469,6 +472,8 @@ function sanitizeState(value) {
         value.consumables,
         getPowerKeys(),
       ),
+    equippedCharacter: CHARACTER_COSMETICS.some((item) => item.key === value.equippedCharacter && value.cosmetics?.[item.key] === true) ? value.equippedCharacter : null,
+    legacyTurkeyMigrated: value.legacyTurkeyMigrated === true,
   };
 }
 
@@ -867,6 +872,10 @@ export function recordWorldExploration(world) {
   return addExploredTiles(discovered - previous);
 }
 
+export function resetExplorationBaseline(world) {
+  exploredTileHighWater.set(world, normalizeInteger(world.player.discoveredFloor));
+}
+
 export function getTilesUntilNextMiz(
   state =
     loadMizState(),
@@ -980,6 +989,8 @@ export function purchaseMystItem(
   const current =
     loadMizState();
 
+  if (item?.currency === "hux") return { ok: false, error: "This cosmetic costs hux. Use its character card.", state: current, item };
+
   if (!item) {
     return {
       ok: false,
@@ -991,8 +1002,7 @@ export function purchaseMystItem(
   }
 
   if (
-    item.kind ===
-      "cosmetic" &&
+    ["cosmetic", "character"].includes(item.kind) &&
     isCosmeticOwned(
       itemKey,
       current,
@@ -1058,10 +1068,7 @@ export function purchaseMystItem(
     ...current.consumables,
   };
 
-  if (
-    item.kind ===
-    "cosmetic"
-  ) {
+  if (["cosmetic", "character"].includes(item.kind)) {
     cosmetics[
       itemKey
     ] = true;
@@ -1084,6 +1091,7 @@ export function purchaseMystItem(
           item.price,
         cosmetics,
         consumables,
+        equippedCharacter: item.kind === "character" ? item.key : current.equippedCharacter,
       },
       {
         reason:

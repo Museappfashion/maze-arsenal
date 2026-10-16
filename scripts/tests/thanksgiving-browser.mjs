@@ -46,7 +46,7 @@ try {
   await page.goto(baseUrl);
   const mizSentinel = await page.evaluate(async () => {
     const { saveMizState } = await import("/src/services/mizEconomy.js");
-    saveMizState({ miz: 321, tileRemainder: 7, lifetimeExploredTiles: 93, lifetimeMizEarned: 2 });
+    saveMizState({ miz: 321, tileRemainder: 7, lifetimeExploredTiles: 93, lifetimeMizEarned: 2, legacyTurkeyMigrated: true });
     return localStorage.getItem("mist-maze-miz-economy-v3");
   });
   await page.locator(".thanksgiving-entry").click();
@@ -106,7 +106,7 @@ try {
     const world = globalThis.__farmTestWorld;
     world.cages = [{ id: 90001, x: world.player.x + 1, y: world.player.y, progress: 0 }];
     world.corn = [{ id: 90002, x: world.player.x, y: world.player.y }];
-    world.pickups = [{ id: 90003, x: world.player.x, y: world.player.y, type: "decoy" }];
+    world.pickups = [{ id: 90003, x: world.player.x, y: world.player.y, type: "teleport" }];
   });
   await page.keyboard.down("e");
   await page.waitForFunction(() => globalThis.__farmTestWorld.rescued === 1);
@@ -116,7 +116,7 @@ try {
   assert.equal(earned.hux, 53);
   assert.equal(earned.bestRescued, 1);
   assert.equal(earned.totalRescued, 1);
-  assert.equal(earned.inventory.decoy, 1, "found supplies persist alongside purchased supplies");
+  assert.equal(earned.inventory.teleport, 2, "found supplies persist alongside purchased supplies");
   assert.equal(await page.evaluate(() => globalThis.__farmTestWorld.cornCollected), 1);
   await assertMizUnchanged(mizSentinel);
   if (screenshots) await page.screenshot({ path: `${screenshots}/thanksgiving-play.png` });
@@ -141,8 +141,8 @@ try {
     const world = globalThis.__farmTestWorld;
     globalThis.__farmPreviousTestWorld = world;
     Object.assign(world.farmer, { x: world.player.x, y: world.player.y });
-    world.effects.stun = 0;
-    world.effects.camouflage = 0;
+    world.effects.mudSlow = 0;
+    world.effects.fenceSlip = 0;
   });
   await page.getByRole("heading", { name: "The farmer caught you!", exact: true }).waitFor();
   assert.equal(await page.evaluate(() => globalThis.__farmTestWorld.caught), true);

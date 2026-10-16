@@ -20,7 +20,8 @@ import { DeveloperLetterPanel } from "./DeveloperLetterPanel.jsx";
 import { ThanksgivingArtwork } from "./ThanksgivingArtwork.jsx";
 import { isThanksgivingOpen } from "../services/thanksgivingSeason.js";
 import { formatLeaderboardTime } from "../utils/math.js";
-import { PLAYER_NAME_LIMIT, getPlayerDisplayName, sanitizePlayerName } from "../utils/player.js";
+import { PLAYER_NAME_LIMIT, getPlayerDisplayName, getLeaderboardDisplayName, sanitizePlayerName } from "../utils/player.js";
+import { UpdateNoticeBoard } from "./UpdateNoticeBoard.jsx";
 
 export const LEVEL_PREVIEW_THEMES = {
   space: {
@@ -259,7 +260,7 @@ export function LeaderboardModeList({
                     ? "leaderboard-name"
                     : "leaderboard-name leaderboard-empty"
                 }
-                title={entry?.playerName ?? ""}
+                title={getLeaderboardDisplayName(entry)}
               >
                 {entry ? (
                   <>
@@ -270,7 +271,7 @@ export function LeaderboardModeList({
                       {countryCodeToFlag(entry.countryCode)}
                     </span>
                     <span className="leaderboard-player-name">
-                      {getPlayerDisplayName(entry.playerName)}
+                      {getLeaderboardDisplayName(entry)}
                     </span>
                   </>
                 ) : (
@@ -613,6 +614,8 @@ export function LevelSelectScreen({
               : "UNLOCK ALL MAZES"}
           </button>
         </div>
+
+        <UpdateNoticeBoard />
 
         <section className="level-choice-grid" aria-label="Level selection">
           {onOpenThanksgiving && isThanksgivingOpen() && (

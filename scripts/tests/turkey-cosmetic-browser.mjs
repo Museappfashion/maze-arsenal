@@ -20,17 +20,19 @@ try {
   const buy = page.getByRole("button", { name: "Buy Turkey Disguise for 1000 hux", exact: true });
   assert.equal(await buy.isDisabled(), true);
   await page.evaluate(async () => {
-    const { earnHux } = await import("/src/services/huxEconomy.js");
-    earnHux(1001);
+    const { saveMizState } = await import("/src/services/mizEconomy.js");
+    saveMizState({ miz: 1, legacyTurkeyMigrated: true });
+    (await import("/src/services/huxEconomy.js")).earnHux(1001);
   });
   await buy.click();
   await page.getByRole("button", { name: "Unequip Turkey Disguise", exact: true }).waitFor();
   assert.equal(await buy.count(), 0, "an owned cosmetic cannot be bought twice");
-  const purchased = await page.evaluate(async () => (await import("/src/services/huxEconomy.js")).loadHuxState());
-  assert.equal(purchased.hux, 1);
+  const purchased = await page.evaluate(async () => (await import("/src/services/mizEconomy.js")).loadMizState());
+  assert.equal(purchased.miz, 1);
+  assert.equal(await page.evaluate(async () => (await import("/src/services/huxEconomy.js")).loadHuxState().hux), 1);
   assert.equal(purchased.cosmetics.turkey, true);
-  assert.equal(purchased.equippedCosmetic, "turkey");
-  if (screenshots) await page.locator(".turkey-cosmetic-card").screenshot({ path: `${screenshots}/turkey-store.png` });
+  assert.equal(purchased.equippedCharacter, "turkey");
+  if (screenshots) await page.getByRole("article", { name: "Turkey Disguise cosmetic", exact: true }).screenshot({ path: `${screenshots}/turkey-store.png` });
   await page.getByRole("button", { name: /Back to first page/ }).click();
   await page.getByRole("button", { name: "UNLOCK ALL MAZES", exact: true }).click();
 
@@ -92,9 +94,9 @@ try {
   await page.locator(".first-page-myst-store-button").click();
   await page.getByRole("button", { name: "Unequip Turkey Disguise", exact: true }).waitFor();
   await page.setViewportSize({ width: 390, height: 844 });
-  const card = page.locator(".turkey-cosmetic-card");
+  const card = page.getByRole("article", { name: "Turkey Disguise cosmetic", exact: true });
   assert.equal(await card.evaluate((el) => el.scrollWidth > el.clientWidth), false);
-  assert.equal(await page.evaluate(async () => (await import("/src/services/huxEconomy.js")).loadHuxState().hux), 1);
+  assert.equal(await page.evaluate(async () => (await import("/src/services/mizEconomy.js")).loadMizState().miz), 1);
   assert.deepEqual(errors, []);
   console.log("PASS: 1000-hux purchase, permanent ownership, three actual player skins, unchanged stats, 3D portrait, reload, equip/unequip, post-season controls, mobile fit, zero browser errors.");
 } finally {

@@ -83,6 +83,12 @@ test("every supply purchases for its listed price, survives reload, and stays co
   const world = createThanksgivingWorld({ inventory: reloaded.loadHuxState().inventory });
   for (const item of FARM_POWERUPS) {
     assert.equal(world.inventory[item.id], 1);
+    if (item.id === "decoy") {
+      // Place both actors on an open row so the conditional push can apply.
+      for (let x = 1; x < 15; x++) world.grid[2][x] = 0;
+      Object.assign(world.player, { x: 3.5, y: 2.5 });
+      Object.assign(world.farmer, { x: 5.5, y: 2.5 });
+    }
     assert.equal(activateThanksgivingPower(world, item.id), true);
     reloaded.saveFarmInventory(world.inventory);
   }
@@ -162,9 +168,9 @@ test("unavailable browser storage keeps a usable session wallet and supply bag",
   storage.setItem = () => { throw new Error("Quota exceeded"); };
   const economy = await freshEconomy();
   economy.earnHux(40);
-  assert.equal(economy.buyFarmSupply("stun").ok, true);
+  assert.equal(economy.buyFarmSupply("teleport").ok, true);
   economy.recordTurkeyRescues(2, 2);
-  assert.deepEqual(economy.loadHuxState(), { ...emptyState(), hux: 24, bestRescued: 2, totalRescued: 2, inventory: { ...emptyInventory(), stun: 1 } });
+  assert.deepEqual(economy.loadHuxState(), { ...emptyState(), hux: 16, bestRescued: 2, totalRescued: 2, inventory: { ...emptyInventory(), teleport: 1 } });
   assert.equal(events.length, 3);
 });
 
@@ -174,8 +180,8 @@ test("a write-only storage failure preserves new earnings beyond the old saved b
   const economy = await freshEconomy();
   economy.earnHux(10);
   assert.equal(economy.loadHuxState().hux, 40);
-  assert.equal(economy.buyFarmSupply("stun").state.hux, 24);
-  assert.equal(economy.loadHuxState().inventory.stun, 1);
+  assert.equal(economy.buyFarmSupply("teleport").state.hux, 16);
+  assert.equal(economy.loadHuxState().inventory.teleport, 1);
   assert.equal(JSON.parse(values.get(HUX_KEY)).hux, 30);
 });
 
@@ -237,66 +243,13 @@ test("the advertised harvest expires in 2026 and never reopens automatically nex
   }
 });
 
-test("Turkey Disguise costs exactly 1000 hux once and preserves farm progress and MIZ", async (t) => {
-  const rawMiz = JSON.stringify({ miz: 123 });
-  const { values, writes } = browserStorage(t, { [MIZ_KEY]: rawMiz, [HUX_KEY]: JSON.stringify({ hux: 1000, bestRescued: 8, totalRescued: 15, inventory: { speed: 3 } }) });
+test("replacement farm supplies preserve all saved charges without changing hux", async (t) => {
+  const { values } = browserStorage(t, { [HUX_KEY]: JSON.stringify({ hux: 10, inventory: { stun: 2, decoy: 1, camouflage: 1, speed: 3 } }) });
   const economy = await freshEconomy();
-  const result = economy.buyTurkeyCosmetic();
-  assert.equal(result.ok, true);
-  assert.equal(result.state.hux, 0);
-  assert.deepEqual(result.state.cosmetics, { turkey: true });
-  assert.equal(result.state.equippedCosmetic, "turkey");
-  assert.equal(result.state.bestRescued, 8);
-  assert.equal(result.state.totalRescued, 15);
-  assert.equal(result.state.inventory.speed, 3);
-  const writeCount = writes.length;
-  assert.equal(economy.buyTurkeyCosmetic().ok, false);
-  assert.equal(writes.length, writeCount, "repeat purchase never spends again");
-  assert.equal(values.get(MIZ_KEY), rawMiz);
-  const reloaded = await freshEconomy();
-  assert.deepEqual(reloaded.loadHuxState(), result.state);
-});
-
-test("unowned cosmetic cannot be equipped or bought with insufficient hux", async (t) => {
-  const { writes } = browserStorage(t, { [HUX_KEY]: JSON.stringify({ hux: 999 }) });
-  const economy = await freshEconomy();
-  const before = economy.loadHuxState();
-  assert.equal(economy.buyTurkeyCosmetic().ok, false);
-  assert.equal(economy.setTurkeyCosmeticEquipped(true).ok, false);
-  assert.deepEqual(economy.loadHuxState(), before);
-  assert.equal(writes.length, 0);
-});
-
-test("equipping and unequipping survive reload and gameplay saves without consuming the unlock", async (t) => {
-  browserStorage(t);
-  const economy = await freshEconomy();
-  economy.earnHux(1100);
-  economy.buyTurkeyCosmetic();
-  economy.buyFarmSupply("speed");
-  economy.saveFarmInventory({ speed: 0 });
-  economy.recordTurkeyRescues(1, 1);
-  economy.earnHux(4);
-  assert.equal(economy.loadHuxState().cosmetics.turkey, true);
-  assert.equal(economy.loadHuxState().equippedCosmetic, "turkey");
-  const remaining = economy.loadHuxState().hux;
-  assert.equal(economy.setTurkeyCosmeticEquipped(false).state.equippedCosmetic, null);
-  const reloaded = await freshEconomy();
-  assert.equal(reloaded.loadHuxState().cosmetics.turkey, true);
-  assert.equal(reloaded.loadHuxState().equippedCosmetic, null);
-  assert.equal(reloaded.setTurkeyCosmeticEquipped(true).state.equippedCosmetic, "turkey");
-  assert.equal(reloaded.loadHuxState().hux, remaining);
-});
-
-test("turkey appears only on its three supported themes and cannot equip from malformed ownership", async (t) => {
-  const { values } = browserStorage(t);
-  const economy = await freshEconomy();
-  economy.earnHux(1000);
-  economy.buyTurkeyCosmetic();
-  for (const theme of ["space", "jungle", "medieval"]) assert.equal(economy.getPlayerCosmeticForTheme(theme), "turkey");
-  for (const theme of ["city", "labyrinth", "farm", "unknown", undefined]) assert.equal(economy.getPlayerCosmeticForTheme(theme), null);
-  economy.setTurkeyCosmeticEquipped(false);
-  assert.equal(economy.getPlayerCosmeticForTheme("space"), null);
-  values.set(HUX_KEY, JSON.stringify({ hux: 35, cosmetics: { turkey: "true" }, equippedCosmetic: "turkey" }));
-  assert.deepEqual(economy.loadHuxState(), { ...emptyState(), hux: 35 });
-  assert.equal(economy.getPlayerCosmeticForTheme("space"), null);
+  assert.equal(economy.loadHuxState().hux, 10);
+  assert.equal(economy.loadHuxState().hux, 10);
+  economy.earnHux(1);
+  assert.equal(JSON.parse(values.get(HUX_KEY)).hux, 11);
+  assert.equal(economy.loadHuxState().hux, 11);
+  assert.deepEqual(economy.loadHuxState().inventory, { speed: 3, stun: 2, teleport: 0, decoy: 1, camouflage: 1 });
 });

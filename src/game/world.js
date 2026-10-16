@@ -28,7 +28,7 @@ import {
 } from "./labyrinth.js";
 import { createOwnedWeapons, indexOfTile } from "../utils/math.js";
 import { sanitizePlayerName } from "../utils/player.js";
-import { getPlayerCosmeticForTheme } from "../services/huxEconomy.js";
+import { getPlayerCosmeticForTheme } from "../services/characterCosmetics.js";
 
 export function getControlsForViewMode(viewMode) {
   if (viewMode === "3d") {

@@ -15,9 +15,14 @@ function randomIndex(world, length) {
   return Math.min(length - 1, Math.max(0, Math.floor((Number.isFinite(value) ? value : 0) * length)));
 }
 
-function positionClear(world, x, y, radius) {
-  return road(world, x - radius, y - radius) && road(world, x + radius, y - radius)
-    && road(world, x - radius, y + radius) && road(world, x + radius, y + radius);
+function positionClear(world, x, y, radius, slip = false) {
+  const clear = (px, py) => road(world, px, py) || (slip && px >= 1 && py >= 1 && px < world.width - 1 && py < world.height - 1 && world.terrain[Math.floor(py)]?.[Math.floor(px)] === 4);
+  return clear(x - radius, y - radius) && clear(x + radius, y - radius)
+    && clear(x - radius, y + radius) && clear(x + radius, y + radius);
+}
+
+function nearestRoad(world, point) {
+  return world._roads.reduce((best, tile) => positionClear(world, tile.x, tile.y, PLAYER_RADIUS) && (!best || distance(tile, point) < distance(best, point)) ? tile : best, null);
 }
 
 function clearSegment(world, from, to, radius = 0) {
@@ -124,10 +129,10 @@ function generateFarmLayout(random) {
       if (place(cells, type ? 5 : integer(0, 3), type ? { x, y, width, height, type } : null)) placed += 1;
     }
   };
-  rectangles(32, 3, 8, 3, 7); // Uneven crop pens, offset from one another.
-  rectangles(8, 4, 6, 4, 5, ['barn']);
+  rectangles(26, 3, 7, 3, 6); // Uneven pens with more room to dodge around them.
+  rectangles(7, 4, 6, 4, 5, ['barn']);
   let fences = 0;
-  for (let attempt = 0; attempt < 1800 && fences < 90; attempt += 1) {
+  for (let attempt = 0; attempt < 1800 && fences < 65; attempt += 1) {
     const x = integer(2, FARM_WIDTH - 12);
     const y = integer(2, FARM_HEIGHT - 12);
     const length = integer(3, 10);
@@ -138,7 +143,7 @@ function generateFarmLayout(random) {
     for (let n = 1; n <= bend; n++) cells.push([x + (vertical ? n : length - 1), y + (vertical ? length - 1 : n)]);
     if (place(cells, 4, null)) fences += 1;
   }
-  rectangles(75, 1, 3, 1, 2, ['hay', 'crates', 'barrels', 'wagon']);
+  rectangles(55, 1, 3, 1, 2, ['hay', 'crates', 'barrels', 'wagon']);
   return { grid, terrain, farmProps, obstacleTiles };
 }
 
@@ -154,7 +159,7 @@ export function createThanksgivingWorld({ random = Math.random, inventory = {} }
     player: null, farmer: null, cages: [], corn: [], pickups: [], freed: [],
     time: 0, rescued: 0, cornCollected: 0, caught: false,
     inventory: Object.fromEntries(POWER_IDS.map(id => [id, Math.min(99, Math.max(0, Math.floor(Number(inventory[id]) || 0)))])),
-    effects: { speed: 0, stun: 0, camouflage: 0, decoy: 0 }, decoy: null,
+    effects: { speed: 0, mudSlow: 0, fenceSlip: 0, gust: 0 }, traps: [],
     message: "Free the turkeys. Gather corn for Hux. Keep moving!",
     _random: randomSource,
     _roads: roads, _nextId: 1, _path: [], _pathTarget: "", _pathUntil: 0,
@@ -168,9 +173,9 @@ export function createThanksgivingWorld({ random = Math.random, inventory = {} }
   return world;
 }
 
-function move(world, actor, dx, dy, radius) {
-  if (positionClear(world, actor.x + dx, actor.y, radius)) actor.x += dx;
-  if (positionClear(world, actor.x, actor.y + dy, radius)) actor.y += dy;
+function move(world, actor, dx, dy, radius, slip = false) {
+  if (positionClear(world, actor.x + dx, actor.y, radius, slip)) actor.x += dx;
+  if (positionClear(world, actor.x, actor.y + dy, radius, slip)) actor.y += dy;
   if (Math.abs(dx) + Math.abs(dy) > 0.00001) actor.facing = Math.atan2(dy, dx);
 }
 
@@ -203,8 +208,13 @@ function findPath(world, from, to) {
 }
 
 function updateFarmer(world, dt) {
-  if (world.effects.stun > 0 || world.effects.camouflage > 0) return;
-  const target = world.decoy || world.player;
+  for (const trap of world.traps) {
+    if (distance(trap, world.farmer) < 1.2 && clearSegment(world, trap, world.farmer)) {
+      world.effects.mudSlow = 5;
+      trap.remaining = 0;
+    }
+  }
+  const target = positionClear(world, world.player.x, world.player.y, PLAYER_RADIUS) ? world.player : nearestRoad(world, world.player);
   let waypoint = target;
   if (!clearSegment(world, world.farmer, target, FARMER_RADIUS)) {
     const targetKey = `${Math.floor(target.x)},${Math.floor(target.y)}`;
@@ -228,7 +238,7 @@ function updateFarmer(world, dt) {
   }
   const gap = distance(world.farmer, waypoint);
   if (gap < 0.001) return;
-  const step = Math.min(gap, FARM_FARMER_SPEED * dt);
+  const step = Math.min(gap, FARM_FARMER_SPEED * (world.effects.mudSlow > 0 ? 0.35 : 1) * dt);
   move(world, world.farmer, (waypoint.x - world.farmer.x) / gap * step, (waypoint.y - world.farmer.y) / gap * step, FARMER_RADIUS);
 }
 
@@ -248,15 +258,19 @@ function nearestCage(world) {
 function updateStep(world, dt, input) {
   world.time += dt;
   for (const id of Object.keys(world.effects)) world.effects[id] = Math.max(0, world.effects[id] - dt);
-  if (!world.effects.decoy) world.decoy = null;
+  world.traps = world.traps.filter(trap => (trap.remaining -= dt) > 0);
+  // Return to the nearest open cell when a wire crossing expires.
+  if (!world.effects.fenceSlip && !positionClear(world, world.player.x, world.player.y, PLAYER_RADIUS)) {
+    Object.assign(world.player, nearestRoad(world, world.player));
+  }
   if (world.time >= world._messageUntil) world.message = "";
   const x = Number.isFinite(input.x) ? input.x : 0;
   const y = Number.isFinite(input.y) ? input.y : 0;
   const magnitude = Math.max(1, Math.hypot(x, y));
   const speed = FARM_PLAYER_SPEED * (world.effects.speed > 0 ? 1.65 : 1);
-  move(world, world.player, x / magnitude * speed * dt, y / magnitude * speed * dt, PLAYER_RADIUS);
+  move(world, world.player, x / magnitude * speed * dt, y / magnitude * speed * dt, PLAYER_RADIUS, world.effects.fenceSlip > 0);
   updateFarmer(world, dt);
-  if (!world.effects.stun && !world.effects.camouflage && distance(world.player, world.farmer) < 0.66
+  if (distance(world.player, world.farmer) < 0.66
     && clearSegment(world, world.player, world.farmer)) {
     world.caught = true;
     setMessage(world, "Caught! Your rescued turkeys are safe and your Hux are kept.", Infinity);
@@ -268,9 +282,10 @@ function updateStep(world, dt, input) {
     return false;
   });
   world.pickups = world.pickups.filter(pickup => {
+    const power = FARM_POWERUPS.find(item => item.id === pickup.type);
+    if (!power) return false;
     if (distance(world.player, pickup) > 0.8 || world.inventory[pickup.type] >= 99) return true;
     world.inventory[pickup.type] += 1;
-    const power = FARM_POWERUPS.find(item => item.id === pickup.type);
     setMessage(world, `${power.name} found! Press ${power.key} to use it.`);
     return false;
   });
@@ -315,11 +330,25 @@ export function activateThanksgivingPower(world, id) {
     world.player.y = destination.y;
     world._path = [];
   } else if (id === "speed") world.effects.speed = 7;
-  else if (id === "stun") world.effects.stun = 4;
-  else if (id === "camouflage") world.effects.camouflage = 6;
+  else if (id === "stun") {
+    if (!positionClear(world, world.player.x, world.player.y, PLAYER_RADIUS)) { setMessage(world, "Step onto open ground to place a Mud Trap. Charge kept."); return false; }
+    world.traps.push({ x: world.player.x, y: world.player.y, remaining: 14 });
+    if (world.traps.length > 3) world.traps.shift();
+  }
+  else if (id === "camouflage") world.effects.fenceSlip = 5;
   else if (id === "decoy") {
-    world.effects.decoy = 8;
-    world.decoy = { x: world.player.x, y: world.player.y };
+    const gap = distance(world.player, world.farmer);
+    if (gap > 10 || !clearSegment(world, world.player, world.farmer, FARMER_RADIUS)) { setMessage(world, "Feather Gust needs the farmer nearby on a clear path. Charge kept."); return false; }
+    const angle = gap > 0.01 ? Math.atan2(world.farmer.y - world.player.y, world.farmer.x - world.player.x) : world.player.facing;
+    const start = { ...world.farmer };
+    for (let step = 0; step < 30; step++) {
+      const x = world.farmer.x + Math.cos(angle) * 0.2;
+      const y = world.farmer.y + Math.sin(angle) * 0.2;
+      if (!positionClear(world, x, y, FARMER_RADIUS)) break;
+      world.farmer.x = x; world.farmer.y = y;
+    }
+    if (distance(start, world.farmer) < 0.1) { setMessage(world, "No room to push the farmer. Feather Gust charge kept."); return false; }
+    world.effects.gust = 0.7;
     world._path = [];
   }
   world.inventory[id] -= 1;
@@ -330,7 +359,7 @@ export function activateThanksgivingPower(world, id) {
 export function getThanksgivingSnapshot(world) {
   return {
     time: world.time, rescued: world.rescued, cornCollected: world.cornCollected,
-    caught: world.caught, inventory: { ...world.inventory }, effects: { ...world.effects },
+    caught: world.caught, inventory: { ...world.inventory }, effects: { ...world.effects, stun: Math.max(0, ...world.traps.map(trap => trap.remaining)), camouflage: world.effects.fenceSlip, decoy: world.effects.gust },
     message: world.message, nearCage: Boolean(nearestCage(world)),
   };
 }

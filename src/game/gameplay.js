@@ -140,6 +140,20 @@ export function placeProgressionItems(world, distances, used) {
       label: "Medkit",
     });
   }
+
+  // Extra caches are spread across the reachable maze, using distinct tiles.
+  // Keep the original route supplies as well as these fifty of each kind.
+  for (const type of ["ammo", "medkit"]) {
+    for (let index = 0; index < 50; index += 1) {
+      const tile = findSpawnTile(world, distances, 8, world.exit.distance, used);
+      addPickup(world, tile, {
+        type,
+        amount: type === "ammo" ? randInt(AMMO_EXTRA_MIN_AMOUNT, AMMO_EXTRA_MAX_AMOUNT) : randInt(10, 22),
+        label: type === "ammo" ? getAmmoPickupLabel(world) : "Medkit",
+        extraSupply: true,
+      });
+    }
+  }
 }
 
 export function placePowerUps(world, distances, used) { const spreadBase = 7;

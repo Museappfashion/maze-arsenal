@@ -16,3 +16,10 @@ export function getPlayerDisplayName(valueOrWorld) {
 
   return sanitizePlayerName(value) || "You";
 }
+
+export function getLeaderboardDisplayName(entry) {
+  if (!entry) return "";
+  const name = getPlayerDisplayName(entry.playerName);
+  if (!entry.isCurrentUser) return name.toLowerCase() === "you" ? "Random Player" : name;
+  return name.toLowerCase() === "you" ? name : `${name} (you)`;
+}

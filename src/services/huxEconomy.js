@@ -1,4 +1,5 @@
 import { FARM_POWERUPS } from "../config/thanksgiving.js";
+import { TURKEY_COSMETIC, TURKEY_COSMETIC_THEMES } from "../config/turkeyCosmetic.js";
 
 export const HUX_STORAGE_KEY = "mist-maze-thanksgiving-hux-v1";
 export const HUX_UPDATED_EVENT = "mist-maze-hux-updated";
@@ -15,6 +16,8 @@ function normalize(state = {}) {
     bestRescued: whole(state?.bestRescued),
     totalRescued: whole(state?.totalRescued),
     inventory: Object.fromEntries(FARM_POWERUPS.map(({ id }) => [id, Math.min(99, whole(state?.inventory?.[id]))])),
+    cosmetics: state?.cosmetics?.turkey === true ? { turkey: true } : {},
+    equippedCosmetic: state?.cosmetics?.turkey === true && state?.equippedCosmetic === "turkey" ? "turkey" : null,
   };
 }
 
@@ -72,4 +75,24 @@ export function buyFarmSupply(id) {
   if (state.hux < item.price) return { ok: false, message: `You need ${item.price - state.hux} more hux. Eat corn to earn it.`, state };
   const next = save({ ...state, hux: state.hux - item.price, inventory: { ...state.inventory, [id]: state.inventory[id] + 1 } });
   return { ok: true, message: `${item.name} added to your bag.`, state: next };
+}
+
+export function buyTurkeyCosmetic() {
+  const state = loadHuxState();
+  if (state.cosmetics.turkey) return { ok: false, message: "Turkey Disguise is already owned. Equip it whenever you like.", state };
+  if (state.hux < TURKEY_COSMETIC.price) return { ok: false, message: `You need ${TURKEY_COSMETIC.price - state.hux} more hux. Eat corn to earn it.`, state };
+  const next = save({ ...state, hux: state.hux - TURKEY_COSMETIC.price, cosmetics: { ...state.cosmetics, turkey: true }, equippedCosmetic: "turkey" });
+  return { ok: true, message: "Turkey Disguise unlocked and equipped for all three adventures!", state: next };
+}
+
+export function setTurkeyCosmeticEquipped(enabled) {
+  const state = loadHuxState();
+  if (!state.cosmetics.turkey) return { ok: false, message: "Unlock Turkey Disguise first.", state };
+  const next = save({ ...state, equippedCosmetic: enabled ? "turkey" : null });
+  return { ok: true, message: enabled ? "Turkey Disguise equipped for your next adventure." : "Original character equipped for your next adventure.", state: next };
+}
+
+export function getPlayerCosmeticForTheme(themeKey, state = loadHuxState()) {
+  return state.cosmetics?.turkey === true && state.equippedCosmetic === "turkey"
+    && TURKEY_COSMETIC_THEMES.some((theme) => theme.key === themeKey) ? "turkey" : null;
 }

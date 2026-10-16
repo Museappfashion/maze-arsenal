@@ -5,6 +5,8 @@ import {
   useState,
 } from "react";
 import { MizCoin, MIZ_COSMETIC_STYLES, mizCosmeticClasses } from "./MizCoin.jsx";
+import { TurkeyCosmeticCard } from "./TurkeyCosmeticCard.jsx";
+import { useHuxWallet } from "./useHuxWallet.js";
 import {
   MIZ_STATE_CHANGED_EVENT,
   MIZ_TILES_PER_COIN,
@@ -560,6 +562,7 @@ function isBuyDisabled(
 }
 
 export function MystStore() {
+  const huxWallet = useHuxWallet();
   const state =
     useMizState();
 
@@ -652,6 +655,7 @@ export function MystStore() {
       </div>
 
       <div className="myst-store-items">
+        {huxWallet.cosmetics.turkey && <TurkeyCosmeticCard wallet={huxWallet} onMessage={setStatus} variant="myst" />}
         {MYST_SHOP_ITEMS.map(
           (item) => {
             const itemStatus =

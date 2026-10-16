@@ -1,0 +1,6 @@
+.turkey-cosmetic-card.farm-store-item { margin-top: 20px; }
+.turkey-cosmetic-card h3 { margin-top: 10px; }
+.turkey-cosmetic-previews { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 10px 0 18px; }
+.turkey-cosmetic-previews > div { display: grid; justify-items: center; gap: 4px; min-width: 0; }
+.turkey-cosmetic-previews canvas { display: block; width: 96px; max-width: 100%; height: auto; }
+.turkey-cosmetic-previews span { font: inherit; font-size: 11px; text-align: center; }

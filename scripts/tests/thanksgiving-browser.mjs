@@ -58,7 +58,7 @@ try {
   await page.getByRole("button", { name: "Farm supply store", exact: true }).click();
   const speedBuy = page.getByRole("button", { name: "Buy Turkey Trot for 12 hux", exact: true });
   assert.equal(await speedBuy.isDisabled(), true, "a new wallet cannot buy supplies it cannot afford");
-  assert.equal(await page.locator(".farm-store-item button:disabled").count(), 5);
+  assert.equal(await page.locator(".farm-store-grid .farm-store-item button:disabled").count(), 5);
 
   await page.evaluate(async () => {
     const { earnHux } = await import("/src/services/huxEconomy.js");

@@ -28,6 +28,7 @@ import {
 } from "./labyrinth.js";
 import { createOwnedWeapons, indexOfTile } from "../utils/math.js";
 import { sanitizePlayerName } from "../utils/player.js";
+import { getPlayerCosmeticForTheme } from "../services/huxEconomy.js";
 
 export function getControlsForViewMode(viewMode) {
   if (viewMode === "3d") {
@@ -212,6 +213,7 @@ export function createWorld(
       facingY: 0,
     },
     player: {
+      cosmetic: getPlayerCosmeticForTheme(level.themeKey),
       x: 1.5,
       y: 1.5,
       radius: 0.24,

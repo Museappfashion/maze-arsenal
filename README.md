@@ -119,12 +119,22 @@ Hux, unused supplies, best rescue count, and total rescued turkeys are saved
 in browser storage separately from Miz and the original game's progression.
 Getting caught or returning to the menu keeps all earned rewards.
 
+The farm store also sells **Turkey Disguise** for **1,000 hux**. One purchase
+permanently unlocks a full turkey with a space helmet in Orbital Ruins, a
+jungle hat in Emerald Wilds, and a metal helmet in Fallen Keep. Buying it
+equips it automatically. Equip or unequip it in the farm store or, once
+owned, in Myst's Store on the first page. Those controls remain available
+after the Thanksgiving event ends. In 2D it replaces the player sprite; in
+3D the themed turkey appears in the existing status display. This cosmetic
+does not change movement, collision, combat, or leaderboard eligibility.
+
 Farm regression checks:
 
 ```bash
 node --test scripts/tests/thanksgiving.test.mjs scripts/tests/hux-economy.test.mjs
 # With the dev server running and Playwright available:
 GAME_TEST_URL=http://127.0.0.1:5189 node scripts/tests/thanksgiving-browser.mjs
+GAME_TEST_URL=http://127.0.0.1:5189 node scripts/tests/turkey-cosmetic-browser.mjs
 ```
 
 ## Touch controls

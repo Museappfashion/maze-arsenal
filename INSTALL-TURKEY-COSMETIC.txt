@@ -1,0 +1,15 @@
+MIST MAZE — TURKEY DISGUISE COSMETIC
+
+Install this update over your existing project with Free the Flock / Thanksgiving dense layout V2 already installed.
+
+1. Unzip this download.
+2. Merge src and scripts into the project folder that contains package.json. Replace matching files. README.md includes updated documentation.
+3. Run npm run verify, then deploy using your normal process.
+
+Turkey Disguise costs 1,000 hux in the farm supply store. One purchase permanently unlocks all three approved full-turkey looks: space helmet only in Orbital Ruins, jungle hat in Emerald Wilds, and metal helmet in Fallen Keep. The body remains a turkey in all three looks.
+
+Purchase equips it automatically. Equip/unequip controls are in the farm store and, once owned, Myst's Store. Owned controls remain available after Thanksgiving. The character uses the existing movement, combat, weapons, collision, glow, and leaderboard rules. In 3D the status display includes the themed turkey portrait.
+
+No new dependencies or database changes are required. Existing hux, farm supplies, rescue records, and Miz balances are preserved.
+
+Validation: production build and import-cycle audit passed; 54 automated tests passed; desktop and mobile browser checks passed for the cosmetic and existing Thanksgiving gameplay.

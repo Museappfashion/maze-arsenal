@@ -2,27 +2,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { FARM_POWERUPS, FARM_WIDTH, FARM_HEIGHT } from "../config/thanksgiving.js";
 import { activateThanksgivingPower, createThanksgivingWorld, getThanksgivingSnapshot, updateThanksgivingWorld } from "../game/thanksgiving.js";
 import { drawThanksgivingWorld } from "../game/thanksgivingRendering.js";
-import { buyFarmSupply, earnHux, HUX_STORAGE_KEY, HUX_UPDATED_EVENT, loadHuxState, recordTurkeyRescues, saveFarmInventory } from "../services/huxEconomy.js";
+import { buyFarmSupply, earnHux, loadHuxState, recordTurkeyRescues, saveFarmInventory } from "../services/huxEconomy.js";
 import { isThanksgivingOpen, THANKSGIVING_DATE_LABEL } from "../services/thanksgivingSeason.js";
 import { ThanksgivingArtwork } from "./ThanksgivingArtwork.jsx";
+import { TurkeyCosmeticCard } from "./TurkeyCosmeticCard.jsx";
+import { useHuxWallet } from "./useHuxWallet.js";
 import "../styles/thanksgiving.css";
 
 const clock = (seconds) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
-
-function useHuxWallet() {
-  const [wallet, setWallet] = useState(loadHuxState);
-  useEffect(() => {
-    const refresh = () => setWallet(loadHuxState());
-    const storage = (event) => { if (event.key === HUX_STORAGE_KEY || event.key === null) refresh(); };
-    window.addEventListener(HUX_UPDATED_EVENT, refresh);
-    window.addEventListener("storage", storage);
-    return () => {
-      window.removeEventListener(HUX_UPDATED_EVENT, refresh);
-      window.removeEventListener("storage", storage);
-    };
-  }, []);
-  return wallet;
-}
 
 function FarmStore({ wallet, onClose }) {
   const [message, setMessage] = useState("");
@@ -40,6 +27,7 @@ function FarmStore({ wallet, onClose }) {
           </article>
         ))}
       </div>
+      <TurkeyCosmeticCard wallet={wallet} onMessage={setMessage} />
       <p className="farm-store-message" role="status">{message || "You can also find free power-ups along the farm lanes."}</p>
     </section>
   );

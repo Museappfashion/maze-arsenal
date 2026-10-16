@@ -13,6 +13,7 @@ import { getDiscoveredPercent, hashNoise } from "./maze.js";
 import { getLabyrinthTimeRemaining, labyrinthBreakerActive } from "./labyrinth.js";
 import { angleDelta, clamp, formatTime, indexOfTile, lerp, normalize, tileCenter } from "../utils/math.js";
 import { getPlayerDisplayName } from "../utils/player.js";
+import { drawTurkeyCosmeticBody } from "./turkeyCosmetic.js";
 
 export function drawEffects(ctx, world, camera) {
   for (const effect of world.effects ?? []) {
@@ -1474,7 +1475,9 @@ export function drawPlayerBody(ctx, world, x, y) {
   ctx.strokeStyle = outline;
   ctx.lineWidth = Math.max(2.2, radius * 0.24);
 
-  if (themeKey === "space") {
+  if (player.cosmetic === "turkey" && ["space", "jungle", "medieval"].includes(themeKey)) {
+    drawTurkeyCosmeticBody(ctx, themeKey, radius);
+  } else if (themeKey === "space") {
     // Twin animated engines make this read as a spaceship instead of an arrow.
     ctx.save();
     ctx.globalAlpha = 0.72 + pulse * 0.25;
@@ -4027,10 +4030,12 @@ export function draw3DOverlay(ctx, world) {
       world.player.weapon,
     );
 
+    const turkeyEquipped = world.player.cosmetic === "turkey";
+    const hudWidth = turkeyEquipped ? 362 : 286;
     ctx.fillStyle = "rgba(2, 6, 23, 0.72)";
-    ctx.fillRect(14, 14, 286, 78);
+    ctx.fillRect(14, 14, hudWidth, 78);
     ctx.strokeStyle = "rgba(148, 163, 184, 0.24)";
-    ctx.strokeRect(14.5, 14.5, 285, 77);
+    ctx.strokeRect(14.5, 14.5, hudWidth - 1, 77);
 
     ctx.fillStyle = "#f8fafc";
     ctx.font = "800 17px system-ui, sans-serif";
@@ -4048,6 +4053,18 @@ export function draw3DOverlay(ctx, world) {
     ctx.font = "700 13px system-ui, sans-serif";
     ctx.fillText(weaponLabel, 28, 64);
     ctx.fillText(formatTime(world.time), 216, 64);
+
+    if (turkeyEquipped) {
+      ctx.save();
+      ctx.translate(337, 48);
+      drawTurkeyCosmeticBody(ctx, world.level.themeKey, 16);
+      ctx.restore();
+      ctx.fillStyle = "#cbd5e1";
+      ctx.font = "700 10px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("TURKEY", 337, 80);
+      ctx.textAlign = "left";
+    }
 
     const crosshairSize = 8;
     const crosshairGap = 5;

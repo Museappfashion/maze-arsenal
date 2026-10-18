@@ -1,3 +1,5 @@
+import { FARM_POWER_SETTINGS } from '../config/thanksgiving.js';
+
 const TAU = Math.PI * 2;
 const POWER_COLORS = {
   speed: '#ffc54a',
@@ -718,8 +720,18 @@ export function drawThanksgivingWorld(ctx, world, viewportWidth, viewportHeight,
   }
   for (const trap of world.traps || []) {
     if (trap.remaining <= 0 || !visible(trap)) continue;
-    ellipse(ctx, trap.x * tile, trap.y * tile, tile * .7, tile * .4, '#755438bb');
-    ellipse(ctx, trap.x * tile - 3, trap.y * tile - 2, tile * .35, tile * .12, '#bd936c99');
+    // Clip the wider puddle to ground so it never paints across a barn or fence.
+    const radius = FARM_POWER_SETTINGS.mudRadius;
+    ctx.save(); ctx.beginPath();
+    for (let y = Math.floor(trap.y - radius); y <= Math.ceil(trap.y + radius); y++) {
+      for (let x = Math.floor(trap.x - radius); x <= Math.ceil(trap.x + radius); x++) {
+        if (world.grid[y]?.[x] === 0) ctx.rect(x * tile, y * tile, tile, tile);
+      }
+    }
+    ctx.clip();
+    ellipse(ctx, trap.x * tile, trap.y * tile, tile * radius, tile * radius, '#75543877');
+    ellipse(ctx, trap.x * tile - 3, trap.y * tile - 2, tile * radius * .55, tile * radius * .35, '#bd936c66');
+    ctx.restore();
   }
   if (effects.gust > 0) {
     ctx.strokeStyle = '#fff4dbbb'; ctx.lineWidth = 2;
@@ -733,7 +745,7 @@ export function drawThanksgivingWorld(ctx, world, viewportWidth, viewportHeight,
       ellipse(ctx, player.x * tile - Math.cos(a) * n * 8, player.y * tile - Math.sin(a) * n * 8, 5 - n, 5 - n, `rgba(255,228,122,${.45 - n * .1})`);
     }
   }
-  if (world.farmer && visible(world.farmer)) drawFarmer(ctx, world.farmer, tile, time, false);
+  if (world.farmer && visible(world.farmer)) drawFarmer(ctx, world.farmer, tile, time, effects.farmerStagger > 0);
   if (effects.mudSlow > 0 && world.farmer && visible(world.farmer)) ellipse(ctx, world.farmer.x * tile, world.farmer.y * tile + 9, tile * .45, tile * .15, "#795335aa");
   if (world.player) {
     drawTurkey(ctx, player.x * tile, player.y * tile, tile * .52, player.facing || 0, { player: true, ghost: effects.fenceSlip > 0, time });

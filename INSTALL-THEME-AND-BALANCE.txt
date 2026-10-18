@@ -1,0 +1,41 @@
+MIST MAZE — THEME AND BALANCE UPDATE — OCTOBER 17, 2026
+
+INSTALL INTO YOUR EXISTING GAME
+1. Unzip this download.
+2. Open your game project folder containing package.json (for example total/).
+3. Copy src/ into that folder, merging folders and replacing matching files.
+   The main source file belongs at total/src/App.jsx, not total/src/src/App.jsx.
+4. Copy the included scripts/ and root configuration files into the same project.
+5. Keep the project's existing .env files, api/ folder, and supabase/ folder.
+6. Run npm install, npm run verify, and npm run dev.
+   Use the existing deployment process when you are ready to publish.
+
+This download contains the complete current frontend source, including the
+October 16 update and the alien's corrected 10,000-MIZ price.
+
+CHANGES
+- New permanent player appearances: Shadow Wisp (3,500 MIZ), Ember Spirit
+  (6,000 MIZ), and Crystal Guardian (8,000 MIZ). Full player silhouettes,
+  theme variants, preview cards, equip controls, and 3D status portraits.
+- One-use powers now cost 250–2,500 MIZ according to effect strength.
+  Player appearances, coin/counter cosmetics, and powers have separate sections.
+- Turkey remains 1,000 hux; alien remains 10,000 MIZ.
+- Free the Flock starts with at least 45 free powers, supports up to 60,
+  replenishes every second, and keeps reachable supplies close to your route.
+- Trot doubles speed for 12 seconds; Mud slows the farmer by 80% for 10 seconds;
+  Hop adds 4 seconds of double speed; Gust pushes up to 10 tiles and staggers
+  for 2.5 seconds; Fence Slip lasts 12 seconds. Saved supply charges carry over.
+- Abandoned City has skyscrapers of varying heights and visible distant roofs.
+- Orbital Ruins has asteroid barriers, rocky paths, stars, and a planet.
+- Emerald Wilds uses trees, foliage, vines, and roots for its 3D barriers.
+- Fallen Keep has large, irregular weathered flagstone floors.
+- The calm blue notice board reflects these changes.
+
+VALIDATION
+Production build and import-cycle audit passed.
+71 automated tests passed, including purchases, saved ownership, unchanged
+character stats, farm supply reachability, stronger powers, and 3D projection.
+Chrome checks passed for new cosmetics, prices, all four 3D scenes, gameplay,
+reload persistence, desktop/mobile controls, and zero browser errors.
+
+README.md lists full prices, controls, effects, and test commands.

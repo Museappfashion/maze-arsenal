@@ -14,7 +14,8 @@ import { getLabyrinthTimeRemaining, labyrinthBreakerActive } from "./labyrinth.j
 import { angleDelta, clamp, formatTime, indexOfTile, lerp, normalize, tileCenter } from "../utils/math.js";
 import { getPlayerDisplayName } from "../utils/player.js";
 import { drawCharacterCosmeticBody } from "./characterCosmetic.js";
-import { drawPerspectiveFloor, drawWallMaterial } from "./materials3D.js";
+import { getCharacterCosmetic, isCharacterCosmetic } from "../config/turkeyCosmetic.js";
+import { draw3DSky, drawPerspectiveFloor, drawWallMaterial, get3DWallHeight, project3DWall } from "./materials3D.js";
 
 export function drawEffects(ctx, world, camera) {
   for (const effect of world.effects ?? []) {
@@ -1476,7 +1477,7 @@ export function drawPlayerBody(ctx, world, x, y) {
   ctx.strokeStyle = outline;
   ctx.lineWidth = Math.max(2.2, radius * 0.24);
 
-  if (["turkey", "alien"].includes(player.cosmetic) && ["city", "space", "jungle", "medieval"].includes(themeKey)) {
+  if (isCharacterCosmetic(player.cosmetic) && ["city", "space", "jungle", "medieval"].includes(themeKey)) {
     drawCharacterCosmeticBody(ctx, themeKey, radius, player.cosmetic);
   } else if (themeKey === "space") {
     // Twin animated engines make this read as a spaceship instead of an arrow.
@@ -2549,7 +2550,7 @@ export function drawWorld2D(ctx, world) {
   }
 }
 
-export function cast3DRay(world, angle) {
+export function cast3DRay(world, angle, collectLayers = false) {
   const dirX = Math.cos(angle);
   const dirY = Math.sin(angle);
   let mapX = Math.floor(world.player.x);
@@ -2571,6 +2572,9 @@ export function cast3DRay(world, angle) {
       : (mapY + 1 - world.player.y) * deltaDistY;
   let side = 0;
   let distance = 0;
+  const layers = [];
+  let previousWall = false;
+  let previousHeight = 0;
 
   for (let step = 0; step < 96; step += 1) {
     if (sideDistX < sideDistY) {
@@ -2602,7 +2606,7 @@ export function cast3DRay(world, angle) {
       const wallOffset =
         side === 0 ? hitY - Math.floor(hitY) : hitX - Math.floor(hitX);
 
-      return {
+      const hit = {
         distance,
         mapX,
         mapY,
@@ -2610,9 +2614,19 @@ export function cast3DRay(world, angle) {
         wallOffset,
         wallType,
       };
+      if (!collectLayers) return hit;
+      const height = get3DWallHeight(world, hit);
+      // Continue through a low building so distant higher rooflines remain visible.
+      // Solid adjacent cells of the same height share a single facade.
+      if (!previousWall || height !== previousHeight) layers.push(hit);
+      previousWall = true;
+      previousHeight = height;
+    } else {
+      previousWall = false;
     }
   }
 
+  if (collectLayers) return layers;
   return {
     distance: VIEW_3D_MAX_DISTANCE,
     mapX,
@@ -2631,6 +2645,7 @@ export function draw3DEnvironment(ctx, world, zBuffer) {
   ceiling.addColorStop(1, theme.wallC);
   ctx.fillStyle = ceiling;
   ctx.fillRect(0, 0, CANVAS_WIDTH, horizon);
+  draw3DSky(ctx, world, CANVAS_WIDTH, horizon);
 
   const floor = ctx.createLinearGradient(0, horizon, 0, CANVAS_HEIGHT);
   floor.addColorStop(0, theme.floorB);
@@ -2657,12 +2672,10 @@ export function draw3DEnvironment(ctx, world, zBuffer) {
     zBuffer[rayIndex] = perpendicularDistance;
     if (hit.wallType == null) continue;
 
-    const wallHeight = Math.min(
-      CANVAS_HEIGHT * 2.4,
-      projectionPlane / perpendicularDistance,
-    );
-    const wallTop = horizon - wallHeight / 2;
-    const wallBottom = horizon + wallHeight / 2;
+    const physicalHeight = get3DWallHeight(world, hit);
+    const projectedWall = project3DWall(projectionPlane, horizon, perpendicularDistance, physicalHeight);
+    const wallTop = projectedWall.top;
+    const wallBottom = projectedWall.bottom;
     const darknessDistance = world.labyrinthMode
       ? Math.max(6, world.labyrinth.sightRadius * 2.15)
       : VIEW_3D_MAX_DISTANCE;
@@ -2703,7 +2716,7 @@ export function draw3DEnvironment(ctx, world, zBuffer) {
     );
 
     if (!steelWall && !world.labyrinthMode) drawWallMaterial(ctx, world, hit,
-      rayIndex * VIEW_3D_RAY_WIDTH, wallTop, VIEW_3D_RAY_WIDTH + 1, wallBottom - wallTop, distanceFade * sideShade);
+      rayIndex * VIEW_3D_RAY_WIDTH, wallTop, VIEW_3D_RAY_WIDTH + 1, wallBottom - wallTop, distanceFade * sideShade, physicalHeight);
 
     if (steelWall) {
       const brace =
@@ -2745,19 +2758,6 @@ export function draw3DEnvironment(ctx, world, zBuffer) {
         wallTop,
         1,
         Math.min(70, wallBottom - wallTop),
-      );
-    } else if (
-      world.level.themeKey === "space" &&
-      hit.wallOffset > 0.46 &&
-      hit.wallOffset < 0.52
-    ) {
-      ctx.globalAlpha = distanceFade * 0.28;
-      ctx.fillStyle = "#67e8f9";
-      ctx.fillRect(
-        rayIndex * VIEW_3D_RAY_WIDTH,
-        wallTop,
-        1,
-        wallBottom - wallTop,
       );
     } else if (
       world.level.themeKey === "medieval" &&
@@ -4019,8 +4019,8 @@ export function draw3DOverlay(ctx, world) {
       world.player.weapon,
     );
 
-    const turkeyEquipped = ["turkey", "alien"].includes(world.player.cosmetic);
-    const hudWidth = turkeyEquipped ? 362 : 286;
+    const characterCosmetic = getCharacterCosmetic(world.player.cosmetic);
+    const hudWidth = characterCosmetic ? 362 : 286;
     ctx.fillStyle = "rgba(2, 6, 23, 0.72)";
     ctx.fillRect(14, 14, hudWidth, 78);
     ctx.strokeStyle = "rgba(148, 163, 184, 0.24)";
@@ -4043,7 +4043,7 @@ export function draw3DOverlay(ctx, world) {
     ctx.fillText(weaponLabel, 28, 64);
     ctx.fillText(formatTime(world.time), 216, 64);
 
-    if (turkeyEquipped) {
+    if (characterCosmetic) {
       ctx.save();
       ctx.translate(337, 48);
       drawCharacterCosmeticBody(ctx, world.level.themeKey, 16, world.player.cosmetic);
@@ -4051,7 +4051,7 @@ export function draw3DOverlay(ctx, world) {
       ctx.fillStyle = "#cbd5e1";
       ctx.font = "700 10px system-ui, sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText(world.player.cosmetic.toUpperCase(), 337, 80);
+      ctx.fillText(characterCosmetic.portraitLabel ?? characterCosmetic.key.toUpperCase(), 337, 80);
       ctx.textAlign = "left";
     }
 

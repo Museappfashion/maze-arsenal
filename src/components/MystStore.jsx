@@ -6,6 +6,7 @@ import {
 } from "react";
 import { MizCoin, MIZ_COSMETIC_STYLES, mizCosmeticClasses } from "./MizCoin.jsx";
 import { TurkeyCosmeticCard } from "./TurkeyCosmeticCard.jsx";
+import { CHARACTER_COSMETICS } from "../config/turkeyCosmetic.js";
 
 import {
   MIZ_STATE_CHANGED_EVENT,
@@ -66,6 +67,17 @@ const STYLES = `
   .myst-store-shell {
     display: grid;
     gap: 18px;
+  }
+
+  .myst-store-category { display: grid; gap: 12px; }
+  .myst-store-category-title {
+    margin: 0;
+    padding-bottom: 9px;
+    border-bottom: 1px solid rgba(148,163,184,.18);
+    color: #e9d5ff;
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: .04em;
   }
 
   .myst-store-head {
@@ -654,10 +666,19 @@ export function MystStore() {
         </div>
       </div>
 
-      <div className="myst-store-items">
-        <TurkeyCosmeticCard onMessage={setStatus} variant="myst" />
-        <TurkeyCosmeticCard onMessage={setStatus} variant="myst" cosmetic="alien" />
-        {MYST_SHOP_ITEMS.filter((item) => item.kind !== "character").map(
+      <section className="myst-store-category" aria-label="Character cosmetics">
+        <h3 className="myst-store-category-title">Character cosmetics · permanent player appearances</h3>
+        <div className="myst-store-items">
+          {CHARACTER_COSMETICS.map((item) => <TurkeyCosmeticCard key={item.key} onMessage={setStatus} variant="myst" cosmetic={item.key} />)}
+        </div>
+      </section>
+      {[
+        { kind: "cosmetic", title: "Coin & counter cosmetics · permanent" },
+        { kind: "oneTime", title: "One-use powers · activate during a maze" },
+      ].map((category) => <section key={category.kind} className="myst-store-category" aria-label={category.title}>
+        <h3 className="myst-store-category-title">{category.title}</h3>
+        <div className="myst-store-items">
+        {MYST_SHOP_ITEMS.filter((item) => item.kind === category.kind).map(
           (item) => {
             const itemStatus =
               getItemStatus(
@@ -723,7 +744,8 @@ export function MystStore() {
             );
           },
         )}
-      </div>
+        </div>
+      </section>)}
     </div>
   );
 }

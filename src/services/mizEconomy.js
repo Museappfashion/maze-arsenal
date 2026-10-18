@@ -151,7 +151,7 @@ export const MYST_SHOP_ITEMS =
       key: "healPulse",
       kind: "oneTime",
       name: "Vital Restore",
-      price: 12,
+      price: 350,
       rarity: "One-use power",
       description:
         "A sealed pulse that reconstructs lost health.",
@@ -163,7 +163,7 @@ export const MYST_SHOP_ITEMS =
       key: "ammoPulse",
       kind: "oneTime",
       name: "Ammo Refill",
-      price: 10,
+      price: 250,
       rarity: "One-use power",
       description:
         "A compressed supply imprint for emergency ammunition.",
@@ -175,7 +175,7 @@ export const MYST_SHOP_ITEMS =
       key: "nullPulse",
       kind: "oneTime",
       name: "Mist Guard",
-      price: 25,
+      price: 800,
       rarity: "One-use power",
       description:
         "An emergency barrier that clears hostile shots and lets you escape danger.",
@@ -187,7 +187,7 @@ export const MYST_SHOP_ITEMS =
       key: "velocityBloom",
       kind: "oneTime",
       name: "Velocity Bloom",
-      price: 20,
+      price: 650,
       rarity: "One-use power",
       description:
         "A brief kinetic distortion around the player.",
@@ -199,7 +199,7 @@ export const MYST_SHOP_ITEMS =
       key: "vitalBloom",
       kind: "oneTime",
       name: "Field Armor",
-      price: 25,
+      price: 600,
       rarity: "One-use power",
       description:
         "A protective field that absorbs incoming damage while you push forward.",
@@ -211,7 +211,7 @@ export const MYST_SHOP_ITEMS =
       key: "mapFlash",
       kind: "oneTime",
       name: "Cartographer Flash",
-      price: 35,
+      price: 1000,
       rarity: "One-use power",
       description:
         "A violent burst of spatial memory across the maze.",
@@ -223,7 +223,7 @@ export const MYST_SHOP_ITEMS =
       key: "arsenalKey",
       kind: "oneTime",
       name: "Arsenal Key",
-      price: 60,
+      price: 1500,
       rarity: "One-use power",
       description:
         "A temporary authorization imprint for standard weapons.",
@@ -235,7 +235,7 @@ export const MYST_SHOP_ITEMS =
       key: "purgeOrb",
       kind: "oneTime",
       name: "Purge Orb",
-      price: 40,
+      price: 1250,
       rarity: "One-use power",
       description:
         "A dense gray sphere that collapses nearby hostile signatures.",
@@ -247,7 +247,7 @@ export const MYST_SHOP_ITEMS =
       key: "phoenixSpark",
       kind: "oneTime",
       name: "Phoenix Spark",
-      price: 50,
+      price: 2000,
       rarity: "One-use power",
       description:
         "A one-shot emergency spark held until defeat.",
@@ -259,7 +259,7 @@ export const MYST_SHOP_ITEMS =
       key: "exitFold",
       kind: "oneTime",
       name: "Exit Fold",
-      price: 100,
+      price: 2500,
       rarity: "One-use power",
       description:
         "A single-use spatial fold keyed to the maze exit.",

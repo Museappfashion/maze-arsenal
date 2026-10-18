@@ -1,11 +1,11 @@
 const UPDATES = [
-  "Added the green alien cosmetic, with themed headwear and a plain look in Abandoned City.",
-  "Redid the MIZ store: alien costs MIZ and turkey stays 1,000 hux, with more affordable upgrades and useful powers you can activate during a run.",
-  "Improved 3D graphics with grounded textures, lighting, and clearer depth.",
-  "Fixed Abandoned City 3D graphics and building surfaces.",
+  "Added player cosmetics: Shadow Wisp, Ember Spirit, Crystal Guardian, and Blobby Alien. Alien costs 10,000 MIZ; Turkey Disguise stays 1,000 hux.",
+  "Rebalanced one-use powers to 250–2,500 MIZ and separated player cosmetics from coin and counter decorations.",
+  "Rethemed 3D: open-space orbital ruins, natural jungle barriers, and worn flagstone keep floors.",
+  "Abandoned City now has skyscrapers of varying heights and a layered skyline.",
   "Increased supplies: 50 extra ammo pickups and 50 extra medkits in every combat maze.",
   "Fixed Labyrinth changes: the maze now shifts every 30 seconds on all difficulties.",
-  "Opened up Free the Flock with fewer obstructions; Mud Trap, Feather Gust, and Fence Slip replace the old farm powers.",
+  "Strengthened Free the Flock powers and added denser pickups, with nearby supplies reachable along the paths.",
   "Rankings label unnamed opponents Random Player and mark your named entry with (you).",
 ];
 

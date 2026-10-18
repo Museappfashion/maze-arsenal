@@ -1,5 +1,6 @@
 // src/game/rendering-enhanced.js
-import { drawWallMaterial } from "./materials3D.js";
+import { drawWallMaterial, get3DWallHeight, project3DWall } from "./materials3D.js";
+import { isCharacterCosmetic } from "../config/turkeyCosmetic.js";
 import {
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
@@ -2063,7 +2064,7 @@ function drawCityPlayer2D(ctx, world) {
   }
 
   const player = playerScreenPosition(world);
-  if (["turkey", "alien"].includes(world.player.cosmetic)) {
+  if (isCharacterCosmetic(world.player.cosmetic)) {
     const zoom = getWorldRenderZoom(world);
     ctx.save(); ctx.scale(zoom, zoom);
     drawPlayerBody(ctx, world, player.x / zoom, player.y / zoom);
@@ -2228,12 +2229,15 @@ function drawCityWallFacade3D(ctx, world, plane) {
   for (let ray = 0; ray < rayCount; ray++) {
     const x = ray * VIEW_3D_RAY_WIDTH;
     const offset = Math.atan((x + VIEW_3D_RAY_WIDTH / 2 - CANVAS_WIDTH / 2) / plane);
-    const hit = cast3DRay(world, world.player.facing + offset);
-    if (hit.wallType == null) continue;
-    const depth = Math.max(.08, hit.distance * Math.cos(offset));
-    const height = Math.min(CANVAS_HEIGHT * 2.4, plane / depth);
-    const brightness = Math.max(.18, 1 - depth / VIEW_3D_MAX_DISTANCE) * (hit.side ? .78 : 1);
-    drawWallMaterial(ctx, world, hit, x, horizon - height / 2, VIEW_3D_RAY_WIDTH + 1, height, brightness);
+    const layers = cast3DRay(world, world.player.facing + offset, true);
+    for (let layer = layers.length - 1; layer >= 0; layer--) {
+      const hit = layers[layer];
+      const depth = Math.max(.08, hit.distance * Math.cos(offset));
+      const physicalHeight = get3DWallHeight(world, hit);
+      const projection = project3DWall(plane, horizon, depth, physicalHeight);
+      const brightness = Math.max(.22, 1 - depth / (VIEW_3D_MAX_DISTANCE * 1.4)) * (hit.side ? .78 : 1);
+      drawWallMaterial(ctx, world, hit, x, projection.top, VIEW_3D_RAY_WIDTH + 1, projection.height, brightness, physicalHeight);
+    }
   }
   ctx.restore();
 }

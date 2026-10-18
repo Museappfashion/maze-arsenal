@@ -1,6 +1,7 @@
 import {
   FARM_WIDTH, FARM_HEIGHT, FARM_PLAYER_SPEED, FARM_FARMER_SPEED,
   FARM_RESCUE_SECONDS, FARM_SPAWN_LIMITS, FARM_POWERUPS,
+  FARM_PICKUP_SPAWN_SECONDS, FARM_NEARBY_PICKUPS, FARM_NEARBY_PICKUP_DISTANCE, FARM_POWER_SETTINGS,
 } from "../config/thanksgiving.js";
 
 const PLAYER_RADIUS = 0.3;
@@ -34,28 +35,79 @@ function clearSegment(world, from, to, radius = 0) {
   return true;
 }
 
-function randomPosition(world, predicate = () => true) {
+function randomPosition(world, predicate = () => true, candidates = world._roads) {
   // Starting at a random cell and walking a coprime stride gives a bounded fallback
   // even with a deterministic or unlucky random source.
-  const start = randomIndex(world, world._roads.length);
-  for (let offset = 0; offset < world._roads.length; offset += 1) {
-    const candidate = world._roads[(start + offset) % world._roads.length];
+  const start = randomIndex(world, candidates.length);
+  for (let offset = 0; offset < candidates.length; offset += 1) {
+    const candidate = candidates[(start + offset) % candidates.length];
     if (predicate(candidate)) return { x: candidate.x, y: candidate.y };
   }
   return null;
 }
 
-function spawn(world, kind) {
-  if (world[kind].length >= FARM_SPAWN_LIMITS[kind]) return;
+function spawn(world, kind, candidates) {
+  if (world[kind].length >= FARM_SPAWN_LIMITS[kind]) return null;
   const entities = [...world.cages, ...world.corn, ...world.pickups];
   const position = randomPosition(world, point => distance(point, world.player) > 1.8
     && distance(point, world.farmer) > 1.8
-    && entities.every(entity => distance(point, entity) >= (kind === "cages" ? 2 : 0.8)));
-  if (!position) return;
+    && entities.every(entity => distance(point, entity) >= (kind === "cages" ? 2 : 0.8)), candidates);
+  if (!position) return null;
   const entity = { id: world._nextId++, ...position };
   if (kind === "cages") entity.progress = 0;
-  if (kind === "pickups") entity.type = POWER_IDS[randomIndex(world, POWER_IDS.length)];
+  // Rotate supplies so even an unlucky random source cannot omit an entire power.
+  if (kind === "pickups") entity.type = POWER_IDS[world._pickupCycle++ % POWER_IDS.length];
   world[kind].push(entity);
+  return entity;
+}
+
+function nearbyPickupRoads(world) {
+  // Walking distance matters: a power just across a long fence may be far away.
+  const origin = road(world, world.player.x, world.player.y) ? world.player : nearestRoad(world, world.player);
+  if (!origin) return [];
+  const first = Math.floor(origin.y) * world.width + Math.floor(origin.x);
+  const steps = new Int16Array(world.width * world.height).fill(-1);
+  const pending = [first];
+  steps[first] = 0;
+  const nearby = [];
+  for (let head = 0; head < pending.length; head++) {
+    const cell = pending[head];
+    const x = cell % world.width;
+    const y = Math.floor(cell / world.width);
+    if (steps[cell] >= 3) nearby.push({ x: x + .5, y: y + .5 });
+    if (steps[cell] >= FARM_NEARBY_PICKUP_DISTANCE) continue;
+    for (const [nx, ny] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]) {
+      const next = ny * world.width + nx;
+      if (world.grid[ny]?.[nx] !== 0 || steps[next] !== -1) continue;
+      steps[next] = steps[cell] + 1;
+      pending.push(next);
+    }
+  }
+  return nearby;
+}
+
+function replenishNearbyPickups(world) {
+  const candidates = nearbyPickupRoads(world);
+  const nearbyCells = new Set(candidates.map(point => Math.floor(point.y) * world.width + Math.floor(point.x)));
+  const nearby = pickup => nearbyCells.has(Math.floor(pickup.y) * world.width + Math.floor(pickup.x));
+  let nearbyCount = world.pickups.filter(nearby).length;
+  for (; nearbyCount < FARM_NEARBY_PICKUPS; nearbyCount++) {
+    // At the population cap, move an unseen distant supply instead of going over it.
+    let distantIndex = -1;
+    if (world.pickups.length >= FARM_SPAWN_LIMITS.pickups) {
+      distantIndex = world.pickups.findIndex(pickup => !nearby(pickup) && distance(pickup, world.player) > FARM_NEARBY_PICKUP_DISTANCE);
+      // A long fence can put every supply visually nearby but a long walk away.
+      // Prefer unseen supplies, then fall back to any inaccessible supply.
+      if (distantIndex < 0) distantIndex = world.pickups.findIndex(pickup => !nearby(pickup));
+    }
+    const distant = distantIndex >= 0 ? world.pickups.splice(distantIndex, 1)[0] : null;
+    const added = spawn(world, "pickups", candidates);
+    if (distant) {
+      if (added) { added.id = distant.id; added.type = distant.type; }
+      else world.pickups.push(distant);
+    }
+    if (!added) break;
+  }
 }
 
 function setMessage(world, message, duration = 3) {
@@ -159,17 +211,19 @@ export function createThanksgivingWorld({ random = Math.random, inventory = {} }
     player: null, farmer: null, cages: [], corn: [], pickups: [], freed: [],
     time: 0, rescued: 0, cornCollected: 0, caught: false,
     inventory: Object.fromEntries(POWER_IDS.map(id => [id, Math.min(99, Math.max(0, Math.floor(Number(inventory[id]) || 0)))])),
-    effects: { speed: 0, mudSlow: 0, fenceSlip: 0, gust: 0 }, traps: [],
+    effects: { speed: 0, mudSlow: 0, fenceSlip: 0, gust: 0, farmerStagger: 0 }, traps: [],
     message: "Free the turkeys. Gather corn for Hux. Keep moving!",
     _random: randomSource,
     _roads: roads, _nextId: 1, _path: [], _pathTarget: "", _pathUntil: 0,
-    _spawnTimers: { cages: 0, corn: 0, pickups: 0 }, _messageUntil: 6,
+    _spawnTimers: { cages: 0, corn: 0, pickups: 0 }, _messageUntil: 6, _pickupCycle: 0,
   };
   world.player = { ...randomPosition(world), facing: 0, radius: PLAYER_RADIUS };
   world.farmer = { ...randomPosition(world, point => distance(point, world.player) >= 25), facing: 0, radius: FARMER_RADIUS };
   for (let index = 0; index < 16; index += 1) spawn(world, "cages");
   for (let index = 0; index < 120; index += 1) spawn(world, "corn");
-  for (let index = 0; index < 8; index += 1) spawn(world, "pickups");
+  world._pickupCycle = randomIndex(world, POWER_IDS.length);
+  for (let index = 0; index < 45; index += 1) spawn(world, "pickups");
+  replenishNearbyPickups(world);
   return world;
 }
 
@@ -209,11 +263,12 @@ function findPath(world, from, to) {
 
 function updateFarmer(world, dt) {
   for (const trap of world.traps) {
-    if (distance(trap, world.farmer) < 1.2 && clearSegment(world, trap, world.farmer)) {
-      world.effects.mudSlow = 5;
+    if (trap.remaining > 0 && distance(trap, world.farmer) < FARM_POWER_SETTINGS.mudRadius && clearSegment(world, trap, world.farmer)) {
+      world.effects.mudSlow = Math.max(world.effects.mudSlow, FARM_POWER_SETTINGS.mudSlowSeconds);
       trap.remaining = 0;
     }
   }
+  if (world.effects.farmerStagger > 0) return;
   const target = positionClear(world, world.player.x, world.player.y, PLAYER_RADIUS) ? world.player : nearestRoad(world, world.player);
   let waypoint = target;
   if (!clearSegment(world, world.farmer, target, FARMER_RADIUS)) {
@@ -238,7 +293,7 @@ function updateFarmer(world, dt) {
   }
   const gap = distance(world.farmer, waypoint);
   if (gap < 0.001) return;
-  const step = Math.min(gap, FARM_FARMER_SPEED * (world.effects.mudSlow > 0 ? 0.35 : 1) * dt);
+  const step = Math.min(gap, FARM_FARMER_SPEED * (world.effects.mudSlow > 0 ? FARM_POWER_SETTINGS.mudFarmerMultiplier : 1) * dt);
   move(world, world.farmer, (waypoint.x - world.farmer.x) / gap * step, (waypoint.y - world.farmer.y) / gap * step, FARMER_RADIUS);
 }
 
@@ -267,10 +322,10 @@ function updateStep(world, dt, input) {
   const x = Number.isFinite(input.x) ? input.x : 0;
   const y = Number.isFinite(input.y) ? input.y : 0;
   const magnitude = Math.max(1, Math.hypot(x, y));
-  const speed = FARM_PLAYER_SPEED * (world.effects.speed > 0 ? 1.65 : 1);
+  const speed = FARM_PLAYER_SPEED * (world.effects.speed > 0 ? FARM_POWER_SETTINGS.speedMultiplier : 1);
   move(world, world.player, x / magnitude * speed * dt, y / magnitude * speed * dt, PLAYER_RADIUS, world.effects.fenceSlip > 0);
   updateFarmer(world, dt);
-  if (distance(world.player, world.farmer) < 0.66
+  if (world.effects.farmerStagger <= 0 && distance(world.player, world.farmer) < 0.66
     && clearSegment(world, world.player, world.farmer)) {
     world.caught = true;
     setMessage(world, "Caught! Your rescued turkeys are safe and your Hux are kept.", Infinity);
@@ -298,11 +353,12 @@ function updateStep(world, dt, input) {
     setMessage(world, "Turkey freed! Find the next cage.");
   }
   world.freed = world.freed.filter(turkey => (turkey.age += dt) < 2);
-  for (const [kind, interval] of [["cages", 2.8], ["corn", 0.3], ["pickups", 4.5]]) {
+  for (const [kind, interval] of [["cages", 2.8], ["corn", 0.3], ["pickups", FARM_PICKUP_SPAWN_SECONDS]]) {
     world._spawnTimers[kind] += dt;
     if (world._spawnTimers[kind] >= interval) {
       world._spawnTimers[kind] -= interval;
       spawn(world, kind);
+      if (kind === "pickups") replenishNearbyPickups(world);
     }
   }
 }
@@ -323,31 +379,32 @@ export function updateThanksgivingWorld(world, dt, input = {}) {
 export function activateThanksgivingPower(world, id) {
   if (world.caught || !POWER_IDS.includes(id) || !(world.inventory[id] > 0)) return false;
   if (id === "teleport") {
-    const destination = randomPosition(world, point => distance(point, world.farmer) >= 22
-      && distance(point, world.player) >= 14 && world.cages.every(cage => distance(point, cage) > 1));
+    const destination = randomPosition(world, point => distance(point, world.farmer) >= FARM_POWER_SETTINGS.teleportFarmerDistance
+      && distance(point, world.player) >= FARM_POWER_SETTINGS.teleportTravelDistance && world.cages.every(cage => distance(point, cage) > 1));
     if (!destination) return false;
     world.player.x = destination.x;
     world.player.y = destination.y;
     world._path = [];
-  } else if (id === "speed") world.effects.speed = 7;
+    world.effects.speed = Math.max(world.effects.speed, FARM_POWER_SETTINGS.teleportSpeedSeconds);
+    replenishNearbyPickups(world);
+  } else if (id === "speed") world.effects.speed = FARM_POWER_SETTINGS.speedSeconds;
   else if (id === "stun") {
     if (!positionClear(world, world.player.x, world.player.y, PLAYER_RADIUS)) { setMessage(world, "Step onto open ground to place a Mud Trap. Charge kept."); return false; }
-    world.traps.push({ x: world.player.x, y: world.player.y, remaining: 14 });
+    world.traps.push({ x: world.player.x, y: world.player.y, remaining: FARM_POWER_SETTINGS.mudTrapSeconds });
     if (world.traps.length > 3) world.traps.shift();
   }
-  else if (id === "camouflage") world.effects.fenceSlip = 5;
+  else if (id === "camouflage") world.effects.fenceSlip = FARM_POWER_SETTINGS.fenceSlipSeconds;
   else if (id === "decoy") {
     const gap = distance(world.player, world.farmer);
-    if (gap > 10 || !clearSegment(world, world.player, world.farmer, FARMER_RADIUS)) { setMessage(world, "Feather Gust needs the farmer nearby on a clear path. Charge kept."); return false; }
+    if (gap > FARM_POWER_SETTINGS.gustRange || !clearSegment(world, world.player, world.farmer, FARMER_RADIUS)) { setMessage(world, "Feather Gust needs the farmer within 14 clear tiles. Charge kept."); return false; }
     const angle = gap > 0.01 ? Math.atan2(world.farmer.y - world.player.y, world.farmer.x - world.player.x) : world.player.facing;
-    const start = { ...world.farmer };
-    for (let step = 0; step < 30; step++) {
+    for (let step = 0; step < FARM_POWER_SETTINGS.gustPushDistance / .2; step++) {
       const x = world.farmer.x + Math.cos(angle) * 0.2;
       const y = world.farmer.y + Math.sin(angle) * 0.2;
       if (!positionClear(world, x, y, FARMER_RADIUS)) break;
       world.farmer.x = x; world.farmer.y = y;
     }
-    if (distance(start, world.farmer) < 0.1) { setMessage(world, "No room to push the farmer. Feather Gust charge kept."); return false; }
+    world.effects.farmerStagger = FARM_POWER_SETTINGS.gustStaggerSeconds;
     world.effects.gust = 0.7;
     world._path = [];
   }
@@ -359,7 +416,7 @@ export function activateThanksgivingPower(world, id) {
 export function getThanksgivingSnapshot(world) {
   return {
     time: world.time, rescued: world.rescued, cornCollected: world.cornCollected,
-    caught: world.caught, inventory: { ...world.inventory }, effects: { ...world.effects, stun: Math.max(0, ...world.traps.map(trap => trap.remaining)), camouflage: world.effects.fenceSlip, decoy: world.effects.gust },
+    caught: world.caught, inventory: { ...world.inventory }, effects: { ...world.effects, stun: Math.max(0, ...world.traps.map(trap => trap.remaining)), camouflage: world.effects.fenceSlip, decoy: Math.max(world.effects.gust, world.effects.farmerStagger) },
     message: world.message, nearCage: Boolean(nearestCage(world)),
   };
 }

@@ -115,7 +115,18 @@ caps to keep long runs stable.
 - Mud Trap slows the farmer when crossed; Feather Gust pushes a nearby farmer away; Fence Slip crosses chicken wire briefly. These replace Farmer Stunner, Scarecrow Decoy, and Cornfield Cover, keeping saved charges.
 - Press **Escape** to pause; losing focus also pauses the chase.
 
-Hux buys single-use farm supplies. Free supplies also appear during play.
+Hux buys single-use farm supplies. Free supplies are much denser: 45 on entry,
+up to 60 at once, with new pickups every second. As you move, the game keeps
+at least three supplies within 12 walking tiles, using actual open paths.
+
+| Farm supply | Effect |
+| --- | --- |
+| Turkey Trot | Double movement speed for 12 seconds |
+| Mud Trap | A 25-second puddle slows the farmer by 80% for 10 seconds when crossed |
+| Haystack Hop | Teleport at least 20 tiles away and 28 tiles from the farmer, plus 4 seconds of double speed |
+| Feather Gust | From up to 14 clear tiles away, push the farmer up to 10 tiles and stagger him for 2.5 seconds |
+| Fence Slip | Cross chicken wire for 12 seconds; solid obstacles and outer bounds remain solid |
+
 Hux, unused supplies, best rescue count, and total rescued turkeys are saved
 in browser storage separately from Miz and the original game's progression.
 Getting caught or returning to the menu keeps all earned rewards.
@@ -127,6 +138,14 @@ farm store. In 2D they replace the character sprite; 3D shows the character
 in the existing status display. Characters never change movement, collision,
 combat, or leaderboard eligibility. Existing hux-bought turkey unlocks and
 their equipped state migrate automatically without charging again.
+
+Three additional permanent player skins are available in Myst's Store:
+**Shadow Wisp (3,500 MIZ)**, **Ember Spirit (6,000 MIZ)**, and **Crystal Guardian
+(8,000 MIZ)**. Their full player silhouettes, themed details, and 3D status
+portraits change the character itself. These share the single equipped
+character slot with turkey and alien, persist across reloads, and preserve
+all combat stats. The store groups player cosmetics separately from coin
+and counter decorations.
 
 The farm retains its autumn style and randomized connected paths, with fewer
 pens, walls, and solid obstacles to create more room for evasion.
@@ -149,8 +168,8 @@ changes. The existing menus, themes, and Free the Flock artwork are retained.
 - Every combat maze has **50 additional ammo pickups and 50 additional medkits**, on distinct reachable tiles. Labyrinth remains free of combat supplies.
 - Every Labyrinth difficulty now shifts at **30-second intervals**.
 - Rankings show unnamed opponents as **Random Player**. Your custom name includes **(you)**; an entry already named You does not repeat the suffix.
-- 3D environments use perspective floor textures, stable world-anchored wall materials, and wall-depth clipping for sprites. Abandoned City has window frames, glass, building foundations, and textured asphalt.
-- Coin cosmetics cost **20–180 MIZ**. Blobby Alien costs **10,000 MIZ**; Turkey Disguise costs **1,000 hux**. One-use powers cost **10–100 MIZ**.
+- 3D environments use perspective floor textures, stable world-anchored wall materials, and wall-depth clipping for sprites. Abandoned City has skyscrapers of varying heights, windowed facades, foundations, and textured asphalt. Orbital Ruins has an open-space backdrop with exposed cosmic rock surfaces. Emerald Wilds uses natural vegetation and roots for barriers. Fallen Keep has large, weathered flagstones.
+- Coin cosmetics cost **20–180 MIZ**. Blobby Alien costs **10,000 MIZ**; Turkey Disguise costs **1,000 hux**. One-use powers cost **250–2,500 MIZ**.
 
 The **MYST POWERS** control in a combat run activates purchased charges. A
 charge is spent only when its effect can apply. Mist Guard replaces Null
@@ -158,16 +177,16 @@ Pulse; existing Null Pulse inventory becomes Mist Guard inventory.
 
 | Power | MIZ | Effect |
 | --- | ---: | --- |
-| Vital Restore | 12 | Restore health to maximum |
-| Ammo Refill | 10 | Refill ammo to maximum |
-| Mist Guard | 25 | Eight seconds of immunity and clear hostile projectiles |
-| Velocity Bloom | 20 | 75% faster movement for 30 seconds |
-| Field Armor | 25 | Half incoming damage for 30 seconds |
-| Cartographer Flash | 35 | Reveal the map without awarding exploration coins |
-| Arsenal Key | 60 | Unlock standard weapons for this run |
-| Purge Orb | 40 | Defeat the eight nearest standard enemies; bosses are excluded |
-| Phoenix Spark | 50 | Revive after defeat at half health with eight seconds of protection |
-| Exit Fold | 100 | Move directly to the exit |
+| Vital Restore | 350 | Restore health to maximum |
+| Ammo Refill | 250 | Refill ammo to maximum |
+| Mist Guard | 800 | Eight seconds of immunity and clear hostile projectiles |
+| Velocity Bloom | 650 | 75% faster movement for 30 seconds |
+| Field Armor | 600 | Half incoming damage for 30 seconds |
+| Cartographer Flash | 1000 | Reveal the map without awarding exploration coins |
+| Arsenal Key | 1500 | Unlock standard weapons for this run |
+| Purge Orb | 1250 | Defeat the eight nearest standard enemies; bosses are excluded |
+| Phoenix Spark | 2000 | Revive after defeat at half health with eight seconds of protection |
+| Exit Fold | 2500 | Move directly to the exit |
 
 Phoenix Spark is available through MYST POWERS on the defeat screen. Revival
 and Exit Fold make the run unranked. All purchased and unused charges remain

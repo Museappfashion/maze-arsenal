@@ -18,6 +18,7 @@ function normalize(state = {}) {
     inventory: Object.fromEntries(FARM_POWERUPS.map(({ id }) => [id, Math.min(99, whole(state?.inventory?.[id]))])),
     cosmetics: state?.cosmetics?.turkey === true ? { turkey: true } : {},
     equippedCosmetic: state?.cosmetics?.turkey === true && state?.equippedCosmetic === "turkey" ? "turkey" : null,
+    expeditionGiftClaimed: state?.expeditionGiftClaimed === true,
   };
 }
 
@@ -56,6 +57,13 @@ function save(state) {
 export function earnHux(amount) {
   const state = loadHuxState();
   return save({ ...state, hux: state.hux + whole(amount) });
+}
+
+export function claimExpeditionHuxGift() {
+  const state = loadHuxState();
+  if (state.expeditionGiftClaimed) return false;
+  save({ ...state, hux: state.hux + 10_000, expeditionGiftClaimed: true });
+  return true;
 }
 
 export function saveFarmInventory(inventory) {

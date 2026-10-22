@@ -330,7 +330,43 @@ Ammo/health perks affect ground pickups only. Wisp and Crystal do not spend
 their effects on immune hits. Ember counts real melee and projectile hits,
 not misses, defeated enemies, or reflected enemy attacks.
 
-3D scene update: Emerald Wilds barriers are now tree silhouettes rather than
-flat textured surfaces. Orbital Ruins uses floating ancient slabs and luminous
-bridges, with a visible starfield through the gaps; it has no lunar ground or
-moon in its 3D backdrop. Maze collision and routes remain the same.
+3D scene update: Emerald Wilds barriers use solid trees with trunks, roots,
+and canopies. Orbital Ruins uses floating asteroid barriers, stepping platforms,
+and luminous bridges surrounded by a starfield. World-space triangles, camera
+clipping, and per-pixel depth fix the stretched strips seen when approaching or
+turning beside walls. Enemy and pickup sprites respect the visible geometry.
+Maze collision and routes remain the same.
+
+## Playtime modes — October 22 update
+
+The opening page has a **Playtime unlocks** panel. Select a player name with
+**Use name**; the same name entered before a normal maze uses the same progress.
+Names are case-insensitive. Blank names share an anonymous profile. Saves are
+local to this browser and origin, so they do not sync between devices.
+
+- At **one hour** of active play, **Powerup Defense** unlocks. Players place
+  powerup defenses; familiar enemies arrive in waves. Five defenses provide
+  rapid shots, frost slowing, explosive splash, armor-piercing precision, and
+  chain lightning. Upgrade and sell defenses using battlefield energy earned
+  during that run. Survive all 20 waves to win.
+- At **two hours**, **The Hundred Floors** unlocks. Each of its 100 stories is
+  a connected **100 × 100 tile** maze, for 10,000 tiles per floor. Find stairs
+  and press **E** to climb; complete floor 100 to reach the summit. **Q** gives
+  a rechargeable route hint; Haste and Sonar pickups help exploration. **M**
+  opens the full map and pauses play. Keyboard and touch movement are supported.
+  Position, explored map, collected powers, floor, and timer save every five
+  active seconds and at checkpoints, pause, and exit. Only the current floor
+  is allocated; returning with the same name resumes the climb.
+- Active play in the original mazes, Labyrinth, Free the Flock, and both new
+  modes counts. Menus, paused modes, completed runs, and hidden tabs do not.
+
+Entering **oibougvovov** as the player name immediately unlocks both modes and
+adds **1,000,000 MIZ + 10,000 hux** to the existing wallets. The reward is granted
+once per saved wallet; retyping the name or reloading does not add it again.
+Previously owned items and inventory are preserved.
+
+Run `npm run verify` and `node --test scripts/tests/*.test.mjs` for the build,
+import audit, and automated regressions. Browser scenarios for the new modes
+and camera angles are in `scripts/tests/expedition-browser.mjs` and
+`scripts/tests/outdoor-scenes-browser.mjs` (use a locally available Playwright
+installation via `PLAYWRIGHT_MODULE_PATH` if it is not installed in the project).

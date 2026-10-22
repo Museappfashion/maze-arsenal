@@ -291,6 +291,7 @@ const DEFAULT_STATE =
     consumables: {},
     equippedCharacter: null,
     legacyTurkeyMigrated: false,
+    expeditionGiftClaimed: false,
   });
 
 let memoryState = {
@@ -474,6 +475,7 @@ function sanitizeState(value) {
       ),
     equippedCharacter: CHARACTER_COSMETICS.some((item) => item.key === value.equippedCharacter && value.cosmetics?.[item.key] === true) ? value.equippedCharacter : null,
     legacyTurkeyMigrated: value.legacyTurkeyMigrated === true,
+    expeditionGiftClaimed: value.expeditionGiftClaimed === true,
   };
 }
 
@@ -777,6 +779,13 @@ export function saveMizState(
   );
 
   return saved;
+}
+
+export function claimExpeditionMizGift() {
+  const state = loadMizState();
+  if (state.expeditionGiftClaimed) return false;
+  saveMizState({ ...state, miz: state.miz + 1_000_000, expeditionGiftClaimed: true });
+  return true;
 }
 
 export function addExploredTiles(

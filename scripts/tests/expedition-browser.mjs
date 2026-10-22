@@ -1,0 +1,96 @@
+import assert from "node:assert/strict";
+import { mkdir } from "node:fs/promises";
+const { chromium } = await import(process.env.PLAYWRIGHT_MODULE_PATH || "playwright");
+const baseUrl = process.env.GAME_TEST_URL || "http://127.0.0.1:5189/";
+const origin = new URL(baseUrl).origin;
+assert.ok(["localhost", "127.0.0.1"].includes(new URL(baseUrl).hostname));
+const out = process.env.GAME_SCREENSHOT_DIR || "/tmp/mist-expedition-browser";
+await mkdir(out, { recursive: true });
+const browser = await chromium.launch({ channel: "chrome", headless: true });
+try {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.route("**/*", (route) => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+  await page.goto(baseUrl);
+  await page.getByRole("heading", { name: "Playtime unlocks", exact: true }).waitFor();
+  assert.equal(await page.getByRole("button", { name: "60 min of play remaining" }).isDisabled(), true);
+  assert.equal(await page.getByRole("button", { name: "120 min of play remaining" }).isDisabled(), true);
+  await page.locator("#progress-player").fill("oibougvovov");
+  await page.getByRole("button", { name: "Use name", exact: true }).click();
+  const balances = () => page.evaluate(async () => ({ miz: (await import("/src/services/mizEconomy.js")).loadMizState().miz, hux: (await import("/src/services/huxEconomy.js")).loadHuxState().hux }));
+  assert.deepEqual(await balances(), { miz: 1000000, hux: 10000 });
+  await page.reload();
+  await page.getByRole("button", { name: "Enter Powerup Defense", exact: true }).waitFor();
+  assert.deepEqual(await balances(), { miz: 1000000, hux: 10000 });
+  await page.screenshot({ path: `${out}/unlocked-menu.png` });
+  await page.getByRole("button", { name: "Enter Powerup Defense", exact: true }).click();
+  const board = page.locator(".td-canvas"); await board.waitFor();
+  const cell = async (x, y) => { const b = await board.boundingBox(); await page.mouse.click(b.x + (x + .5) / 18 * b.width, b.y + (y + .5) / 12 * b.height); };
+  await cell(0, 2);
+  await page.getByRole("status").filter({ hasText: "route must stay clear" }).waitFor();
+  for (const [x, y] of [[3, 4], [5, 6], [11, 5]]) await cell(x, y);
+  assert.equal(await page.locator(".td-energy").innerText(), "0");
+  await page.clock.install();
+  await page.getByRole("button", { name: "Start wave 1", exact: true }).click();
+  await page.clock.runFor(12000);
+  const progress = () => page.evaluate(async () => (await import("/src/services/playerProgress.js")).getPlayerProgress("oibougvovov").playedSeconds);
+  const beforePause = await progress(); assert.ok(beforePause > 10);
+  assert.ok(Number(await page.locator(".td-stats > div").nth(3).locator("strong").innerText()) > 0);
+  await page.getByRole("button", { name: "Pause", exact: true }).click();
+  await page.clock.runFor(3000); assert.equal(await progress(), beforePause);
+  await page.getByRole("button", { name: "Resume battle", exact: true }).click();
+  await page.screenshot({ path: `${out}/tower-defense.png` });
+  await page.clock.runFor(35000);
+  await page.getByRole("button", { name: "Start wave 2", exact: true }).waitFor();
+  await page.getByRole("button", { name: "Back to first page", exact: true }).click();
+  await page.getByRole("button", { name: "Enter The Hundred Floors", exact: true }).click();
+  await page.locator(".hundred-canvas").waitFor();
+  await page.clock.runFor(100);
+  await page.getByRole("button", { name: /Compass.*ready/ }).click();
+  await page.clock.runFor(100);
+  assert.match(await page.locator(".hundred-message").innerText(), /Compass/);
+  await page.screenshot({ path: `${out}/hundred-floors.png` });
+  await page.getByRole("button", { name: /Floor map/ }).click();
+  const mapTime = await progress(); await page.clock.runFor(2000); assert.equal(await progress(), mapTime);
+  await page.getByRole("button", { name: /Close map/ }).click();
+  await page.getByRole("button", { name: /First page/, exact: false }).click();
+  // Set up a real saved checkpoint at the first staircase, then use the UI to climb.
+  await page.evaluate(async () => {
+    const m = await import("/src/game/hundredFloorMaze.js");
+    const w = m.loadHundredFloorRun("oibougvovov"); w.player = { ...w.stairs };
+    m.saveHundredFloorRun("oibougvovov", w);
+  });
+  await page.getByRole("button", { name: "Enter The Hundred Floors", exact: true }).click();
+  await page.getByRole("button", { name: /Climb stairs/ }).click();
+  await page.locator(".hundred-stat strong").filter({ hasText: "Floor 2" }).waitFor();
+  await page.getByRole("button", { name: /First page/, exact: false }).click();
+  await page.reload();
+  await page.getByRole("button", { name: "Enter The Hundred Floors", exact: true }).click();
+  await page.locator(".hundred-stat strong").filter({ hasText: "Floor 2" }).waitFor();
+  await page.getByRole("button", { name: "Pause", exact: true }).click();
+  await page.getByRole("button", { name: "Start a new climb", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await page.getByRole("heading", { name: "Climb paused" }).waitFor();
+  await page.getByRole("button", { name: "Keep climbing", exact: true }).click();
+  await page.getByRole("button", { name: /First page/, exact: false }).click();
+  // Time gates belong to the selected profile, even after another profile unlocks them.
+  await page.locator("#progress-player").fill("A new explorer");
+  await page.getByRole("button", { name: "Use name", exact: true }).click();
+  assert.equal(await page.getByRole("button", { name: "60 min of play remaining" }).isDisabled(), true);
+  const mobile = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  mobile.on("pageerror", (error) => errors.push(error.message));
+  await mobile.route("**/*", (route) => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
+  await mobile.goto(baseUrl); await mobile.locator("#progress-player").fill("oibougvovov"); await mobile.getByRole("button", { name: "Use name", exact: true }).click();
+  for (const [button, selector, file] of [["Enter Powerup Defense", ".td-screen", "tower-mobile"], ["Enter The Hundred Floors", ".hundred-page", "floors-mobile"]]) {
+    await mobile.getByRole("button", { name: button, exact: true }).click(); await mobile.locator(selector).waitFor();
+    assert.equal(await mobile.locator(selector).evaluate((el) => el.scrollWidth > el.clientWidth + 1), false);
+    await mobile.screenshot({ path: `${out}/${file}.png` });
+    if (selector === ".hundred-page") {
+      assert.equal(await mobile.getByRole("group", { name: "Movement joystick" }).isVisible(), true);
+      await mobile.getByRole("button", { name: /First page/, exact: false }).click();
+    } else await mobile.getByRole("button", { name: "Back to first page", exact: true }).click();
+  }
+  assert.deepEqual(errors, []);
+  console.log("Expedition UI passed: locks, single-credit gift, placements, wave victory, pause accounting, floor stairs/checkpoint/reload, separate names, mobile layout, no browser errors.");
+} finally { await browser.close(); }

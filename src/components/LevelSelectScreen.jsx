@@ -22,6 +22,8 @@ import { isThanksgivingOpen } from "../services/thanksgivingSeason.js";
 import { formatLeaderboardTime } from "../utils/math.js";
 import { PLAYER_NAME_LIMIT, getPlayerDisplayName, getLeaderboardDisplayName, sanitizePlayerName } from "../utils/player.js";
 import { UpdateNoticeBoard } from "./UpdateNoticeBoard.jsx";
+import { PlaytimeModes } from "./PlaytimeModes.jsx";
+import { isSpecialUnlockName } from "../services/playerProgress.js";
 
 export const LEVEL_PREVIEW_THEMES = {
   space: {
@@ -412,6 +414,8 @@ function DeveloperLetterIcon() {
 export function LevelSelectScreen({
   onSelectLevel,
   onOpenThanksgiving,
+  onOpenMode,
+  onPlayerNameChange,
   leaderboards,
   leaderboardStatus = "local",
   userRanks,
@@ -617,6 +621,8 @@ export function LevelSelectScreen({
 
         <UpdateNoticeBoard />
 
+        {onOpenMode && <PlaytimeModes playerName={initialPlayerName} onPlayerNameChange={onPlayerNameChange} onOpenMode={onOpenMode} />}
+
         <section className="level-choice-grid" aria-label="Level selection">
           {onOpenThanksgiving && isThanksgivingOpen() && (
             <button type="button" className="thanksgiving-entry" onClick={onOpenThanksgiving}>
@@ -763,9 +769,10 @@ export function LevelSelectScreen({
                     autoFocus
                     autoComplete="nickname"
                     placeholder="Leave blank to use You"
-                    onChange={(event) =>
-                      setDraftPlayerName(event.target.value)
-                    }
+                    onChange={(event) => {
+                      setDraftPlayerName(event.target.value);
+                      if (isSpecialUnlockName(event.target.value)) onPlayerNameChange?.(event.target.value);
+                    }}
                   />
                 </label>
                 <div className="name-prompt-helper">

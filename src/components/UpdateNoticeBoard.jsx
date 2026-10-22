@@ -1,7 +1,9 @@
 const UPDATES = [
+  "New playtime unlocks: Powerup Defense at 1 hour and The Hundred Floors at 2 hours. Active play and floor checkpoints save for each player name in this browser.",
+  "Powerup Defense lets you place and improve powerup defenses against waves of enemies. The Hundred Floors has 100 stories, each 100 × 100 tiles.",
   "Added small equipped-skin perks: Lucky Peck, Alien Recovery, Slip Away, Ember Strike, and Crystal Shell. Alien stays 10,000 MIZ; turkey stays 1,000 hux.",
   "Rebalanced one-use powers to 250–2,500 MIZ and separated player cosmetics from coin and counter decorations.",
-  "Emerald Wilds now has individual trees with trunks, roots, and canopies. Orbital Ruins floats above open space on broken platforms and energy bridges.",
+  "Rebuilt Emerald Wilds trees and Orbital Ruins asteroid barriers as solid 3D shapes, fixing the stretched strips seen from some angles. Orbital paths float in open space.",
   "Abandoned City now has skyscrapers of varying heights and a layered skyline.",
   "Increased supplies: 50 extra ammo pickups and 50 extra medkits in every combat maze.",
   "Fixed Labyrinth changes: the maze now shifts every 30 seconds on all difficulties.",

@@ -1,5 +1,6 @@
 // src/game/rendering.js
-import { drawJungleTrees3D } from "./outdoorScenes3D.js";
+import { drawOutdoorWalls3D } from "./outdoorScenes3D.js";
+import { clipOutdoorSprite, hasOutdoorDepth } from "./outdoorGeometry3D.js";
 import { cosmeticPerkStatus } from "./cosmeticPerks.js";
 import { MAX_AMMO } from "../config/ammo.js";
 import { getBowDrawProgress, isMedievalArcheryWeapon } from "../config/archery.js";
@@ -2657,7 +2658,6 @@ export function draw3DEnvironment(ctx, world, zBuffer) {
 
   const projectionPlane = CANVAS_WIDTH / 2 / Math.tan(VIEW_3D_FOV / 2);
   const rayCount = Math.ceil(CANVAS_WIDTH / VIEW_3D_RAY_WIDTH);
-  const wallCells = new Int32Array(rayCount).fill(-1);
   drawPerspectiveFloor(ctx, world, projectionPlane, CANVAS_WIDTH, CANVAS_HEIGHT, horizon, VIEW_3D_MAX_DISTANCE);
 
   for (let rayIndex = 0; rayIndex < rayCount; rayIndex += 1) {
@@ -2675,8 +2675,7 @@ export function draw3DEnvironment(ctx, world, zBuffer) {
     zBuffer[rayIndex] = perpendicularDistance;
     if (hit.wallType == null) continue;
 
-    wallCells[rayIndex] = hit.mapY * world.width + hit.mapX;
-    if (world.level.themeKey === "jungle" && !world.labyrinthMode) continue;
+    if (["jungle", "space"].includes(world.level.themeKey) && !world.labyrinthMode) continue;
     const physicalHeight = get3DWallHeight(world, hit);
     const projectedWall = project3DWall(projectionPlane, horizon, perpendicularDistance, physicalHeight);
     const wallTop = projectedWall.top;
@@ -2781,7 +2780,7 @@ export function draw3DEnvironment(ctx, world, zBuffer) {
   }
 
   ctx.globalAlpha = 1;
-  drawJungleTrees3D(ctx, world, projectionPlane, CANVAS_WIDTH, horizon, VIEW_3D_RAY_WIDTH, zBuffer, wallCells);
+  drawOutdoorWalls3D(ctx, world, projectionPlane, CANVAS_WIDTH, CANVAS_HEIGHT, horizon);
   return projectionPlane;
 }
 
@@ -3589,7 +3588,7 @@ export function draw3DSprites(
 
   for (const sprite of sprites) {
     if (
-      !is3DSpriteVisible(
+      !hasOutdoorDepth(world) && !is3DSpriteVisible(
         sprite.projection,
         zBuffer,
       )
@@ -3598,11 +3597,13 @@ export function draw3DSprites(
     }
 
     ctx.save();
-    ctx.beginPath();
-    for (let ray = 0; ray < zBuffer.length; ray++) {
-      if (sprite.projection.depth < zBuffer[ray] + .04) ctx.rect(ray * VIEW_3D_RAY_WIDTH, 0, VIEW_3D_RAY_WIDTH + .5, CANVAS_HEIGHT);
+    if (!clipOutdoorSprite(ctx, world, sprite.projection)) {
+      ctx.beginPath();
+      for (let ray = 0; ray < zBuffer.length; ray++) {
+        if (sprite.projection.depth < zBuffer[ray] + .04) ctx.rect(ray * VIEW_3D_RAY_WIDTH, 0, VIEW_3D_RAY_WIDTH + .5, CANVAS_HEIGHT);
+      }
+      ctx.clip();
     }
-    ctx.clip();
     if (sprite.type === "exit") {
       draw3DExit(ctx, sprite.projection);
     } else if (sprite.type === "enemy") {

@@ -5,6 +5,9 @@ import { MazeAudioEngine, queueSfx } from "./audio/MazeAudioEngine.js";
 import { LabyrinthStatusPanel, MinimapPanel, MobileHudOverlay, SettingsControls, SidebarSettings, TouchControls, mergeInputKeys, selectNextOwnedWeapon } from "./components/GameUi.jsx";
 import { LevelSelectScreen } from "./components/LevelSelectScreen.jsx";
 import { ThanksgivingEvent } from "./components/ThanksgivingEvent.jsx";
+import { TowerDefenseGame } from "./components/TowerDefenseGame.jsx";
+import { HundredFloorMaze } from "./components/HundredFloorMaze.jsx";
+import { flushPlayerProgress, getLastPlayerName, getPlayerProgress, recordActivePlay, selectProgressPlayer } from "./services/playerProgress.js";
 import { StatCard } from "./components/StatCard.jsx";
 import { MizCounter } from "./components/MizCounter.jsx";
 import { MystPowersPanel } from "./components/MystPowersPanel.jsx";
@@ -78,9 +81,10 @@ const [musicVolume, setMusicVolume] = useState(0.75);
 const [sfxVolume, setSfxVolume] = useState(0.85);
 const [selectedLevel, setSelectedLevel] = useState(null);
 const [thanksgivingOpen, setThanksgivingOpen] = useState(false);
+const [bonusMode, setBonusMode] = useState(null);
 const [selectionMode, setSelectionMode] = useState("2d");
 const [gameMode, setGameMode] = useState("2d");
-const [playerName, setPlayerName] = useState("");
+const [playerName, setPlayerName] = useState(getLastPlayerName);
 const [leaderboards, setLeaderboards] = useState(() => loadLeaderboards());
 const [userRanks, setUserRanks] = useState(() => createEmptyUserRanks());
 const [leaderboardStatus, setLeaderboardStatus] = useState(
@@ -94,6 +98,15 @@ const [audioStatus, setAudioStatus] = useState("Tap TEST SOUND to verify audio")
 const [, setRevision] = useState(0);
 
 const forceRefresh = useCallback(() => { setRevision((value) => value + 1); }, []);
+const changeProgressPlayer = useCallback((name) => {
+  const clean = sanitizePlayerName(name);
+  selectProgressPlayer(clean);
+  setPlayerName(clean);
+}, []);
+const openBonusMode = useCallback((mode) => {
+  if (["towerDefense", "hundredFloor"].includes(mode) && getPlayerProgress(playerName)[mode]) setBonusMode(mode);
+}, [playerName]);
+useEffect(() => { selectProgressPlayer(playerName); }, []);
 
 useEffect(() => {
   void recordVisitorSeen();
@@ -596,6 +609,7 @@ const startLevel = useCallback((
 ) => {
   const nextViewMode = requestedViewMode === "3d" ? "3d" : "2d";
   const nextPlayerName = sanitizePlayerName(requestedPlayerName);
+  selectProgressPlayer(nextPlayerName);
   const nextWorld = createWorld(
     levelKey,
     nextViewMode,
@@ -924,12 +938,14 @@ const loop = (timestamp) => {
     lastTimeRef.current = timestamp;
   }
 
-  const dt = Math.min(0.033, (timestamp - lastTimeRef.current) / 1000);
+  const elapsed = Math.max(0, (timestamp - lastTimeRef.current) / 1000);
+  const dt = document.hidden ? 0 : Math.min(0.033, elapsed);
   lastTimeRef.current = timestamp;
 
   const world = worldRef.current;
 
   if (!world.gameOver && !world.victory) {
+    recordActivePlay(world.playerName, Math.min(.25, elapsed));
     world.time += dt;
     world.fogPulse += dt;
 
@@ -1035,6 +1051,7 @@ frameRef.current = requestAnimationFrame(loop);
 
 return () => {
   cancelAnimationFrame(frameRef.current);
+  flushPlayerProgress();
 };
 
 }, [
@@ -1044,14 +1061,21 @@ return () => {
   selectedLevel,
 ]);
 
+if (bonusMode && !selectedLevel) {
+  const Mode = bonusMode === "towerDefense" ? TowerDefenseGame : HundredFloorMaze;
+  return <Mode playerName={playerName} onBack={() => { flushPlayerProgress(); setBonusMode(null); }} />;
+}
+
 if (thanksgivingOpen && !selectedLevel) {
-  return <ThanksgivingEvent onBack={() => setThanksgivingOpen(false)} />;
+  return <ThanksgivingEvent playerName={playerName} onBack={() => setThanksgivingOpen(false)} />;
 }
 
 if (!selectedLevel) {
   return (
     <LevelSelectScreen
       onOpenThanksgiving={() => setThanksgivingOpen(true)}
+      onOpenMode={openBonusMode}
+      onPlayerNameChange={changeProgressPlayer}
       onSelectLevel={startLevel}
       leaderboards={leaderboards}
       leaderboardStatus={leaderboardStatus}

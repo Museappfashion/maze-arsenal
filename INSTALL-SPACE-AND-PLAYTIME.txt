@@ -1,0 +1,26 @@
+MIST MAZE — OCTOBER 22, 2026 UPDATE
+
+INSTALL INTO YOUR EXISTING GAME PROJECT
+1. Make a backup of your existing project.
+2. Extract this ZIP. Merge its src/ and scripts/ folders into the matching folders in your existing project. Replace matching files and include all new files.
+3. Copy the included package.json, package-lock.json, vite.config.js, index.html, eslint.config.js, and README.md to the project root.
+4. Keep your existing .env.local, api/, and supabase/ folders. They are not included in this client update. No new database setup is needed for these features.
+5. From the project root, run npm install, then npm run verify. Run npm run dev to try it locally.
+
+PATH CHECK
+If your project is called total, the App file goes at total/src/App.jsx.
+Do not create total/src/src/App.jsx or put the whole extracted update inside src/.
+
+WHAT IS INCLUDED
+- Solid 3D tree geometry and asteroid barriers with camera clipping and pixel depth to fix stretched scenery while turning or approaching walls.
+- Orbital Ruins surrounded by space, with floating asteroid barriers and stepping platforms/energy bridges above stars.
+- Powerup Defense: unlocks after 1 hour of active play for each player name. Players place and upgrade five powerup defenses against 20 waves of familiar enemies. Battlefield energy is separate from MIZ/hux and resets each defense run.
+- The Hundred Floors: unlocks after 2 hours. 100 floors, each 100 x 100 tiles (10,000 tiles per floor), connected passages, stairs, Haste/Sonar pickups, compass, map, touch controls, and saved checkpoints.
+- Enter the player name oibougvovov to unlock both modes immediately and receive 1,000,000 MIZ plus 10,000 hux once. Use the Playtime unlocks panel's Use name button or enter it before a normal maze. Re-entering or reloading does not grant the reward again.
+- Updated calm blue update board, with all previous cosmetic, farm, store, graphics, supply, and Labyrinth updates preserved.
+
+SAVES AND PLAYTIME
+Saves belong to this browser and site address. Names are case-insensitive. Blank names share an anonymous profile. Active live play in all modes counts; menus, paused games, completed runs, and hidden tabs do not. Existing wallet balances, purchased cosmetics, and supplies are retained. Clearing site data clears local saves and reward receipts.
+
+VERIFICATION
+Production build and import audit passed. All 109 automated tests passed, including a full 20-wave victory and connectivity through all 100 floors. An initial 48-angle outdoor browser pass succeeded. The final integrated browser checks could not finish because automatic approval review reached its usage limit; they are included in scripts/tests/expedition-browser.mjs and scripts/tests/outdoor-scenes-browser.mjs for a later browser run.

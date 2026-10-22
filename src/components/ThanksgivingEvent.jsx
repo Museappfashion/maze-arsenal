@@ -8,6 +8,7 @@ import { ThanksgivingArtwork } from "./ThanksgivingArtwork.jsx";
 import { TurkeyCosmeticCard } from "./TurkeyCosmeticCard.jsx";
 import { useHuxWallet } from "./useHuxWallet.js";
 import "../styles/thanksgiving.css";
+import { recordActivePlay, flushPlayerProgress } from "../services/playerProgress.js";
 
 const clock = (seconds) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
 
@@ -52,7 +53,7 @@ function FarmJoystick({ onMove }) {
   }} onPointerMove={(event) => { if (pointer.current === event.pointerId) update(event); }} onPointerUp={release} onPointerCancel={release} onLostPointerCapture={release}><span style={{ transform: `translate(${thumb.x * 28}px, ${thumb.y * 28}px)` }}/><small>MOVE</small></div>;
 }
 
-function ThanksgivingRun({ onLeave, onRestart, wallet }) {
+function ThanksgivingRun({ onLeave, onRestart, wallet, playerName }) {
   const [world] = useState(() => createThanksgivingWorld({ inventory: loadHuxState().inventory }));
   const [snapshot, setSnapshot] = useState(() => getThanksgivingSnapshot(world));
   const [paused, setPaused] = useState(false);
@@ -106,7 +107,7 @@ function ThanksgivingRun({ onLeave, onRestart, wallet }) {
     return () => {
       window.removeEventListener("keydown", down); window.removeEventListener("keyup", up);
       window.removeEventListener("blur", blur); document.removeEventListener("visibilitychange", hidden);
-      clearInput(); persistProgress();
+      clearInput(); persistProgress(); flushPlayerProgress();
     };
   }, [activate, clearInput, persistProgress, setPause, world]);
 
@@ -147,6 +148,7 @@ function ThanksgivingRun({ onLeave, onRestart, wallet }) {
       lastTime = now;
       const wasCaught = world.caught;
       if (!pausedRef.current && !world.caught) {
+        recordActivePlay(playerName, dt);
         const held = keys.current;
         updateThanksgivingWorld(world, dt, {
           x: Number(Boolean(held.d || held.arrowright)) - Number(Boolean(held.a || held.arrowleft)) + joystick.current.x,
@@ -162,8 +164,8 @@ function ThanksgivingRun({ onLeave, onRestart, wallet }) {
       frame = requestAnimationFrame(loop);
     };
     frame = requestAnimationFrame(loop);
-    return () => { cancelAnimationFrame(frame); observer.disconnect(); };
-  }, [persistProgress, world]);
+    return () => { cancelAnimationFrame(frame); observer.disconnect(); flushPlayerProgress(); };
+  }, [persistProgress, playerName, world]);
 
   return (
     <div className="farm-game">
@@ -195,7 +197,7 @@ function ThanksgivingRun({ onLeave, onRestart, wallet }) {
   );
 }
 
-export function ThanksgivingEvent({ onBack }) {
+export function ThanksgivingEvent({ onBack, playerName = "" }) {
   const wallet = useHuxWallet();
   const [shopOpen, setShopOpen] = useState(false);
   const [run, setRun] = useState(0);
@@ -209,7 +211,7 @@ export function ThanksgivingEvent({ onBack }) {
     if (!isThanksgivingOpen()) { setAvailable(false); return; }
     setRun((value) => value + 1); setPlaying(true);
   };
-  if (playing) return <ThanksgivingRun key={run} wallet={wallet} onLeave={() => setPlaying(false)} onRestart={() => { if (!isThanksgivingOpen()) setPlaying(false); start(); }}/>;
+  if (playing) return <ThanksgivingRun key={run} playerName={playerName} wallet={wallet} onLeave={() => setPlaying(false)} onRestart={() => { if (!isThanksgivingOpen()) setPlaying(false); start(); }}/>;
   return (
     <div className="farm-page">
       <main className="farm-content">

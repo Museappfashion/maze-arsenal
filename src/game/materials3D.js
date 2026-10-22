@@ -150,7 +150,7 @@ export function draw3DSky(ctx, world, width, horizon, height = horizon) {
       const x = width / 2 + Math.tan(offset) * width * .74;
       if (Math.abs(offset) < 1) { const cloud = ctx.createRadialGradient(x, height * y, 2, x, height * y, width * .45); cloud.addColorStop(0, hue); cloud.addColorStop(1, "#02040d00"); ctx.fillStyle = cloud; ctx.fillRect(0, 0, width, height); }
     }
-    for (let i = 0; i < 420; i++) {
+    for (let i = 0; i < 900; i++) {
       let angle = noise(i, 61) * TAU - world.player.facing; angle = Math.atan2(Math.sin(angle), Math.cos(angle));
       if (Math.abs(angle) > .8) continue;
       const x = width / 2 + Math.tan(angle) * width * .74, y = noise(i, 62) * height;
@@ -185,6 +185,12 @@ export function drawPerspectiveFloor(ctx, world, plane, width, height, horizon, 
       const platform = key === "space" && depth <= maxDistance ? orbitalPlatformSample(world, wx, wy) : key === "space" ? 0 : 1;
       const rim = key === "space" && platform >= 2;
       dst[to] = rim ? 65 * shade : src[from] * shade; dst[to + 1] = rim ? 129 * shade : src[from + 1] * shade; dst[to + 2] = rim ? 170 * shade : src[from + 2] * shade;
+      if (key === "jungle") {
+        const fog = Math.min(1, Math.max(0, depth - 6) / maxDistance);
+        dst[to] = dst[to] * (1 - fog) + 35 * fog;
+        dst[to + 1] = dst[to + 1] * (1 - fog) + 58 * fog;
+        dst[to + 2] = dst[to + 2] * (1 - fog) + 35 * fog;
+      }
       dst[to + 3] = platform ? (platform === 3 ? 155 : 255) : 0;
       wx -= forwardY * sideStep; wy += forwardX * sideStep;
     }

@@ -1,4 +1,5 @@
 // src/game/rendering-2.0.js
+import { cosmeticPerkStatus } from "./cosmeticPerks.js";
 import {
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
@@ -1600,7 +1601,7 @@ function drawOrbitalProjectileTrails(ctx, world) {
 
 function drawOrbitalRuinsIdentity(ctx, world) {
   drawOrbitalStarfield(ctx, world);
-  drawOrbitalNebulaAndPlanet(ctx, world);
+  if (world.viewMode !== "3d") drawOrbitalNebulaAndPlanet(ctx, world);
   drawOrbitalDebris(ctx, world);
   drawOrbitalMeteor(ctx, world);
 
@@ -5716,5 +5717,13 @@ export function drawWorld(ctx, world) {
   ctx.restore();
 
   drawRunEscalationOverlay(ctx, world);
+  const perkStatus = cosmeticPerkStatus(world);
+  if (world.viewMode !== "3d" && perkStatus && !world.gameOver && !world.victory) {
+    ctx.save(); ctx.font = "600 11px system-ui, sans-serif";
+    const width = Math.min(310, ctx.measureText(perkStatus).width + 24);
+    ctx.fillStyle = "#080e1bd9"; ctx.fillRect(14, 14, width, 28);
+    ctx.strokeStyle = "#59667988"; ctx.strokeRect(14.5, 14.5, width - 1, 27);
+    ctx.fillStyle = "#c6d1e2"; ctx.fillText(perkStatus, 26, 32); ctx.restore();
+  }
   drawResultOverlay(ctx, world);
 }

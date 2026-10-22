@@ -1,4 +1,5 @@
 // src/game/gameplay-enhanced.js
+import { cosmeticWeaponHitBonus } from "./cosmeticPerks.js";
 import { MAX_AMMO } from "../config/ammo.js";
 import { ENEMY_TYPES } from "../config/enemies.js";
 import {
@@ -725,7 +726,7 @@ function finishLongArmsCircle(
       continue;
     }
 
-    enemy.hp -= desiredDamage;
+    enemy.hp -= desiredDamage + cosmeticWeaponHitBonus(world, enemy);
     enemy.awake = true;
     enemy.lastHitAt = world.time;
   }

@@ -1,7 +1,7 @@
 const UPDATES = [
-  "Added player cosmetics: Shadow Wisp, Ember Spirit, Crystal Guardian, and Blobby Alien. Alien costs 10,000 MIZ; Turkey Disguise stays 1,000 hux.",
+  "Added small equipped-skin perks: Lucky Peck, Alien Recovery, Slip Away, Ember Strike, and Crystal Shell. Alien stays 10,000 MIZ; turkey stays 1,000 hux.",
   "Rebalanced one-use powers to 250–2,500 MIZ and separated player cosmetics from coin and counter decorations.",
-  "Rethemed 3D: open-space orbital ruins, natural jungle barriers, and worn flagstone keep floors.",
+  "Emerald Wilds now has individual trees with trunks, roots, and canopies. Orbital Ruins floats above open space on broken platforms and energy bridges.",
   "Abandoned City now has skyscrapers of varying heights and a layered skyline.",
   "Increased supplies: 50 extra ammo pickups and 50 extra medkits in every combat maze.",
   "Fixed Labyrinth changes: the maze now shifts every 30 seconds on all difficulties.",

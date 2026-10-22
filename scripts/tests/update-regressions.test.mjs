@@ -57,7 +57,7 @@ test("October update: currencies, characters, supplies, powers, and 30-second sh
       assert.equal(characters.setCharacterCosmeticEquipped("alien").ok, false);
       assert.deepEqual(economy.loadMizState(), before);
     });
-    await t.test("three permanent full-player cosmetics persist, equip in all four combat mazes, and leave gameplay stats unchanged", () => {
+    await t.test("three permanent full-player cosmetics persist, equip in all four combat mazes, and leave starting gameplay stats unchanged", () => {
       reset();
       const statKeys = ["hp", "maxHp", "baseMaxHp", "ammo", "radius", "speed", "ownedWeapons", "powerUps"];
       const stats = (world) => Object.fromEntries(statKeys.map((key) => [key, world.player[key]]));

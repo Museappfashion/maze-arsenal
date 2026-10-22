@@ -1,0 +1,49 @@
+MIST MAZE — SKIN PERKS AND SPACE UPDATE — OCTOBER 21, 2026
+
+INSTALL INTO YOUR EXISTING GAME
+1. Unzip this download.
+2. Open your game folder containing package.json (for example total/).
+3. Copy src/ into that folder, merging folders and replacing matching files.
+   The main file belongs at total/src/App.jsx, not total/src/src/App.jsx.
+4. Copy the included scripts/ and root configuration files into the same project.
+5. Keep the existing .env files, api/ folder, and supabase/ folder.
+6. Run npm install, npm run verify, and npm run dev.
+   Use your usual deployment process to publish when ready.
+
+This is the complete current frontend source, including the earlier October
+updates. It includes the new perk and scene modules needed by the game.
+
+NEW EQUIPPED-SKIN PERKS
+Turkey — Lucky Peck: ammo pickups give 10% more ammo.
+Alien — Alien Recovery: medkits restore 10% more health.
+Shadow Wisp — Slip Away: taking damage gives +15% speed for 2 seconds,
+  with a 20-second recharge.
+Ember Spirit — Ember Strike: every tenth successful weapon hit deals
+  3 extra fire damage.
+Crystal Guardian — Crystal Shell: absorb up to 5 damage from one hit,
+  with a 25-second recharge.
+
+Only the equipped skin grants its perk. Perks work in all four combat mazes.
+They use run time and reset on a new run. Hats remain visual. Health/ammo
+caps remain in effect. Labyrinth and Free the Flock use their existing rules.
+Store cards describe every perk; the game shows the perk's status.
+
+3D SCENE CHANGES
+Emerald Wilds now uses individual trees with trunks, buttress roots, branches,
+and leafy canopies instead of flat wall surfaces.
+Orbital Ruins now has broken floating slabs and luminous connections above
+open space. Stars are visible through the gaps and beneath raised ruins.
+Its 3D scene has no moon or lunar ground. Maze routes and collision stay the same.
+
+PRICES AND SAVED ITEMS
+Alien stays 10,000 MIZ. Turkey stays 1,000 hux. Prior purchases and stored
+power charges carry over. One-use store prices remain 250–2,500 MIZ.
+
+VALIDATION
+Production build and import-cycle audit passed.
+79 automated tests passed, including eight new perk/scene checks.
+Chrome checks passed for all five perks through the actual game module chain
+in every combat maze, 2D/3D rendering, store descriptions, purchases, saved
+ownership, and mobile layout, with zero browser runtime errors.
+
+See README.md for full controls, powers, prices, and test commands.

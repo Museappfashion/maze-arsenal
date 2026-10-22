@@ -1,4 +1,6 @@
 // src/game/rendering.js
+import { drawJungleTrees3D } from "./outdoorScenes3D.js";
+import { cosmeticPerkStatus } from "./cosmeticPerks.js";
 import { MAX_AMMO } from "../config/ammo.js";
 import { getBowDrawProgress, isMedievalArcheryWeapon } from "../config/archery.js";
 import { CANVAS_HEIGHT, CANVAS_WIDTH, DRAW_TILE, FLOOR, STEEL_WALL, VIEW_3D_FOV, VIEW_3D_MAX_DISTANCE, VIEW_3D_RAY_WIDTH, WALL } from "../config/constants.js";
@@ -2645,16 +2647,17 @@ export function draw3DEnvironment(ctx, world, zBuffer) {
   ceiling.addColorStop(1, theme.wallC);
   ctx.fillStyle = ceiling;
   ctx.fillRect(0, 0, CANVAS_WIDTH, horizon);
-  draw3DSky(ctx, world, CANVAS_WIDTH, horizon);
+  draw3DSky(ctx, world, CANVAS_WIDTH, horizon, CANVAS_HEIGHT);
 
   const floor = ctx.createLinearGradient(0, horizon, 0, CANVAS_HEIGHT);
   floor.addColorStop(0, theme.floorB);
   floor.addColorStop(1, theme.backdrop);
   ctx.fillStyle = floor;
-  ctx.fillRect(0, horizon, CANVAS_WIDTH, CANVAS_HEIGHT - horizon);
+  if (world.level.themeKey !== "space" || world.labyrinthMode) ctx.fillRect(0, horizon, CANVAS_WIDTH, CANVAS_HEIGHT - horizon);
 
   const projectionPlane = CANVAS_WIDTH / 2 / Math.tan(VIEW_3D_FOV / 2);
   const rayCount = Math.ceil(CANVAS_WIDTH / VIEW_3D_RAY_WIDTH);
+  const wallCells = new Int32Array(rayCount).fill(-1);
   drawPerspectiveFloor(ctx, world, projectionPlane, CANVAS_WIDTH, CANVAS_HEIGHT, horizon, VIEW_3D_MAX_DISTANCE);
 
   for (let rayIndex = 0; rayIndex < rayCount; rayIndex += 1) {
@@ -2672,10 +2675,12 @@ export function draw3DEnvironment(ctx, world, zBuffer) {
     zBuffer[rayIndex] = perpendicularDistance;
     if (hit.wallType == null) continue;
 
+    wallCells[rayIndex] = hit.mapY * world.width + hit.mapX;
+    if (world.level.themeKey === "jungle" && !world.labyrinthMode) continue;
     const physicalHeight = get3DWallHeight(world, hit);
     const projectedWall = project3DWall(projectionPlane, horizon, perpendicularDistance, physicalHeight);
     const wallTop = projectedWall.top;
-    const wallBottom = projectedWall.bottom;
+    const wallBottom = projectedWall.bottom - (world.level.themeKey === "space" ? projectedWall.scale * .2 : 0);
     const darknessDistance = world.labyrinthMode
       ? Math.max(6, world.labyrinth.sightRadius * 2.15)
       : VIEW_3D_MAX_DISTANCE;
@@ -2776,6 +2781,7 @@ export function draw3DEnvironment(ctx, world, zBuffer) {
   }
 
   ctx.globalAlpha = 1;
+  drawJungleTrees3D(ctx, world, projectionPlane, CANVAS_WIDTH, horizon, VIEW_3D_RAY_WIDTH, zBuffer, wallCells);
   return projectionPlane;
 }
 
@@ -4042,6 +4048,7 @@ export function draw3DOverlay(ctx, world) {
     ctx.font = "700 13px system-ui, sans-serif";
     ctx.fillText(weaponLabel, 28, 64);
     ctx.fillText(formatTime(world.time), 216, 64);
+    if (characterCosmetic) { ctx.font = "600 10px system-ui, sans-serif"; ctx.fillStyle = "#b8c5d8"; ctx.fillText(cosmeticPerkStatus(world), 28, 81); }
 
     if (characterCosmetic) {
       ctx.save();

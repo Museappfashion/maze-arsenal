@@ -32,6 +32,7 @@ export function TurkeyCosmeticCard({ onMessage, variant = "farm", cosmetic = "tu
     <h3 className={myst ? "myst-item-name" : ""}>{item.name}</h3>
     <div className="turkey-cosmetic-previews">{TURKEY_COSMETIC_THEMES.map((theme) => <CharacterPreview key={theme.key} theme={theme} item={item} />)}</div>
     <p className={myst ? "myst-item-description" : ""}>{item.description}</p>
+    <p className={myst ? "myst-item-effect" : ""}><strong>{item.perk.label}:</strong> {item.perk.description}</p>
     <div className={myst ? "myst-item-owned" : "farm-item-meta"}>{owned ? equipped ? "Owned · equipped" : "Owned" : `${balance.toLocaleString()} ${currency} available · permanent unlock`}</div>
     <button type="button" className={myst ? "myst-item-buy" : "farm-button"} disabled={!owned && balance < item.price} onClick={action} aria-label={owned ? `${equipped ? "Unequip" : "Equip"} ${item.name}` : `Buy ${item.name} for ${item.price} ${currency}`}>
       {owned ? `${equipped ? "Unequip" : "Equip"} ${item.name}` : balance < item.price ? `Need ${item.price - balance} ${currency}` : `Buy cosmetic · ${item.price.toLocaleString()} ${currency}`}

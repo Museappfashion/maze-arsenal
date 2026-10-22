@@ -135,16 +135,16 @@ Getting caught or returning to the menu keeps all earned rewards.
 City, wear a space helmet in Orbital Ruins, a jungle hat in Emerald Wilds,
 and a metal helmet in Fallen Keep. Buy and equip them in Myst's Store or the
 farm store. In 2D they replace the character sprite; 3D shows the character
-in the existing status display. Characters never change movement, collision,
-combat, or leaderboard eligibility. Existing hux-bought turkey unlocks and
+in the existing status display. Equipped skins now grant one small passive perk in combat mazes;
+collision and starting stats stay the same. Existing hux-bought turkey unlocks and
 their equipped state migrate automatically without charging again.
 
 Three additional permanent player skins are available in Myst's Store:
 **Shadow Wisp (3,500 MIZ)**, **Ember Spirit (6,000 MIZ)**, and **Crystal Guardian
 (8,000 MIZ)**. Their full player silhouettes, themed details, and 3D status
 portraits change the character itself. These share the single equipped
-character slot with turkey and alien, persist across reloads, and preserve
-all combat stats. The store groups player cosmetics separately from coin
+character slot with turkey and alien, persist across reloads, and keep
+the same starting stats. Each skin grants one small passive perk. The store groups player cosmetics separately from coin
 and counter decorations.
 
 The farm retains its autumn style and randomized connected paths, with fewer
@@ -158,6 +158,7 @@ node --test scripts/tests/thanksgiving.test.mjs scripts/tests/hux-economy.test.m
 GAME_TEST_URL=http://127.0.0.1:5189 node scripts/tests/thanksgiving-browser.mjs
 GAME_TEST_URL=http://127.0.0.1:5189 node scripts/tests/turkey-cosmetic-browser.mjs
 GAME_TEST_URL=http://127.0.0.1:5189 node scripts/tests/october-update-browser.mjs
+GAME_TEST_URL=http://127.0.0.1:5189 node scripts/tests/cosmetic-perks-browser.mjs
 ```
 
 ## October update
@@ -168,7 +169,7 @@ changes. The existing menus, themes, and Free the Flock artwork are retained.
 - Every combat maze has **50 additional ammo pickups and 50 additional medkits**, on distinct reachable tiles. Labyrinth remains free of combat supplies.
 - Every Labyrinth difficulty now shifts at **30-second intervals**.
 - Rankings show unnamed opponents as **Random Player**. Your custom name includes **(you)**; an entry already named You does not repeat the suffix.
-- 3D environments use perspective floor textures, stable world-anchored wall materials, and wall-depth clipping for sprites. Abandoned City has skyscrapers of varying heights, windowed facades, foundations, and textured asphalt. Orbital Ruins has an open-space backdrop with exposed cosmic rock surfaces. Emerald Wilds uses natural vegetation and roots for barriers. Fallen Keep has large, weathered flagstones.
+- 3D environments use perspective floor textures, stable world-anchored wall materials, and wall-depth clipping for sprites. Abandoned City has skyscrapers of varying heights, windowed facades, foundations, and textured asphalt. Orbital Ruins has broken platforms and luminous connections suspended above a starfield, with space visible beneath them. Emerald Wilds has individual trees with trunks, roots, and leafy canopies. Fallen Keep has large, weathered flagstones.
 - Coin cosmetics cost **20–180 MIZ**. Blobby Alien costs **10,000 MIZ**; Turkey Disguise costs **1,000 hux**. One-use powers cost **250–2,500 MIZ**.
 
 The **MYST POWERS** control in a combat run activates purchased charges. A
@@ -310,3 +311,26 @@ Inbox on `/?developer=1`.
 Support counts are click attempts, not confirmed payments. The client has no
 SELECT permission on the analytics table; dashboard reads go through the
 server-only Vercel function.
+
+## Equipped skin perks
+
+Only the equipped character grants its perk, in any of the four combat mazes.
+Hats stay visual. The effects use run time, pause with the game, and reset on
+a new run. Labyrinth and Free the Flock do not use these combat-skin perks.
+
+| Skin | Perk | Effect |
+| --- | --- | --- |
+| Turkey Disguise | Lucky Peck | Ammo pickups give 10% more ammo, up to the normal cap |
+| Blobby Alien | Alien Recovery | Medkits heal 10% more, up to maximum health |
+| Shadow Wisp | Slip Away | Taking damage grants +15% speed for 2 seconds; 20-second cooldown |
+| Ember Spirit | Ember Strike | Every tenth successful weapon hit deals 3 extra fire damage |
+| Crystal Guardian | Crystal Shell | Absorb up to 5 damage from one hit; 25-second cooldown |
+
+Ammo/health perks affect ground pickups only. Wisp and Crystal do not spend
+their effects on immune hits. Ember counts real melee and projectile hits,
+not misses, defeated enemies, or reflected enemy attacks.
+
+3D scene update: Emerald Wilds barriers are now tree silhouettes rather than
+flat textured surfaces. Orbital Ruins uses floating ancient slabs and luminous
+bridges, with a visible starfield through the gaps; it has no lunar ground or
+moon in its 3D backdrop. Maze collision and routes remain the same.

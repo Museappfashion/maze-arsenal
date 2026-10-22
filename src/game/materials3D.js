@@ -1,3 +1,4 @@
+import { orbitalPlatformSample } from "./outdoorScenes3D.js";
 // Cached, world-anchored outdoor materials. These never affect maze collision.
 const cache = new Map();
 let floorSurface = null;
@@ -63,11 +64,11 @@ function materials(key) {
   const floor = canvas(128, 128), wall = canvas(128, key === "city" ? 1024 : 192);
   if (!floor || !wall) return null;
   const f = floor.getContext("2d"), c = wall.getContext("2d");
-  const base = { space: [44, 52, 66], jungle: [42, 60, 31], city: [58, 63, 67], medieval: [76, 71, 61] }[key] || [30, 35, 42];
+  const base = { space: [47, 43, 66], jungle: [42, 60, 31], city: [58, 63, 67], medieval: [76, 71, 61] }[key] || [30, 35, 42];
   const floorImage = f.createImageData(128, 128);
   for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) {
     const grain = (noise(x, y) - .5) * 17;
-    const rock = key === "space" ? Math.sin(x * .11 + Math.sin(y * .08) * 3) * 6 + Math.sin(y * .15 + x * .04) * 5 : 0;
+    const rock = 0;
     const i = (y * 128 + x) * 4;
     for (let channel = 0; channel < 3; channel++) floorImage.data[i + channel] = base[channel] + grain + rock;
     floorImage.data[i + 3] = 255;
@@ -75,13 +76,10 @@ function materials(key) {
   f.putImageData(floorImage, 0, 0);
   if (key === "medieval") paintFlagstones(f);
   if (key === "space") {
-    for (let i = 0; i < 11; i++) {
-      const x = noise(i, 12) * 128, y = noise(i, 13) * 128, radius = 3 + noise(i, 14) * 7;
-      f.fillStyle = "#121b2b85"; f.beginPath(); f.ellipse(x, y, radius, radius * .7, noise(i, 9), 0, TAU); f.fill();
-      f.strokeStyle = "#72839a60"; f.lineWidth = 1; f.beginPath(); f.ellipse(x, y, radius + 1, radius * .7 + 1, noise(i, 9), .2, 2.5); f.stroke();
-    }
-    f.strokeStyle = "#111c2c"; f.lineWidth = 1;
-    f.beginPath(); f.moveTo(0, 43); f.lineTo(24, 51); f.lineTo(43, 46); f.lineTo(61, 66); f.lineTo(90, 70); f.lineTo(128, 86); f.stroke();
+    f.strokeStyle = "#221c36"; f.lineWidth = 1.2;
+    f.beginPath(); f.moveTo(5, 12); f.lineTo(38, 47); f.lineTo(29, 71); f.moveTo(38, 47); f.lineTo(72, 55); f.stroke();
+    f.strokeStyle = "#8a9cbe70"; f.lineWidth = 1;
+    f.beginPath(); f.moveTo(81, 81); f.lineTo(102, 81); f.lineTo(102, 105); f.moveTo(86, 87); f.lineTo(96, 87); f.lineTo(96, 99); f.stroke();
   } else if (key === "jungle") {
     for (let i = 0; i < 72; i++) {
       f.fillStyle = ["#6a743e", "#1c4925", "#53602d", "#705836"][i % 4];
@@ -93,20 +91,13 @@ function materials(key) {
   }
 
   if (key === "space") {
-    c.fillStyle = "#334151"; c.fillRect(0, 0, 128, 192);
-    for (let i = 0; i < 37; i++) {
-      const x = noise(i, 21) * 128, y = noise(i, 22) * 192, radius = 9 + noise(i, 23) * 26;
-      c.fillStyle = ["#293642", "#435362", "#536374", "#344250", "#24333f"][i % 5];
-      c.strokeStyle = "#192734"; c.lineWidth = 1.2; c.beginPath();
-      for (let corner = 0; corner < 6; corner++) {
-        const angle = corner / 6 * TAU, r = radius * (.65 + noise(i, corner, 24) * .5);
-        const px = x + Math.cos(angle) * r, py = y + Math.sin(angle) * r;
-        if (corner) c.lineTo(px, py); else c.moveTo(px, py);
-      }
-      c.closePath(); c.fill(); c.stroke();
-    }
-    c.strokeStyle = "#81c1d375"; c.lineWidth = 1.5; c.beginPath(); c.moveTo(31, 192); c.lineTo(42, 136); c.lineTo(63, 118); c.lineTo(55, 74); c.lineTo(72, 32); c.stroke();
-    c.strokeStyle = "#152330"; c.lineWidth = 2; c.beginPath(); c.moveTo(92, 0); c.lineTo(77, 57); c.lineTo(96, 95); c.lineTo(82, 139); c.lineTo(95, 192); c.stroke();
+    c.fillStyle = "#3b334f"; c.fillRect(0, 0, 128, 192);
+    c.fillStyle = "#514361"; c.beginPath(); c.moveTo(7, 0); c.lineTo(50, 8); c.lineTo(43, 112); c.lineTo(15, 165); c.closePath(); c.fill();
+    c.fillStyle = "#29263d"; c.beginPath(); c.moveTo(92, 0); c.lineTo(74, 79); c.lineTo(101, 119); c.lineTo(80, 192); c.lineTo(128, 192); c.lineTo(128, 0); c.fill();
+    c.strokeStyle = "#a6cee0"; c.lineWidth = 1.3;
+    c.beginPath(); c.moveTo(39, 57); c.lineTo(88, 57); c.lineTo(88, 100); c.lineTo(54, 100); c.lineTo(54, 72); c.lineTo(72, 72); c.lineTo(72, 88); c.stroke();
+    c.strokeStyle = "#151526"; c.lineWidth = 2;
+    c.beginPath(); c.moveTo(12, 0); c.lineTo(24, 36); c.lineTo(17, 66); c.lineTo(43, 116); c.lineTo(38, 192); c.stroke();
   } else if (key === "jungle") {
     c.fillStyle = "#14351f"; c.fillRect(0, 0, 128, 192);
     for (let i = 0; i < 5; i++) {
@@ -148,26 +139,22 @@ function materials(key) {
   cache.set(key, result); return result;
 }
 
-export function draw3DSky(ctx, world, width, horizon) {
+export function draw3DSky(ctx, world, width, horizon, height = horizon) {
   if (world.labyrinthMode) return;
   const key = world.level.themeKey;
   ctx.save(); ctx.globalAlpha = 1;
   if (key === "space") {
-    const sky = ctx.createLinearGradient(0, 0, 0, horizon); sky.addColorStop(0, "#01030b"); sky.addColorStop(1, "#10152c");
-    ctx.fillStyle = sky; ctx.fillRect(0, 0, width, horizon);
-    // Spherical directions keep stars fixed in the sky as the player turns.
-    for (let i = 0; i < 180; i++) {
-      let angle = noise(i, 61) * TAU - world.player.facing; angle = Math.atan2(Math.sin(angle), Math.cos(angle));
-      if (Math.abs(angle) > .7) continue;
-      const x = width / 2 + Math.tan(angle) * width * .74, y = noise(i, 62) * horizon * .96;
-      ctx.globalAlpha = .35 + noise(i, 63) * .6; ctx.fillStyle = i % 6 ? "#d4e0ef" : "#8bb3df"; ctx.fillRect(x, y, i % 11 ? 1 : 2, i % 11 ? 1 : 2);
+    ctx.fillStyle = "#02040d"; ctx.fillRect(0, 0, width, height);
+    for (const [angle, y, hue] of [[-.3, .2, "#182c4b"], [.5, .8, "#251e48"]]) {
+      const offset = Math.atan2(Math.sin(angle - world.player.facing), Math.cos(angle - world.player.facing));
+      const x = width / 2 + Math.tan(offset) * width * .74;
+      if (Math.abs(offset) < 1) { const cloud = ctx.createRadialGradient(x, height * y, 2, x, height * y, width * .45); cloud.addColorStop(0, hue); cloud.addColorStop(1, "#02040d00"); ctx.fillStyle = cloud; ctx.fillRect(0, 0, width, height); }
     }
-    let moonAngle = .28 - world.player.facing; moonAngle = Math.atan2(Math.sin(moonAngle), Math.cos(moonAngle));
-    if (Math.abs(moonAngle) < 1) {
-      const x = width / 2 + Math.tan(moonAngle) * width * .74, y = horizon * .3, radius = horizon * .19;
-      const moon = ctx.createRadialGradient(x - radius * .4, y - radius * .4, 1, x, y, radius); moon.addColorStop(0, "#63708b"); moon.addColorStop(.6, "#33425e"); moon.addColorStop(1, "#10172c");
-      ctx.globalAlpha = 1; ctx.fillStyle = moon; ctx.beginPath(); ctx.arc(x, y, radius, 0, TAU); ctx.fill();
-      ctx.strokeStyle = "#6c8baf80"; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, radius + 1, 3.3, 5.8); ctx.stroke();
+    for (let i = 0; i < 420; i++) {
+      let angle = noise(i, 61) * TAU - world.player.facing; angle = Math.atan2(Math.sin(angle), Math.cos(angle));
+      if (Math.abs(angle) > .8) continue;
+      const x = width / 2 + Math.tan(angle) * width * .74, y = noise(i, 62) * height;
+      ctx.globalAlpha = .4 + noise(i, 63) * .6; ctx.fillStyle = i % 6 ? "#d4e0ef" : "#8bb3df"; ctx.fillRect(x, y, i % 11 ? 1 : 2, i % 11 ? 1 : 2);
     }
   } else if (key === "city") {
     const sky = ctx.createLinearGradient(0, 0, 0, horizon); sky.addColorStop(0, "#242a31"); sky.addColorStop(1, "#67717a"); ctx.fillStyle = sky; ctx.fillRect(0, 0, width, horizon);
@@ -195,8 +182,10 @@ export function drawPerspectiveFloor(ctx, world, plane, width, height, horizon, 
     for (let col = 0; col < w; col++) {
       const tx = Math.floor(wx * frequency) & 127, ty = Math.floor(wy * frequency) & 127;
       const from = (ty * 128 + tx) * 4, to = (row * w + col) * 4;
-      const inWorld = wx >= 0 && wy >= 0 && wx < world.width && wy < world.height, voidSpace = key === "space" && (!inWorld || depth > maxDistance);
-      dst[to] = voidSpace ? 3 : src[from] * shade; dst[to + 1] = voidSpace ? 6 : src[from + 1] * shade; dst[to + 2] = voidSpace ? 16 : src[from + 2] * shade; dst[to + 3] = 255;
+      const platform = key === "space" && depth <= maxDistance ? orbitalPlatformSample(world, wx, wy) : key === "space" ? 0 : 1;
+      const rim = key === "space" && platform >= 2;
+      dst[to] = rim ? 65 * shade : src[from] * shade; dst[to + 1] = rim ? 129 * shade : src[from + 1] * shade; dst[to + 2] = rim ? 170 * shade : src[from + 2] * shade;
+      dst[to + 3] = platform ? (platform === 3 ? 155 : 255) : 0;
       wx -= forwardY * sideStep; wy += forwardX * sideStep;
     }
   }

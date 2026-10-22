@@ -1,4 +1,5 @@
 // src/game/gameplay.js
+import { cosmeticPickupAmount, cosmeticSpeedMultiplier, cosmeticIncomingDamage, cosmeticDamageTaken, cosmeticWeaponHitBonus } from "./cosmeticPerks.js";
 import { queueSfx } from "../audio/MazeAudioEngine.js";
 import { isMedievalArcheryWeapon, WALL_ARROW_LIFETIME } from "../config/archery.js";
 import { AMMO_DROP_MIN_TILE_SPACING, AMMO_EXTRA_MAX_AMOUNT, AMMO_EXTRA_MIN_AMOUNT, AMMO_ROUTE_SPACING, AMMO_SUPPORT_MAX_AMOUNT, AMMO_SUPPORT_MELEE_CHANCE, AMMO_SUPPORT_MIN_AMOUNT, AMMO_SUPPORT_RANGED_CHANCE, MAX_AMMO } from "../config/ammo.js";
@@ -346,7 +347,7 @@ export function getStoredPowerUps(world) {
 }
 
 export function getPlayerSpeed(world) {
-  return world.player.speed * (hasPowerUp(world, "haste") ? 1.75 : 1);
+  return world.player.speed * (hasPowerUp(world, "haste") ? 1.75 : 1) * cosmeticSpeedMultiplier(world);
 }
 
 export function getEnemyPursuitMultiplier(enemy, worldTime) {
@@ -744,7 +745,7 @@ player.meleeSwing = {
 };
 queueSfx(world, "weaponAttack", { weaponKey: player.weapon });
 
-for (const enemy of world.enemies) { const dx = enemy.x - player.x; const dy = enemy.y - player.y; const distance = Math.hypot(dx, dy); const overlapping = distance <= enemy.radius + player.radius + 0.08;
+for (const enemy of world.enemies) { if (enemy.hp <= 0) continue; const dx = enemy.x - player.x; const dy = enemy.y - player.y; const distance = Math.hypot(dx, dy); const overlapping = distance <= enemy.radius + player.radius + 0.08;
 
 if (distance > reach + enemy.radius) {
   continue;
@@ -763,7 +764,7 @@ if (!overlapping) {
   }
 }
 
-enemy.hp -= damage;
+enemy.hp -= damage + cosmeticWeaponHitBonus(world, enemy);
 enemy.awake = true;
 enemy.lastHitAt = world.time;
 queueSfx(world, "enemyHit", { enemyKind: enemy.kind });
@@ -1036,7 +1037,7 @@ if (pickup.type === "weapon") {
 
 if (pickup.type === "ammo") {
   const before = player.ammo;
-  givePlayerAmmo(world, pickup.amount);
+  givePlayerAmmo(world, cosmeticPickupAmount(world, "ammo", pickup.amount));
   const gained = Math.max(0, Math.floor(player.ammo) - Math.floor(before));
 
   if (gained > 0) {
@@ -1050,7 +1051,7 @@ if (pickup.type === "ammo") {
 
 if (pickup.type === "medkit") {
   const before = player.hp;
-  healPlayer(world, pickup.amount);
+  healPlayer(world, cosmeticPickupAmount(world, "medkit", pickup.amount));
   const restored = Math.max(0, Math.round(player.hp - before));
 
   if (restored > 0) {
@@ -1177,6 +1178,7 @@ spawnProjectile(world, {
 } }
 
 export function damagePlayer(world, amount, sourceX = null, sourceY = null) {
+  if (!(amount > 0)) return;
   if (world.developerInvincible) {
     return;
   }
@@ -1189,9 +1191,11 @@ export function damagePlayer(world, amount, sourceX = null, sourceY = null) {
     return;
   }
 
-const actualDamage = Math.max( 1, Math.round(amount * getDamageTakenMultiplier(world)), );
+const actualDamage = cosmeticIncomingDamage(world, Math.max(1, Math.round(amount * getDamageTakenMultiplier(world))));
+if (actualDamage <= 0) return;
 
 world.player.hp = Math.max(0, world.player.hp - actualDamage);
+cosmeticDamageTaken(world, actualDamage);
 world.damageFlash = Math.min(0.92, (world.damageFlash ?? 0) + 0.46);
 world.damageKick = Math.min(1, (world.damageKick ?? 0) + 0.58);
 world.lastDamageAt = world.time;
@@ -1444,12 +1448,12 @@ for (let step = 0; step < steps; step += 1) {
         Math.hypot(projectile.x - enemy.x, projectile.y - enemy.y) <=
         projectile.radius + enemy.radius;
 
-      if (!hit || projectile.hitIds.has(enemy.id)) {
+      if (enemy.hp <= 0 || !hit || projectile.hitIds.has(enemy.id)) {
         continue;
       }
 
       projectile.hitIds.add(enemy.id);
-      enemy.hp -= projectile.damage;
+      enemy.hp -= projectile.damage + cosmeticWeaponHitBonus(world, enemy);
       enemy.awake = true;
       enemy.lastHitAt = world.time;
       queueSfx(world, "enemyHit", { enemyKind: enemy.kind });

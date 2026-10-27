@@ -1,0 +1,36 @@
+MIST MAZE — STYLE, PERSPECTIVE, AND DEFENSE FIX — OCTOBER 22, 2026
+
+INSTALL INTO YOUR EXISTING PROJECT
+1. Back up your project.
+2. Merge the included src/ and scripts/ into the matching folders in the project. Replace matching files and include every new file. This fix requires the renderer, engine, and style files as well as App.jsx.
+3. Copy the included package.json, package-lock.json, index.html, vite.config.js, eslint.config.js, and README.md to the project root.
+4. Keep your existing .env.local, api/, and supabase/ folders. No new database setup is needed for this update.
+5. Run npm install, then npm run verify, then npm run dev.
+
+PATH CHECK
+For a project named total, the application is total/src/App.jsx.
+Do not create total/src/src/App.jsx or put the extracted update inside src/.
+The PREVIEWS/ folder contains optional renderer samples; you do not need to copy it into your game.
+
+THIS FIX
+- Both one-hour and two-hour modes follow the original navy/slate game HUD, cyan controls, compact sidebar layout, and geometric glowing artwork.
+- The Hundred Floors reuses the original maze tiles, player bodies, and powerup drawing routines, with a green exit/stair marker.
+- Powerup Defense has 1x, 2x, and 3x battle speed. S cycles speed while the board has focus. Playtime unlocks still count real active seconds.
+- A selected defense shows Current stats and, directly underneath, the exact Next level stats before purchase. Relevant damage, cooldown, range, slow, splash, chain, and armor effects are shown. Maximum-level defenses say so.
+- Harder defense waves add rushes, armored groups, veterans, regenerating Crawlers, Spitter rallies, Warden protection, and boss waves. Upgrades and combinations matter; the reference strategy using earned energy completes all 20 waves with 4/20 core health at normal and triple speed.
+- Pickups are real shaded boxes/cubes with changing visible faces as the camera turns. The defense core also has three visible cube faces.
+- Fixed pickup/enemy/exit/decorations floor anchoring, cube visibility near screen edges and corners, close camera clipping, and depth against trees, asteroids, other cubes, and walls.
+- Removed the duplicate fixed-screen Orbital pickup hexagon and misplaced legendary pickup overlay in 3D. Existing 2D effects are preserved.
+- Emerald Wilds trees have substantially thicker roots, trunks, and canopies.
+- Orbital Ruins has suspended faceted asteroids, dark continuous floating rock paths matching the walkable route, physical shelf thickness, starfield, and a distant asteroid belt.
+- The calm blue update board includes these changes.
+
+SAVES / PREVIOUS FEATURES
+This contains the earlier skin perks, farm, shop, cosmetics, ammo/medkit, Labyrinth, and ranking updates. Existing ownership, wallet balances, inventories, playtime, and Hundred Floor checkpoints are preserved.
+Powerup Defense unlocks at 1 active hour; The Hundred Floors at 2 hours. There are 100 stories, each 100 x 100 tiles.
+The player name oibougvovov still unlocks both immediately and grants 1,000,000 MIZ plus 10,000 hux once per saved wallet. Retyping or reloading does not repeat the reward.
+Local saves belong to the browser and site address, grouped by player name.
+
+VERIFIED
+Production build, import audit, and all 124 automated tests passed. Native Canvas2D verification exercised the actual renderer alias chain at 24 camera positions/angles, stable frames, cubes hidden by scenery, cube/decor depth, partial cube visibility around City/Keep corners, four views around a cube, the defense board, and all four Hundred Floor themes. Component-handler tests exercise speed changes, stat previews, purchase updates, and pause. This fix's checks used native rendering and component tests rather than end-to-end browser automation.
+PREVIEWS are actual native canvas renderer output with controlled scenes, not mockups of different game art.

@@ -7,7 +7,7 @@ import { isThanksgivingOpen, THANKSGIVING_DATE_LABEL, THANKSGIVING_EVENT_YEAR, t
 const HUX_KEY = "mist-maze-thanksgiving-hux-v1";
 const MIZ_KEY = "mist-maze-miz-economy-v3";
 const emptyInventory = () => Object.fromEntries(FARM_POWERUPS.map(({ id }) => [id, 0]));
-const emptyState = () => ({ hux: 0, bestRescued: 0, totalRescued: 0, inventory: emptyInventory(), cosmetics: {}, equippedCosmetic: null });
+const emptyState = () => ({ hux: 0, bestRescued: 0, totalRescued: 0, inventory: emptyInventory(), cosmetics: {}, equippedCosmetic: null, expeditionGiftClaimed: false });
 let instance = 0;
 const freshEconomy = () => import(`../../src/services/huxEconomy.js?hux-test=${++instance}`);
 

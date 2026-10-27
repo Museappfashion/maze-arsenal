@@ -1,18 +1,19 @@
-.playtime-modes { border: 1px solid #334155; border-radius: 18px; background: #0b1222; padding: 24px; color: #e2e8f0; }
-.playtime-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.playtime-heading h2 { margin: 7px 0 14px; font-size: 25px; letter-spacing: -.03em; }
-.playtime-heading > span, .playtime-note { color: #94a3b8; font-size: 12px; line-height: 1.7; }
-.playtime-player-form { display: flex; align-items: end; gap: 10px; flex-wrap: wrap; }
-.playtime-player-form label { display: grid; gap: 6px; font-size: 12px; font-weight: 700; }
-.playtime-player-form input { border: 1px solid #475569; background: #020617; color: #e2e8f0; padding: 10px 12px; border-radius: 9px; max-width: 100%; }
-.playtime-modes button { background: #20203c; color: #e2e8f0; border: 1px solid #665b91; border-radius: 10px; padding: 11px 16px; min-height: 44px; font-weight: 800; cursor: pointer; }
-.playtime-modes button:hover:not(:disabled) { background: #343052; }
-.playtime-modes button:disabled { background: #101827; border-color: #334155; color: #94a3b8; cursor: default; }
-.playtime-gift { color: #a5e9cb; font-size: 13px; }
-.playtime-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 20px; }
-.playtime-card { min-width: 0; background: #111b2c; border: 1px solid #334155; padding: 20px; border-radius: 14px; display: grid; gap: 12px; }
-.playtime-card h3, .playtime-card p { margin: 0; }
-.playtime-card p { color: #b0bfd1; line-height: 1.65; font-size: 13px; }
-.playtime-card progress { width: 100%; height: 7px; accent-color: #a78bfa; }
-.playtime-modes :focus-visible { outline: 2px solid #67e8f9; outline-offset: 3px; }
-@media (max-width: 650px) { .playtime-cards { grid-template-columns: 1fr; } .playtime-modes { padding: 18px; } }
+/* Extend the existing selector cards without adding a second visual theme. */
+.playtime-modes { border:1px solid rgba(148,163,184,.2); border-radius:18px; background:rgba(15,23,42,.76); padding:24px; color:#e2e8f0; }
+.playtime-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+.playtime-heading h2 { margin:7px 0 14px; font-size:25px; letter-spacing:-.035em; color:#f8fafc; }
+.playtime-heading>span,.playtime-note { color:#94a3b8; font-size:12px; line-height:1.7; }
+.playtime-player-form { display:flex; align-items:end; gap:10px; flex-wrap:wrap; }
+.playtime-player-form label { display:grid; gap:6px; font-size:11px; font-weight:800; color:#cbd5e1; }
+.playtime-player-form input { border:1px solid rgba(148,163,184,.28); background:#020617; color:#e2e8f0; padding:10px 12px; border-radius:9px; max-width:100%; }
+.playtime-modes button { background:rgba(8,47,73,.72); color:#cffafe; border:1px solid rgba(103,232,249,.44); border-radius:10px; padding:11px 16px; min-height:44px; font:inherit; font-size:12px; font-weight:900; cursor:pointer; }
+.playtime-modes button:hover:not(:disabled) { background:#164e63; border-color:#67e8f9; }
+.playtime-modes button:disabled { background:rgba(2,6,23,.72); border-color:rgba(148,163,184,.18); color:#64748b; cursor:default; }
+.playtime-gift { color:#86efac; font-size:12px; }
+.playtime-cards { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; margin-top:20px; }
+.playtime-card { min-width:0; background:linear-gradient(180deg,rgba(15,23,42,.72),rgba(2,6,23,.98)); border:1px solid rgba(148,163,184,.2); padding:20px; border-radius:14px; display:grid; gap:12px; }
+.playtime-card h3,.playtime-card p { margin:0; }.playtime-card h3 { color:#f8fafc; font-size:20px; letter-spacing:-.025em; }
+.playtime-card p { color:#94a3b8; line-height:1.65; font-size:12px; }
+.playtime-card progress { width:100%; height:7px; accent-color:#22d3ee; appearance:none; border:0; border-radius:4px; overflow:hidden; background:#1e293b; }.playtime-card progress::-webkit-progress-bar { background:#1e293b; }.playtime-card progress::-webkit-progress-value { background:#22d3ee; }.playtime-card progress::-moz-progress-bar { background:#22d3ee; }
+.playtime-modes :focus-visible { outline:3px solid #38bdf8; outline-offset:3px; }
+@media(max-width:650px) { .playtime-cards { grid-template-columns:1fr; }.playtime-modes { padding:18px; } }

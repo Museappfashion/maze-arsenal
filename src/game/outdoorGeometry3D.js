@@ -34,28 +34,48 @@ function rings(mesh, levels, sides, color, seed, jitter = 0) {
   }
 }
 
+// A wall tile has a square collision footprint. Keeping the broad lower
+// contour over its four corners prevents a round rock/trunk from exposing a
+// clear-looking gap that the player cannot actually walk through.
+function solidFootprint(mesh, levels, color, seed) {
+  const outline = [[-.5, -.5], [0, -.56], [.5, -.5], [.56, 0], [.5, .5], [0, .56], [-.5, .5], [-.56, 0]];
+  const vertices = levels.map(([x, y, z, scale]) => outline.map(([vx, vy]) => [x + vx * scale, y + vy * scale, z]));
+  for (let layer = 0; layer < vertices.length - 1; layer++) {
+    for (let i = 0; i < outline.length; i++) {
+      const j = (i + 1) % outline.length;
+      const variation = .91 + noise(i, seed, layer + 21) * .18;
+      triangle(mesh, vertices[layer][i], vertices[layer][j], vertices[layer + 1][i], color, variation);
+      triangle(mesh, vertices[layer][j], vertices[layer + 1][j], vertices[layer + 1][i], color, variation);
+    }
+  }
+}
+
 export function createOutdoorMesh(theme, tileX, tileY) {
   const x = tileX + .5, y = tileY + .5, seed = tileX * 71 + tileY * 19;
-  const mesh = { x, y, radius: 1.15, triangles: [] };
+  const mesh = { x, y, radius: 1.3, triangles: [] };
   if (theme === "jungle") {
-    const height = 2.6 + noise(tileX, tileY, 2) * .95;
+    const height = 3.35 + noise(tileX, tileY, 2) * .95;
     const bendX = (noise(tileX, tileY, 4) - .5) * .15;
     const bendY = (noise(tileX, tileY, 5) - .5) * .15;
-    // Flared roots, a tall real trunk, then irregular foliage volumes.
-    rings(mesh, [[x, y, 0, .48], [x, y, .22, .27], [x + bendX, y + bendY, height * .77, .14]], 7, [133, 100, 59], seed, .16);
-    rings(mesh, [[x + bendX, y + bendY, height * .5, .12], [x, y, height * .69, .72], [x + bendX, y + bendY, height * .9, .73], [x + bendX, y + bendY, height, 0]], 8, [75, 137, 55], seed + 2, .3);
+    // Old-growth trees have broad buttress roots and thick trunks. Their lower
+    // volume fills the solid tile, while the upper trunk bends and tapers.
+    solidFootprint(mesh, [[x, y, 0, 1.06], [x, y, .24, 1.04], [x, y, .78, 1], [x + bendX, y + bendY, height * .67, .66], [x + bendX, y + bendY, height * .82, .42]], [119, 89, 52], seed);
+    rings(mesh, [[x + bendX, y + bendY, height * .52, .32], [x, y, height * .7, .93], [x + bendX, y + bendY, height * .9, .91], [x + bendX, y + bendY, height, 0]], 8, [64, 119, 47], seed + 2, .25);
     for (let branch = 0; branch < 3; branch++) {
-      const angle = branch * TAU / 3 + noise(seed, 7), bx = x + Math.cos(angle) * .47, by = y + Math.sin(angle) * .47;
+      const angle = branch * TAU / 3 + noise(seed, 7), bx = x + Math.cos(angle) * .63, by = y + Math.sin(angle) * .63;
       const bz = height * (.64 + noise(seed, branch, 6) * .12);
-      rings(mesh, [[bx, by, bz - .23, 0], [bx, by, bz, .39], [bx, by, bz + .38, .3], [bx, by, bz + .54, 0]], 6, [66, 119 + branch * 7, 44], seed + branch + 8, .28);
+      rings(mesh, [[bx, by, bz - .3, 0], [bx, by, bz, .5], [bx, by, bz + .4, .4], [bx, by, bz + .64, 0]], 6, [59, 108 + branch * 7, 38], seed + branch + 8, .25);
     }
   } else {
-    const low = .13 + noise(tileX, tileY, 11) * .16;
-    const height = .9 + noise(tileX, tileY, 12) * .8;
+    const low = .13 + noise(tileX, tileY, 11) * .065;
+    const height = 1.05 + noise(tileX, tileY, 12) * 1.05;
     const dx = (noise(tileX, tileY, 14) - .5) * .2, dy = (noise(tileX, tileY, 15) - .5) * .2;
     const stone = noise(tileX, tileY, 16);
-    const color = [114 + stone * 31, 110 + stone * 22, 109 + stone * 30];
-    rings(mesh, [[x + dx, y + dy, low, 0], [x, y, low + height * .25, .59], [x - dx, y - dy, low + height * .64, .62], [x + dx, y + dy, low + height, .18], [x + dx, y + dy, low + height + .05, 0]], 8, color, seed, .38);
+    const color = [101 + stone * 32, 105 + stone * 28, 119 + stone * 30];
+    // The closed, pointed underside floats above the route instead of growing
+    // out of it like a cliff. Its wide middle still covers the collision tile
+    // at eye height; the slanted upper faces make each rock a separate body.
+    solidFootprint(mesh, [[x + dx, y + dy, low, 0], [x, y, .3, 1.04], [x, y, .68, 1.09], [x - dx, y - dy, Math.max(.82, height * .78), .72], [x + dx, y + dy, height, .24], [x + dx, y + dy, height + .03, 0]], color, seed);
     // Dark scars lie on actual rock faces, retaining the same perspective.
     const faces = mesh.triangles.slice();
     for (let i = 0; i < faces.length; i++) {
@@ -65,6 +85,19 @@ export function createOutdoorMesh(theme, tileX, tileY) {
       const points = [a, b, c].map((v) => v.map((n, axis) => center[axis] + (n - center[axis]) * .55 + (axis === 2 ? .001 : 0)));
       triangle(mesh, ...points, [48, 47, 48]);
     }
+  }
+  return mesh;
+}
+
+export function createOrbitalShelfMesh(tileX, tileY, edges) {
+  const mesh = { x: tileX + .5, y: tileY + .5, radius: .75, triangles: [] };
+  const corners = [[tileX, tileY], [tileX + 1, tileY], [tileX + 1, tileY + 1], [tileX, tileY + 1]];
+  for (let side = 0; side < 4; side++) {
+    if (!(edges & 1 << side)) continue;
+    const a = corners[side], b = corners[(side + 1) % 4];
+    const topA = [...a, 0], topB = [...b, 0], lowA = [...a, -.18], lowB = [...b, -.18];
+    triangle(mesh, topA, lowA, topB, [34, 40, 56]);
+    triangle(mesh, topB, lowA, lowB, [23, 28, 43]);
   }
   return mesh;
 }
@@ -144,6 +177,15 @@ let renderedWorld;
 
 export function hasOutdoorDepth(world) {
   return renderedWorld === world && !world.labyrinthMode && ["jungle", "space"].includes(world.level.themeKey);
+}
+
+// Read-only access for world-space pickups and other projected solid shapes.
+// Both this sampler and sprite clipping use camera-forward depth, in tiles.
+export function outdoorDepthAt(world, screenX, screenY) {
+  if (!hasOutdoorDepth(world)) return Infinity;
+  const x = Math.floor(screenX / 2), y = Math.floor(screenY / 2);
+  if (x < 0 || y < 0 || x >= surface.width || y >= surface.height) return Infinity;
+  return surface.depth[y * surface.width + x];
 }
 
 export function clipOutdoorSprite(ctx, world, projection) {

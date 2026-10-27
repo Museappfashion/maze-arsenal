@@ -64,7 +64,7 @@ function materials(key) {
   const floor = canvas(128, 128), wall = canvas(128, key === "city" ? 1024 : 192);
   if (!floor || !wall) return null;
   const f = floor.getContext("2d"), c = wall.getContext("2d");
-  const base = { space: [47, 43, 66], jungle: [42, 60, 31], city: [58, 63, 67], medieval: [76, 71, 61] }[key] || [30, 35, 42];
+  const base = { space: [25, 30, 45], jungle: [42, 60, 31], city: [58, 63, 67], medieval: [76, 71, 61] }[key] || [30, 35, 42];
   const floorImage = f.createImageData(128, 128);
   for (let y = 0; y < 128; y++) for (let x = 0; x < 128; x++) {
     const grain = (noise(x, y) - .5) * 17;
@@ -76,10 +76,19 @@ function materials(key) {
   f.putImageData(floorImage, 0, 0);
   if (key === "medieval") paintFlagstones(f);
   if (key === "space") {
-    f.strokeStyle = "#221c36"; f.lineWidth = 1.2;
-    f.beginPath(); f.moveTo(5, 12); f.lineTo(38, 47); f.lineTo(29, 71); f.moveTo(38, 47); f.lineTo(72, 55); f.stroke();
-    f.strokeStyle = "#8a9cbe70"; f.lineWidth = 1;
-    f.beginPath(); f.moveTo(81, 81); f.lineTo(102, 81); f.lineTo(102, 105); f.moveTo(86, 87); f.lineTo(96, 87); f.lineTo(96, 99); f.stroke();
+    // Faceted asteroid rock uses the same cool greys as the solid barriers.
+    // Large patches read as physical ground; small mineral flecks add scale.
+    for (let i = 0; i < 15; i++) {
+      const x = noise(i, 71) * 128, y = noise(i, 72) * 128;
+      f.fillStyle = ["#313b5352", "#0f172b70", "#53607730"][i % 3];
+      f.beginPath(); f.moveTo(x, y); f.lineTo(x + 6, y - 8); f.lineTo(x + 24, y - 2); f.lineTo(x + 18, y + 12); f.lineTo(x - 3, y + 6); f.closePath(); f.fill();
+    }
+    f.strokeStyle = "#272d3d"; f.lineWidth = 1.1;
+    f.beginPath(); f.moveTo(5, 12); f.lineTo(38, 47); f.lineTo(29, 71); f.moveTo(38, 47); f.lineTo(72, 55); f.lineTo(83, 78); f.stroke();
+    for (let i = 0; i < 20; i++) {
+      f.fillStyle = i % 3 ? "#6e829a2a" : "#769eb83d";
+      f.fillRect(noise(i, 73) * 128, noise(i, 74) * 128, 1.4, .7);
+    }
   } else if (key === "jungle") {
     for (let i = 0; i < 72; i++) {
       f.fillStyle = ["#6a743e", "#1c4925", "#53602d", "#705836"][i % 4];
@@ -156,6 +165,21 @@ export function draw3DSky(ctx, world, width, horizon, height = horizon) {
       const x = width / 2 + Math.tan(angle) * width * .74, y = noise(i, 62) * height;
       ctx.globalAlpha = .4 + noise(i, 63) * .6; ctx.fillStyle = i % 6 ? "#d4e0ef" : "#8bb3df"; ctx.fillRect(x, y, i % 11 ? 1 : 2, i % 11 ? 1 : 2);
     }
+    // A sparse distant belt makes the setting an asteroid field. These tiny
+    // world-anchored silhouettes never cover the traversable near geometry.
+    ctx.globalAlpha = 1;
+    for (let i = 0; i < 18; i++) {
+      let angle = noise(i, 81) * TAU - world.player.facing; angle = Math.atan2(Math.sin(angle), Math.cos(angle));
+      if (Math.abs(angle) > .8) continue;
+      const x = width / 2 + Math.tan(angle) * width * .74, y = horizon * (.17 + noise(i, 82) * .55), radius = 2 + noise(i, 83) * 6;
+      ctx.fillStyle = i % 2 ? "#303743" : "#434752"; ctx.beginPath();
+      for (let j = 0; j < 7; j++) {
+        const a = j * TAU / 7, r = radius * (.72 + noise(i, j, 84) * .3);
+        const px = x + Math.cos(a) * r, py = y + Math.sin(a) * r * .7;
+        if (j) ctx.lineTo(px, py); else ctx.moveTo(px, py);
+      }
+      ctx.closePath(); ctx.fill();
+    }
   } else if (key === "city") {
     const sky = ctx.createLinearGradient(0, 0, 0, horizon); sky.addColorStop(0, "#242a31"); sky.addColorStop(1, "#67717a"); ctx.fillStyle = sky; ctx.fillRect(0, 0, width, horizon);
   } else if (key === "jungle") {
@@ -167,7 +191,8 @@ export function draw3DSky(ctx, world, width, horizon, height = horizon) {
 export function drawPerspectiveFloor(ctx, world, plane, width, height, horizon, maxDistance) {
   if (world.labyrinthMode) return;
   const key = world.level.themeKey, material = materials(key); if (!material) return;
-  const w = Math.ceil(width / 3), h = Math.ceil((height - horizon) / 3);
+  const resolution = key === "space" ? 2 : 3;
+  const w = Math.ceil(width / resolution), h = Math.ceil((height - horizon) / resolution);
   if (!floorSurface || floorSurface.width !== w || floorSurface.height !== h) {
     const surface = canvas(w, h); if (!surface) return;
     const context = surface.getContext("2d"); floorSurface = { width: w, height: h, surface, context, image: context.createImageData(w, h) };
@@ -176,22 +201,22 @@ export function drawPerspectiveFloor(ctx, world, plane, width, height, horizon, 
   const forwardX = Math.cos(world.player.facing), forwardY = Math.sin(world.player.facing);
   const src = material.floor, dst = image.data, frequency = key === "medieval" ? 20 : 32;
   for (let row = 0; row < h; row++) {
-    const depth = plane * .5 / (row * 3 + 1.5), shade = Math.max(key === "space" ? .25 : .18, 1 - depth / (maxDistance * 1.3));
-    const sideStart = -width / 2 / plane * depth, sideStep = 3 / plane * depth;
+    const depth = plane * .5 / (row * resolution + resolution / 2), shade = Math.max(key === "space" ? .25 : .18, 1 - depth / (maxDistance * 1.3));
+    const sideStart = (-width / 2 + resolution / 2) / plane * depth, sideStep = resolution / plane * depth;
     let wx = world.player.x + forwardX * depth - forwardY * sideStart, wy = world.player.y + forwardY * depth + forwardX * sideStart;
     for (let col = 0; col < w; col++) {
       const tx = Math.floor(wx * frequency) & 127, ty = Math.floor(wy * frequency) & 127;
       const from = (ty * 128 + tx) * 4, to = (row * w + col) * 4;
       const platform = key === "space" && depth <= maxDistance ? orbitalPlatformSample(world, wx, wy) : key === "space" ? 0 : 1;
-      const rim = key === "space" && platform >= 2;
-      dst[to] = rim ? 65 * shade : src[from] * shade; dst[to + 1] = rim ? 129 * shade : src[from + 1] * shade; dst[to + 2] = rim ? 170 * shade : src[from + 2] * shade;
+      const bevel = key === "space" && platform === 2 ? 1.18 : 1;
+      dst[to] = src[from] * shade * bevel; dst[to + 1] = src[from + 1] * shade * bevel; dst[to + 2] = src[from + 2] * shade * bevel;
       if (key === "jungle") {
         const fog = Math.min(1, Math.max(0, depth - 6) / maxDistance);
         dst[to] = dst[to] * (1 - fog) + 35 * fog;
         dst[to + 1] = dst[to + 1] * (1 - fog) + 58 * fog;
         dst[to + 2] = dst[to + 2] * (1 - fog) + 35 * fog;
       }
-      dst[to + 3] = platform ? (platform === 3 ? 155 : 255) : 0;
+      dst[to + 3] = platform ? 255 : 0;
       wx -= forwardY * sideStep; wy += forwardX * sideStep;
     }
   }

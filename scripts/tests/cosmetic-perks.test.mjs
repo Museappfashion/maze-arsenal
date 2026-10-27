@@ -76,10 +76,10 @@ test("perks use run time, reset in a new run, and do not apply in Labyrinth", ()
   lab.player.cosmetic = "crystalGuardian"; damagePlayer(lab, 10); assert.equal(lab.player.hp, 90);
 });
 
-test("orbital walkways have real void gaps, connecting energy bridges, and solid slabs without changing collision", () => {
+test("orbital walkways support pickups on solid rock without changing collision", () => {
   const w = world(); const before = JSON.stringify(w.grid);
-  assert.equal(orbitalPlatformSample(w, 2.01, 2.01), 0);
-  assert.equal(orbitalPlatformSample(w, 3, 2.01), 3);
+  assert.equal(orbitalPlatformSample(w, 2.01, 2.01), 1);
+  assert.equal(orbitalPlatformSample(w, 3, 2.01), 1);
   assert.equal(orbitalPlatformSample(w, 3, 3), 1);
   assert.equal(orbitalPlatformSample(w, -1, -1), 0);
   assert.equal(JSON.stringify(w.grid), before);

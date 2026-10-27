@@ -330,12 +330,16 @@ Ammo/health perks affect ground pickups only. Wisp and Crystal do not spend
 their effects on immune hits. Ember counts real melee and projectile hits,
 not misses, defeated enemies, or reflected enemy attacks.
 
-3D scene update: Emerald Wilds barriers use solid trees with trunks, roots,
-and canopies. Orbital Ruins uses floating asteroid barriers, stepping platforms,
-and luminous bridges surrounded by a starfield. World-space triangles, camera
-clipping, and per-pixel depth fix the stretched strips seen when approaching or
-turning beside walls. Enemy and pickup sprites respect the visible geometry.
-Maze collision and routes remain the same.
+3D scene update: Emerald Wilds barriers use thick trees with broad roots,
+substantial trunks, and canopies. Orbital Ruins uses suspended asteroid barriers
+and continuous dark rock routes surrounded by a starfield. The routes follow
+the walkable map, with visible rock thickness and void beyond the shelves.
+World-space triangles, camera clipping, and per-pixel depth fix the stretched
+strips seen when approaching or turning beside walls. Pickups are shaded 3D
+boxes/cubes with faces that change naturally as the camera moves. Pickup feet,
+enemies, exits, and decorations use the same floor projection. Duplicate fixed
+screen pickup holograms and legendary rings were removed from the 3D view;
+their 2D artwork is preserved. Maze collision and routes remain the same.
 
 ## Playtime modes — October 22 update
 
@@ -348,7 +352,15 @@ local to this browser and origin, so they do not sync between devices.
   powerup defenses; familiar enemies arrive in waves. Five defenses provide
   rapid shots, frost slowing, explosive splash, armor-piercing precision, and
   chain lightning. Upgrade and sell defenses using battlefield energy earned
-  during that run. Survive all 20 waves to win.
+  during that run. Survive all 20 waves to win. **1× / 2× / 3×** controls change
+  battle speed; **S** cycles speed while the board is focused. Playtime unlocks
+  still count real active seconds. A selected defense shows its current stats,
+  then the exact next level's stats directly underneath, before purchase.
+  Previewed damage, cooldown, range, slow, splash, and chain limits use the same
+  formulas as combat. Rushes, armored sieges, boss waves, veterans, regenerating
+  Crawlers, Spitter rallies, and Warden protection create a rising challenge.
+  Difficulty follows a fixed progression. Upgrading and combining defenses
+  matters: the reference earned-budget strategy wins with 4/20 core health.
 - At **two hours**, **The Hundred Floors** unlocks. Each of its 100 stories is
   a connected **100 × 100 tile** maze, for 10,000 tiles per floor. Find stairs
   and press **E** to climb; complete floor 100 to reach the summit. **Q** gives
@@ -365,8 +377,19 @@ adds **1,000,000 MIZ + 10,000 hux** to the existing wallets. The reward is grant
 once per saved wallet; retyping the name or reloading does not add it again.
 Previously owned items and inventory are preserved.
 
+Both playtime modes use the original navy/slate and cyan HUD style. The Hundred
+Floors shares the main game's tile, powerup, player, and exit drawing routines,
+with its canvas and compact sidebar arranged like the original maze screen.
+Powerup Defense uses the same geometric glowing powerup/enemy language; its
+crystal core has three shaded cube faces.
+
 Run `npm run verify` and `node --test scripts/tests/*.test.mjs` for the build,
 import audit, and automated regressions. Browser scenarios for the new modes
 and camera angles are in `scripts/tests/expedition-browser.mjs` and
 `scripts/tests/outdoor-scenes-browser.mjs` (use a locally available Playwright
 installation via `PLAYWRIGHT_MODULE_PATH` if it is not installed in the project).
+Optional native Canvas2D render verification is in
+`scripts/tests/native-scenes-qa.mjs`. Supply `GAME_CANVAS_MODULE_PATH` when using
+a bundled `@napi-rs/canvas` installation. It checks the full aliased renderer
+at 24 camera positions/angles, steady-frame stability, cubes hidden by walls,
+four views around a cube, the defense board, and all four Hundred Floor themes.

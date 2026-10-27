@@ -38,8 +38,12 @@ try {
   const beforePause = await progress(); assert.ok(beforePause > 10);
   assert.ok(Number(await page.locator(".td-stats > div").nth(3).locator("strong").innerText()) > 0);
   await page.getByRole("button", { name: "Pause", exact: true }).click();
-  await page.clock.runFor(3000); assert.equal(await progress(), beforePause);
+  const pausedTime = await progress();
+  await page.clock.runFor(3000); assert.equal(await progress(), pausedTime);
   await page.getByRole("button", { name: "Resume battle", exact: true }).click();
+  await page.getByRole("button", { name: "3×", exact: true }).click();
+  assert.equal(await page.getByRole("button", { name: "3×", exact: true }).getAttribute("aria-pressed"), "true");
+  assert.equal(await page.locator(".td-current-stats + .td-next-stats").count(), 1);
   await page.screenshot({ path: `${out}/tower-defense.png` });
   await page.clock.runFor(35000);
   await page.getByRole("button", { name: "Start wave 2", exact: true }).waitFor();

@@ -5,7 +5,7 @@ import { recordActivePlay, flushPlayerProgress } from "../services/playerProgres
 import "../styles/hundredFloorMaze.css";
 
 const timer = (seconds) => `${Math.floor(seconds / 3600)}:${String(Math.floor(seconds / 60) % 60).padStart(2, "0")}:${String(Math.floor(seconds) % 60).padStart(2, "0")}`;
-const snapshotOf = (world) => ({ floor: world.floor, theme: world.theme.name, elapsed: world.elapsed, completed: world.completed, nearStairs: nearHundredFloorStairs(world), haste: world.haste, sonar: world.sonar, compassCooldown: world.compassCooldown, message: world.messageTime > 0 || world.completed ? world.message : "Explore the floor. Gold marks the stairs on your map." });
+const snapshotOf = (world) => ({ floor: world.floor, theme: world.theme.name, elapsed: world.elapsed, completed: world.completed, nearStairs: nearHundredFloorStairs(world), haste: world.haste, sonar: world.sonar, compassCooldown: world.compassCooldown, message: world.messageTime > 0 || world.completed ? world.message : "Explore the floor. Green marks the stairs on your map." });
 
 function TowerJoystick({ onMove }) {
   const pointer = useRef(null);
@@ -149,7 +149,7 @@ function HundredFloorRun({ onBack, playerName }) {
       </section></div>}
     </div>
     <footer className="hundred-footer">
-      <div className="hundred-controls"><button type="button" onClick={compass} disabled={busy || snapshot.compassCooldown > 0}><kbd>Q</kbd> Compass {snapshot.compassCooldown > 0 ? `· ${Math.ceil(snapshot.compassCooldown)}s` : "· ready"}</button><button type="button" onClick={() => showMap(!mapOpen)} disabled={paused || snapshot.completed || restartConfirm}><kbd>M</kbd> {mapOpen ? "Close map" : "Floor map"}</button><button type="button" className="hundred-primary" onClick={climb} disabled={busy || !snapshot.nearStairs}><kbd>E</kbd> {snapshot.floor === 100 ? "Reach summit" : "Climb stairs"}</button><div className="hundred-buffs"><span className={snapshot.haste > 0 ? "is-active" : ""}>Haste {snapshot.haste > 0 ? `${Math.ceil(snapshot.haste)}s` : "· green H"}</span><span className={snapshot.sonar > 0 ? "is-active" : ""}>Sonar {snapshot.sonar > 0 ? `${Math.ceil(snapshot.sonar)}s` : "· purple S"}</span></div></div>
+      <div className="hundred-controls"><button type="button" onClick={compass} disabled={busy || snapshot.compassCooldown > 0}><kbd>Q</kbd> Compass {snapshot.compassCooldown > 0 ? `· ${Math.ceil(snapshot.compassCooldown)}s` : "· ready"}</button><button type="button" onClick={() => showMap(!mapOpen)} disabled={paused || snapshot.completed || restartConfirm}><kbd>M</kbd> {mapOpen ? "Close map" : "Floor map"}</button><button type="button" className="hundred-primary" onClick={climb} disabled={busy || !snapshot.nearStairs}><kbd>E</kbd> {snapshot.floor === 100 ? "Reach summit" : "Climb stairs"}</button><div className="hundred-buffs"><span className={snapshot.haste > 0 ? "is-active" : ""}>Haste {snapshot.haste > 0 ? `${Math.ceil(snapshot.haste)}s` : "· green diamond"}</span><span className={snapshot.sonar > 0 ? "is-active" : ""}>Sonar {snapshot.sonar > 0 ? `${Math.ceil(snapshot.sonar)}s` : "· cyan diamond"}</span></div></div>
       <p>WASD / arrows: move · Q: 10-second route hint · E: stairs · M: map · Esc: pause <span>Auto-saves every 5 seconds and at every staircase.</span></p>
     </footer>
   </main>;

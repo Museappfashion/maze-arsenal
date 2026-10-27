@@ -1,4 +1,7 @@
 const UPDATES = [
+  "Powerup Defense and The Hundred Floors now share the original maze artwork, navy/slate HUD, and cyan controls.",
+  "Powerup Defense adds 1× / 2× / 3× speed, tougher varied waves, enemy support abilities, and next-upgrade stats directly beneath current stats.",
+  "Fixed 3D pickup and decoration perspective: solid shaded cubes, consistent floor positions, and correct depth around obstacles. Wilds trees are thicker; Orbital has suspended asteroids and continuous dark rock paths above space.",
   "New playtime unlocks: Powerup Defense at 1 hour and The Hundred Floors at 2 hours. Active play and floor checkpoints save for each player name in this browser.",
   "Powerup Defense lets you place and improve powerup defenses against waves of enemies. The Hundred Floors has 100 stories, each 100 × 100 tiles.",
   "Added small equipped-skin perks: Lucky Peck, Alien Recovery, Slip Away, Ember Strike, and Crystal Shell. Alien stays 10,000 MIZ; turkey stays 1,000 hux.",

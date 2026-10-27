@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { clipOutdoorPolygon, createOutdoorMesh, createOutdoorRaster, rasterOutdoorTriangle, renderOutdoorMeshes, drawOutdoorMeshScene, clipOutdoorSprite, hasOutdoorDepth, OUTDOOR_NEAR_PLANE } from "../../src/game/outdoorGeometry3D.js";
+import { clipOutdoorPolygon, createOutdoorMesh, createOrbitalShelfMesh, createOutdoorRaster, rasterOutdoorTriangle, renderOutdoorMeshes, drawOutdoorMeshScene, clipOutdoorSprite, hasOutdoorDepth, outdoorDepthAt, OUTDOOR_NEAR_PLANE } from "../../src/game/outdoorGeometry3D.js";
 import { orbitalPlatformSample } from "../../src/game/outdoorScenes3D.js";
 
 test("outdoor triangles crossing the camera are clipped before perspective division", () => {
@@ -57,16 +57,58 @@ test("close turns at a wall corner never project geometry behind the viewer over
   assert.deepEqual(target.pixels, original, "a complete rotation returns to the same view");
 });
 
-test("Orbital floor leaves substantial open space below the maze with connected stepping pads", () => {
-  const world = { grid: Array.from({ length: 8 }, () => Array(8).fill(0)) };
-  const counts = [0, 0, 0, 0];
-  for (let x = 0; x < 100; x++) for (let y = 0; y < 100; y++) counts[orbitalPlatformSample(world, x / 50, y / 50)]++;
-  assert.ok(counts[0] > 5000, "more than half the view between pads is actual starfield");
-  assert.ok(counts[1] > 1000 && counts[2] > 100 && counts[3] > 500);
-  assert.equal(orbitalPlatformSample(world, 1, 1), 1);
-  assert.equal(orbitalPlatformSample(world, 1, .01), 3);
-  assert.equal(orbitalPlatformSample(world, .01, .01), 0);
-  assert.ok(world.grid.every((row) => row.every((tile) => tile === 0)), "visual gaps do not change collision");
+test("Orbital route supports every walkable point and has no detached pads or internal glowing seams", () => {
+  const world = { grid: [[1, 1, 1, 1], [1, 0, 0, 1], [1, 0, 0, 1], [1, 1, 1, 1]] };
+  const before = JSON.stringify(world.grid);
+  for (let x = 0; x < 100; x++) for (let y = 0; y < 100; y++) {
+    assert.ok([1, 2].includes(orbitalPlatformSample(world, 1 + x / 50, 1 + y / 50)), "every point over a walkable cell has real rock footing");
+  }
+  assert.equal(orbitalPlatformSample(world, 2, 2), 1, "tile joins are continuous rock instead of a blue lattice");
+  assert.equal(orbitalPlatformSample(world, 1.01, 1.5), 2, "only a genuine route edge has a stone bevel");
+  assert.equal(orbitalPlatformSample(world, .5, .5), 0, "asteroid cells leave starfield below their volume");
+  assert.equal(orbitalPlatformSample(world, -1, -1), 0);
+  assert.equal(JSON.stringify(world.grid), before, "rendering never changes collision");
+});
+
+test("thick trees and asteroid bases cover their actual collision square from every direction", () => {
+  const boxRay = (camera, dx, dy) => {
+    const tx = [(4.01 - camera.x) / dx, (4.99 - camera.x) / dx].sort((a, b) => a - b);
+    const ty = [(4.01 - camera.y) / dy, (4.99 - camera.y) / dy].sort((a, b) => a - b);
+    return Math.max(tx[0], ty[0], 0) <= Math.min(tx[1], ty[1]);
+  };
+  for (const theme of ["jungle", "space"]) {
+    const mesh = createOutdoorMesh(theme, 4, 4), target = createOutdoorRaster(160, 120);
+    for (let angle = 0; angle < 32; angle++) {
+      const facing = angle * Math.PI / 16, cos = Math.cos(facing), sin = Math.sin(facing);
+      const camera = { x: 4.5 - cos * 3, y: 4.5 - sin * 3, facing };
+      renderOutdoorMeshes(target, [mesh], camera, { plane: 120, horizon: 75, theme });
+      for (let x = 0; x < 160; x++) {
+        const side = (x + .5 - 80) / 120;
+        if (boxRay(camera, cos - sin * side, sin + cos * side)) assert.ok(Number.isFinite(target.depth[75 * 160 + x]), `${theme}: no misleading hole at angle ${angle}, pixel ${x}`);
+      }
+    }
+  }
+});
+
+test("floating route edges are real vertical stone with thickness and no interior faces", () => {
+  const empty = createOrbitalShelfMesh(4, 7, 0), edge = createOrbitalShelfMesh(4, 7, 1 | 4);
+  assert.equal(empty.triangles.length, 0);
+  assert.equal(edge.triangles.length, 4);
+  const vertices = edge.triangles.flatMap(({ a, b, c }) => [a, b, c]);
+  assert.ok(vertices.some((v) => v[2] === 0) && vertices.some((v) => v[2] === -.18));
+  assert.ok(vertices.every((v) => v[1] === 7 || v[1] === 8), "only the requested exposed north/south edges are drawn");
+});
+
+test("Orbital asteroid undersides are closed and suspended above the route", () => {
+  const mesh = createOutdoorMesh("space", 4, 4), target = createOutdoorRaster(160, 140);
+  const vertices = mesh.triangles.flatMap(({ a, b, c }) => [a, b, c]);
+  const low = Math.min(...vertices.map((v) => v[2]));
+  assert.ok(low >= .13 && low <= .195, "the entire asteroid is visibly raised above its route");
+  const lowest = vertices.filter((v) => Math.abs(v[2] - low) < 1e-8);
+  assert.ok(lowest.every((v) => v[0] === lowest[0][0] && v[1] === lowest[0][1]), "lower faces close at an actual pointed underside");
+  renderOutdoorMeshes(target, [mesh], { x: 1.5, y: 4.5, facing: 0 }, { plane: 120, horizon: 70, theme: "space" });
+  assert.ok(Number.isFinite(target.depth[70 * 160 + 80]), "the collision-height middle is solid");
+  assert.equal(target.depth[89 * 160 + 80], Infinity, "the space between rock underside and route stays open to stars");
 });
 
 test("outdoor sprite clipping uses actual visible pixels and never leaks into other themes", () => {
@@ -80,6 +122,8 @@ test("outdoor sprite clipping uses actual visible pixels and never leaks into ot
     const world = { level: { themeKey: "space" }, player: { x: 1.5, y: 4.5, facing: 0 } };
     drawOutdoorMeshScene(ctx, world, [createOutdoorMesh("space", 4, 4)], { plane: 30, width: 40, height: 30, horizon: 15 });
     assert.equal(hasOutdoorDepth(world), true);
+    assert.equal(outdoorDepthAt(world, -1, 0), Infinity);
+    assert.equal(outdoorDepthAt(world, 20, 15) < Infinity, true, "solid geometry exposes camera-forward depth to projected cubes");
     clipOutdoorSprite(ctx, world, { screenX: 20, scale: 10, depth: 1 });
     assert.equal(rectangles.reduce((total, [, , w, h]) => total + w * h, 0), 1200, "a foreground pickup is fully visible");
     clipOutdoorSprite(ctx, world, { screenX: 20, scale: 10, depth: 10 });
@@ -87,6 +131,7 @@ test("outdoor sprite clipping uses actual visible pixels and never leaks into ot
     assert.ok(visibleArea > 0 && visibleArea < 1200, "only the actual asteroid silhouette covers a distant actor");
     world.level.themeKey = "city";
     assert.equal(hasOutdoorDepth(world), false);
+    assert.equal(outdoorDepthAt(world, 20, 15), Infinity);
     assert.equal(clipOutdoorSprite(ctx, world, { screenX: 20, scale: 10, depth: 10 }), false);
   } finally {
     if (previousCanvas === undefined) delete globalThis.OffscreenCanvas;

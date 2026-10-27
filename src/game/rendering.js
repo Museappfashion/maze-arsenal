@@ -1,6 +1,7 @@
 // src/game/rendering.js
 import { drawOutdoorWalls3D } from "./outdoorScenes3D.js";
-import { clipOutdoorSprite, hasOutdoorDepth } from "./outdoorGeometry3D.js";
+import { clipOutdoorSprite, hasOutdoorDepth, outdoorDepthAt } from "./outdoorGeometry3D.js";
+import { projectSceneBox, sceneFaceDepthAt, scenePickupShape, sceneScreenY } from "./sceneProjection3D.js";
 import { cosmeticPerkStatus } from "./cosmeticPerks.js";
 import { MAX_AMMO } from "../config/ammo.js";
 import { getBowDrawProgress, isMedievalArcheryWeapon } from "../config/archery.js";
@@ -2640,6 +2641,30 @@ export function cast3DRay(world, angle, collectLayers = false) {
   };
 }
 
+const sceneDepthFrames = new WeakMap();
+
+export function clip3DSceneSprite(ctx, world, projection) {
+  const frame = sceneDepthFrames.get(world);
+  if (!frame) return clipOutdoorSprite(ctx,world,projection);
+  const outdoor = hasOutdoorDepth(world);
+  const halfWidth = Math.max(90, projection.scale * 1.5);
+  const left = Math.max(0, Math.floor((projection.screenX-halfWidth)/2)*2);
+  const right = Math.min(CANVAS_WIDTH,Math.ceil((projection.screenX+halfWidth)/2)*2);
+  ctx.beginPath();
+  for (let y=0;y<CANVAS_HEIGHT;y+=2) {
+    let from = -1;
+    for (let x=left;x<=right;x+=2) {
+      const objectDepth = frame.objects[Math.floor(y/2)*frame.width+Math.floor(x/2)] ?? Infinity;
+      const wallDepth = outdoor ? outdoorDepthAt(world,x+.5,y+.5) : frame.zBuffer[Math.floor(x/VIEW_3D_RAY_WIDTH)] ?? Infinity;
+      const visible = x<right && projection.depth<Math.min(wallDepth,objectDepth)+.015;
+      if (visible && from<0) from=x;
+      else if (!visible && from>=0) {ctx.rect(from,y,x-from,2);from=-1;}
+    }
+  }
+  ctx.clip();
+  return true;
+}
+
 export function draw3DEnvironment(ctx, world, zBuffer) {
   const theme = getTheme(world);
   const horizon = CANVAS_HEIGHT * 0.46;
@@ -2781,10 +2806,14 @@ export function draw3DEnvironment(ctx, world, zBuffer) {
 
   ctx.globalAlpha = 1;
   drawOutdoorWalls3D(ctx, world, projectionPlane, CANVAS_WIDTH, CANVAS_HEIGHT, horizon);
+  let frame = sceneDepthFrames.get(world);
+  if (!frame) frame = { width: Math.ceil(CANVAS_WIDTH/2), objects: new Float32Array(Math.ceil(CANVAS_WIDTH/2)*Math.ceil(CANVAS_HEIGHT/2)) };
+  frame.zBuffer=zBuffer; frame.objects.fill(Infinity);
+  sceneDepthFrames.set(world,frame);
   return projectionPlane;
 }
 
-export function project3DSprite(world, x, y, projectionPlane) {
+export function project3DSprite(world, x, y, projectionPlane, worldRadius = 0) {
   const dx = x - world.player.x;
   const dy = y - world.player.y;
   const distance = Math.hypot(dx, dy);
@@ -2793,16 +2822,25 @@ export function project3DSprite(world, x, y, projectionPlane) {
     angleToSprite,
     world.player.facing,
   );
-  const depth = distance * Math.cos(relativeAngle);
+  const forward = distance * Math.cos(relativeAngle);
+  const side = -dx * Math.sin(world.player.facing) + dy * Math.cos(world.player.facing);
+  const radius = Math.max(0, Number(worldRadius) || 0);
 
-  if (
+  if (radius > 0 ? (
+    distance - radius > VIEW_3D_MAX_DISTANCE + 1 ||
+    forward + radius < .08 ||
+    Math.abs(side) - radius > (forward + radius) * Math.tan(VIEW_3D_FOV / 2)
+  ) : (
     distance < 0.08 ||
     distance > VIEW_3D_MAX_DISTANCE + 1 ||
-    depth <= 0.05 ||
+    forward <= 0.05 ||
     Math.abs(relativeAngle) > VIEW_3D_FOV * 0.62
-  ) {
+  )) {
     return null;
   }
+  // A volume may cross the camera plane even while its center is behind it.
+  // Keep a finite anchor; its actual faces perform their own near-plane clip.
+  const depth = radius > 0 ? Math.max(.08, forward) : forward;
 
   return {
     distance,
@@ -2810,8 +2848,9 @@ export function project3DSprite(world, x, y, projectionPlane) {
     relativeAngle,
     screenX:
       CANVAS_WIDTH / 2 +
-      Math.tan(relativeAngle) * projectionPlane,
+      side * projectionPlane / depth,
     scale: projectionPlane / depth,
+    groundY: sceneScreenY(projectionPlane / depth),
   };
 }
 
@@ -2839,14 +2878,9 @@ export function is3DSpriteVisible(projection, zBuffer) {
 }
 
 export function draw3DExit(ctx, projection) {
-  const height = clamp(
-    projection.scale * 0.9,
-    28,
-    CANVAS_HEIGHT * 1.25,
-  );
+  const height = projection.scale * .9;
   const width = height * 0.48;
-  const baseY =
-    CANVAS_HEIGHT * 0.46 + height * 0.5;
+  const baseY = sceneScreenY(projection.scale);
 
   ctx.save();
   ctx.translate(
@@ -3008,11 +3042,7 @@ export function draw3DThemedEnemy(ctx, world, enemy, width, height, attack) {
 
 export function draw3DEnemy(ctx, world, enemy, projection) {
   const enemyType = ENEMY_TYPES[enemy.kind];
-  const bodyHeight = clamp(
-    projection.scale * (enemy.radius * 2.35 + 0.42),
-    26,
-    CANVAS_HEIGHT * 0.95,
-  );
+  const bodyHeight = projection.scale * (enemy.radius * 2.35 + .42);
   const bodyWidth =
     bodyHeight *
     (enemy.kind === "warden"
@@ -3020,7 +3050,7 @@ export function draw3DEnemy(ctx, world, enemy, projection) {
       : enemy.kind === "brute"
         ? 0.66
         : 0.56);
-  const baseY = CANVAS_HEIGHT * 0.46 + bodyHeight * 0.43;
+  const baseY = sceneScreenY(projection.scale);
   const bobPhase = enemy.x * 1.7 + enemy.y * 2.3;
   const bob =
     Math.sin(world.time * 4 + bobPhase) *
@@ -3037,7 +3067,7 @@ export function draw3DEnemy(ctx, world, enemy, projection) {
   ctx.save();
   ctx.translate(
     projection.screenX,
-    baseY - bodyHeight * 0.48 + bob,
+    baseY - bodyHeight * 0.36 + bob,
   );
 
   const attackScale =
@@ -3062,7 +3092,7 @@ export function draw3DEnemy(ctx, world, enemy, projection) {
   ctx.beginPath();
   ctx.ellipse(
     0,
-    bodyHeight * 0.45,
+    bodyHeight * 0.36,
     bodyWidth * 0.5,
     bodyHeight * 0.075,
     0,
@@ -3157,141 +3187,102 @@ export function get3DPickupColor(pickup) {
   return pickup.color ?? "#a78bfa";
 }
 
-export function draw3DPickup(ctx, world, pickup, projection) {
-  const size = clamp(
-    projection.scale * 0.24,
-    8,
-    92,
-  );
-  const y =
-    CANVAS_HEIGHT * 0.46 +
-    size * 1.2 +
-    Math.sin(world.time * 4 + pickup.x) * 4;
-  const color = get3DPickupColor(pickup);
+function shadePickupColor(color, brightness) {
+  const hex = /^#[0-9a-f]{6}$/i.test(color) ? color : "#a78bfa";
+  return `rgb(${[1,3,5].map((i) => Math.min(255, Math.round(parseInt(hex.slice(i,i+2),16) * brightness))).join(",")})`;
+}
 
-  ctx.save();
-  ctx.translate(projection.screenX, y);
-  ctx.globalAlpha = clamp(
-    1 - projection.distance / VIEW_3D_MAX_DISTANCE,
-    0.38,
-    1,
-  );
-  ctx.shadowBlur = clamp(size * 0.5, 6, 24);
-  ctx.shadowColor = color;
-  ctx.fillStyle = color;
+function clipPickupFace(ctx, world, face, zBuffer) {
+  if (!hasOutdoorDepth(world) && !zBuffer) return true;
+  const xs = face.points.map((p) => p[0]), ys = face.points.map((p) => p[1]);
+  const left = Math.max(0, Math.floor(Math.min(...xs))), right = Math.min(CANVAS_WIDTH, Math.ceil(Math.max(...xs)));
+  const top = Math.max(0, Math.floor(Math.min(...ys))), bottom = Math.min(CANVAS_HEIGHT, Math.ceil(Math.max(...ys)));
+  const outdoor = hasOutdoorDepth(world);
+  const frame = sceneDepthFrames.get(world);
+  let visible = false;
+  ctx.beginPath();
+  for (let y = top; y < bottom; y += 2) {
+    let from = -1;
+    for (let x = left; x <= right; x += 2) {
+      const depth = x < right ? sceneFaceDepthAt(face, x + .5, y + .5) : Infinity;
+      const wallDepth = outdoor ? outdoorDepthAt(world,x+.5,y+.5) : zBuffer?.[Math.floor(x / VIEW_3D_RAY_WIDTH)] ?? Infinity;
+      const open = depth !== Infinity && depth < wallDepth + .015;
+      if (open && frame) {
+        const cell=Math.floor(y/2)*frame.width+Math.floor(x/2);
+        frame.objects[cell]=Math.min(frame.objects[cell],depth);
+      }
+      if (open && from < 0) from = x;
+      else if (!open && from >= 0) { ctx.rect(from,y,x-from,2); from = -1; visible = true; }
+    }
+    if (from >= 0) { ctx.rect(from,y,right-from,2); visible = true; }
+  }
+  ctx.clip();
+  return visible;
+}
 
+function faceSymbolPoint(face, u, v) {
+  const [a,b,c,d] = face.points;
+  const weights = [(1-u)*(1-v),u*(1-v),u*v,(1-u)*v];
+  const corners = [a,b,c,d];
+  const z = corners.reduce((sum,p,i) => sum+p[2]*weights[i],0);
+  return [0,1].map((axis) => corners.reduce((sum,p,i) => sum+p[axis]*p[2]*weights[i],0)/z);
+}
+
+export function draw3DPickup(ctx, world, pickup, projection, zBuffer) {
+  const shape = scenePickupShape(world,pickup);
+  const color = pickup.legendary ? "#facc15" : get3DPickupColor(pickup);
+  const centerY = sceneScreenY(projection.scale,shape.heightAboveGround);
+  const size = projection.scale * shape.width;
   if (pickup.type === "labyrinthLight") {
-    ctx.fillStyle = "#111827";
-    ctx.strokeStyle = color;
-    ctx.lineWidth = Math.max(1.5, size * 0.06);
-    ctx.beginPath();
-    ctx.arc(0, 0, size * 0.38, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(0, 0, size * 0.18, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.globalAlpha *= 0.58;
-    ctx.strokeStyle = color;
-    ctx.beginPath();
-    ctx.arc(0, 0, size * 0.55, 0, Math.PI * 2);
-    ctx.stroke();
-  } else if (pickup.type === "medkit") {
-    ctx.fillStyle = "#fff1f2";
-    ctx.fillRect(
-      -size * 0.42,
-      -size * 0.42,
-      size * 0.84,
-      size * 0.84,
-    );
-    ctx.fillStyle = color;
-    ctx.fillRect(
-      -size * 0.08,
-      -size * 0.31,
-      size * 0.16,
-      size * 0.62,
-    );
-    ctx.fillRect(
-      -size * 0.31,
-      -size * 0.08,
-      size * 0.62,
-      size * 0.16,
-    );
-  } else if (pickup.type === "ammo") {
-    if (isMedievalTheme(world)) {
-      ctx.strokeStyle = "#d6a85f";
-      ctx.fillStyle = "#d1d5db";
-      ctx.lineWidth = Math.max(1.5, size * 0.06);
-
-      for (let offset = -1; offset <= 1; offset += 1) {
-        const arrowX = offset * size * 0.18;
+    ctx.save();
+    ctx.translate(projection.screenX,centerY);
+    ctx.fillStyle = "#111827"; ctx.strokeStyle = color; ctx.lineWidth = Math.max(.7,size*.05);
+    ctx.beginPath(); ctx.arc(0,0,size*.34,0,Math.PI*2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = color; ctx.beginPath(); ctx.arc(0,0,size*.15,0,Math.PI*2); ctx.fill();
+    ctx.restore(); return;
+  }
+  const faces = projectSceneBox(world.player,[pickup.x,pickup.y,shape.heightAboveGround],{ ...shape, plane: projection.scale * projection.depth });
+  const symbolFace = faces.filter((face) => face.indices[0] < 4 && face.points.length === 4).at(-1);
+  ctx.save();
+  ctx.globalAlpha = clamp(1-projection.distance/VIEW_3D_MAX_DISTANCE,.45,1);
+  for (const face of faces) {
+    ctx.save();
+    if (!clipPickupFace(ctx,world,face,zBuffer)) { ctx.restore(); continue; }
+    const bodyColor = pickup.type === "medkit" ? "#fff1f2" : color;
+    ctx.fillStyle = shadePickupColor(bodyColor,face.shade);
+    ctx.strokeStyle = shadePickupColor(color,Math.min(1.6,face.shade+ .3));
+    ctx.lineWidth = Math.max(.55,Math.min(1.4,size*.025));
+    ctx.beginPath(); face.points.forEach(([x,y],i) => i ? ctx.lineTo(x,y) : ctx.moveTo(x,y)); ctx.closePath(); ctx.fill(); ctx.stroke();
+    if (face === symbolFace && size > 8) {
+      ctx.fillStyle = pickup.type === "medkit" ? "#f43f5e" : "#07111f";
+      ctx.strokeStyle = pickup.legendary ? "#fffbeb" : "#e2e8f0";
+      ctx.lineWidth = Math.max(.6,Math.min(2,size*.035));
+      if (pickup.type === "medkit") {
         ctx.beginPath();
-        ctx.moveTo(arrowX, size * 0.42);
-        ctx.lineTo(arrowX, -size * 0.32);
+        [[.4,.15],[.6,.15],[.6,.4],[.85,.4],[.85,.6],[.6,.6],[.6,.85],[.4,.85],[.4,.6],[.15,.6],[.15,.4],[.4,.4]].forEach(([u,v],i) => { const [x,y]=faceSymbolPoint(face,u,v); i ? ctx.lineTo(x,y) : ctx.moveTo(x,y); });
+        ctx.closePath(); ctx.fill();
+      } else {
+        const lines = pickup.type === "ammo" ? [[.3,.22,.3,.78],[.5,.22,.5,.78],[.7,.22,.7,.78]] : pickup.type === "weapon" ? [[.2,.58,.8,.58],[.52,.58,.52,.27]] : [[.3,.5,.5,.72],[.5,.72,.72,.32]];
+        ctx.beginPath();
+        for (const [u,v,u2,v2] of lines) { ctx.moveTo(...faceSymbolPoint(face,u,v)); ctx.lineTo(...faceSymbolPoint(face,u2,v2)); }
         ctx.stroke();
-
-        ctx.beginPath();
-        ctx.moveTo(arrowX, -size * 0.48);
-        ctx.lineTo(arrowX - size * 0.08, -size * 0.3);
-        ctx.lineTo(arrowX + size * 0.08, -size * 0.3);
-        ctx.closePath();
-        ctx.fill();
       }
-
-      ctx.strokeStyle = "#92400e";
-      ctx.lineWidth = Math.max(2, size * 0.08);
+    }
+    ctx.restore();
+  }
+  if (world.labelsOn && size > 18 && size < 240) {
+    ctx.save();
+    if (!clip3DSceneSprite(ctx,world,projection) && zBuffer) {
       ctx.beginPath();
-      ctx.moveTo(-size * 0.34, size * 0.08);
-      ctx.lineTo(size * 0.34, size * 0.08);
-      ctx.stroke();
-    } else {
-      for (let offset = -1; offset <= 1; offset += 1) {
-        ctx.fillRect(
-          offset * size * 0.19 - size * 0.06,
-          -size * 0.42,
-          size * 0.12,
-          size * 0.84,
-        );
-      }
+      for (let ray=0;ray<zBuffer.length;ray++) if (projection.depth<zBuffer[ray]+.015) ctx.rect(ray*VIEW_3D_RAY_WIDTH,0,VIEW_3D_RAY_WIDTH+.5,CANVAS_HEIGHT);
+      ctx.clip();
     }
-  } else {
-    ctx.rotate(world.time * 0.7);
-    ctx.beginPath();
-    ctx.moveTo(0, -size * 0.5);
-    ctx.lineTo(size * 0.42, 0);
-    ctx.lineTo(0, size * 0.5);
-    ctx.lineTo(-size * 0.42, 0);
-    ctx.closePath();
-    ctx.fill();
+    ctx.font = `700 ${clamp(size*.22,9,13)}px system-ui, sans-serif`; ctx.textAlign = "center";
+    ctx.fillStyle = pickup.legendary ? "#fef08a" : "#f8fafc";
+    ctx.shadowColor = "#020617"; ctx.shadowBlur = 3;
+    ctx.fillText(getPickupLabel(pickup),projection.screenX,sceneScreenY(projection.scale,shape.heightAboveGround+shape.height*.9)-5);
+    ctx.restore();
   }
-
-  ctx.shadowBlur = 0;
-
-  if (world.labelsOn && size > 13) {
-    if (
-      pickup.type !== "medkit" &&
-      pickup.type !== "ammo" &&
-      pickup.type !== "labyrinthLight"
-    ) {
-      ctx.rotate(-world.time * 0.7);
-    }
-    ctx.fillStyle = "#f8fafc";
-    ctx.font = `700 ${clamp(
-      size * 0.28,
-      9,
-      13,
-    )}px system-ui, sans-serif`;
-    ctx.textAlign = "center";
-    ctx.fillText(
-      getPickupLabel(pickup),
-      0,
-      -size * 0.72,
-    );
-  }
-
   ctx.restore();
 }
 
@@ -3393,9 +3384,7 @@ export function draw3DEffect(ctx, effect, projection) {
     clamp(effect.ttl / initialTtl, 0, 1) *
     (effect.alpha ?? 1) *
     clamp(1 - projection.distance / VIEW_3D_MAX_DISTANCE, 0.35, 1);
-  const baseY =
-    CANVAS_HEIGHT * 0.46 +
-    clamp(projection.scale * 0.18, 2, CANVAS_HEIGHT * 0.28);
+  const baseY = sceneScreenY(projection.scale, .18);
   const size = clamp(
     projection.scale * Math.max(0.035, effect.size ?? 0.1),
     2,
@@ -3513,11 +3502,13 @@ export function draw3DSprites(
   }
 
   for (const pickup of world.pickups) {
+    const shape = scenePickupShape(world, pickup);
     const projection = project3DSprite(
       world,
       pickup.x,
       pickup.y,
       projectionPlane,
+      pickup.type === "labyrinthLight" ? 0 : Math.hypot(shape.width, shape.depth) / 2,
     );
 
     if (
@@ -3582,22 +3573,15 @@ export function draw3DSprites(
 
   sprites.sort(
     (a, b) =>
-      b.projection.distance -
-      a.projection.distance,
+      b.projection.depth -
+      a.projection.depth,
   );
 
   for (const sprite of sprites) {
-    if (
-      !hasOutdoorDepth(world) && !is3DSpriteVisible(
-        sprite.projection,
-        zBuffer,
-      )
-    ) {
-      continue;
-    }
-
+    // Clip the visible parts, even when the center ray is behind a corner.
     ctx.save();
-    if (!clipOutdoorSprite(ctx, world, sprite.projection)) {
+    const volumePickup = sprite.type === "pickup" && sprite.entity.type !== "labyrinthLight";
+    if (!volumePickup && !clip3DSceneSprite(ctx, world, sprite.projection)) {
       ctx.beginPath();
       for (let ray = 0; ray < zBuffer.length; ray++) {
         if (sprite.projection.depth < zBuffer[ray] + .04) ctx.rect(ray * VIEW_3D_RAY_WIDTH, 0, VIEW_3D_RAY_WIDTH + .5, CANVAS_HEIGHT);
@@ -3619,6 +3603,7 @@ export function draw3DSprites(
         world,
         sprite.entity,
         sprite.projection,
+        zBuffer,
       );
     } else if (sprite.type === "effect") {
       draw3DEffect(

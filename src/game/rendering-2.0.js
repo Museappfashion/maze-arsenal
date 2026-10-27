@@ -1,5 +1,8 @@
 // src/game/rendering-2.0.js
 import { cosmeticPerkStatus } from "./cosmeticPerks.js";
+import { sceneScreenY, projectScenePoint } from "./sceneProjection3D.js";
+import { clip3DSceneSprite } from "./rendering.js?core";
+import { hasOutdoorDepth } from "./outdoorGeometry3D.js";
 import {
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
@@ -729,22 +732,11 @@ function drawPursuitVisuals3D(ctx, world) {
         enemy.y - world.player.y,
       );
 
-    if (distance > 10) {
+    if (distance > 10 || (!hasOutdoorDepth(world) && !hasLineOfSight(world, world.player.x, world.player.y, enemy.x, enemy.y))) {
       continue;
     }
 
-    const bodyHeight =
-      Math.max(
-        26,
-        Math.min(
-          CANVAS_HEIGHT * 0.95,
-          projection.scale *
-            (
-              enemy.radius * 2.35 +
-              0.42
-            ),
-        ),
-      );
+    const bodyHeight = projection.scale * (enemy.radius * 2.35 + .42);
     const bodyWidth =
       bodyHeight *
       (
@@ -756,9 +748,7 @@ function drawPursuitVisuals3D(ctx, world) {
       );
     const centerX =
       projection.screenX;
-    const centerY =
-      CANVAS_HEIGHT * 0.46 -
-      bodyHeight * 0.05;
+    const centerY = sceneScreenY(projection.scale) - bodyHeight * .36;
     const color =
       getPursuitColor(state.progress);
     const pulse =
@@ -770,6 +760,7 @@ function drawPursuitVisuals3D(ctx, world) {
         );
 
     ctx.save();
+    clip3DSceneSprite(ctx, world, projection);
 
     /*
      * Tint only the inner projected enemy body.
@@ -1600,10 +1591,12 @@ function drawOrbitalProjectileTrails(ctx, world) {
 }
 
 function drawOrbitalRuinsIdentity(ctx, world) {
-  drawOrbitalStarfield(ctx, world);
-  if (world.viewMode !== "3d") drawOrbitalNebulaAndPlanet(ctx, world);
-  drawOrbitalDebris(ctx, world);
-  drawOrbitalMeteor(ctx, world);
+  if (world.viewMode !== "3d") {
+    drawOrbitalStarfield(ctx, world);
+    drawOrbitalNebulaAndPlanet(ctx, world);
+    drawOrbitalDebris(ctx, world);
+    drawOrbitalMeteor(ctx, world);
+  }
 
   if (world.viewMode !== "3d") {
     drawOrbitalWreckageSparks2D(
@@ -3067,13 +3060,10 @@ function drawProjectedWorldProps(
   );
 
   for (const entry of projected) {
-    drawFn(
-      ctx,
-      world,
-      entry.item,
-      entry.projection,
-      entry.distance,
-    );
+    ctx.save();
+    clip3DSceneSprite(ctx, world, entry.projection);
+    drawFn(ctx, world, entry.item, entry.projection, entry.distance);
+    ctx.restore();
   }
 }
 
@@ -3379,20 +3369,9 @@ function drawKeepProjectedStatues3D(
     ) => {
       const variant =
         getKeepStatueVariant(statue);
-      const height = Math.max(
-        84,
-        Math.min(
-          CANVAS_HEIGHT * 0.95,
-          projection.scale * 1.7,
-        ),
-      );
+      const height = projection.scale * 1.7;
       const width = height * 0.46;
-      const baseY =
-        CANVAS_HEIGHT * 0.8 +
-        Math.min(
-          CANVAS_HEIGHT * 0.12,
-          projection.scale * 0.045,
-        );
+      const baseY = sceneScreenY(projection.scale);
       const alpha =
         0.96 - Math.min(0.42, distance * 0.022);
 
@@ -3601,19 +3580,8 @@ function drawKeepProjectedTorches3D(
       projection,
       distance,
     ) => {
-      const height = Math.max(
-        26,
-        Math.min(
-          CANVAS_HEIGHT * 0.34,
-          projection.scale * 0.55,
-        ),
-      );
-      const baseY =
-        CANVAS_HEIGHT * 0.57 +
-        Math.min(
-          CANVAS_HEIGHT * 0.08,
-          projection.scale * 0.03,
-        );
+      const height = projection.scale * 0.55;
+      const baseY = sceneScreenY(projection.scale);
       const flicker =
         0.75 +
         0.25 *
@@ -3715,20 +3683,9 @@ function drawKeepProjectedBanners3D(
       projection,
       distance,
     ) => {
-      const height = Math.max(
-        34,
-        Math.min(
-          CANVAS_HEIGHT * 0.42,
-          projection.scale * 0.62,
-        ),
-      );
+      const height = projection.scale * 0.62;
       const width = height * 0.32;
-      const baseY =
-        CANVAS_HEIGHT * 0.56 +
-        Math.min(
-          CANVAS_HEIGHT * 0.1,
-          projection.scale * 0.03,
-        );
+      const baseY = sceneScreenY(projection.scale);
       const sway =
         Math.sin(
           (localWorld.time ?? 0) * 1.3 +
@@ -3762,104 +3719,6 @@ function drawKeepProjectedBanners3D(
       );
       localCtx.closePath();
       localCtx.fill();
-      localCtx.restore();
-    },
-  );
-}
-
-function drawOrbitalProjectedWeaponPickups3D(
-  ctx,
-  world,
-) {
-  const weaponPickups =
-    (world.pickups ?? []).filter(
-      (pickup) => pickup.type === "weapon",
-    );
-
-  drawProjectedWorldProps(
-    ctx,
-    world,
-    weaponPickups.map((pickup) => ({
-      ...pickup,
-      tileX: Math.floor(pickup.x),
-      tileY: Math.floor(pickup.y),
-    })),
-    14,
-    (
-      localCtx,
-      localWorld,
-      pickup,
-      projection,
-      distance,
-    ) => {
-      const radius = Math.max(
-        12,
-        Math.min(
-          CANVAS_HEIGHT * 0.12,
-          projection.scale * 0.16,
-        ),
-      );
-      const centerY =
-        CANVAS_HEIGHT * 0.58 -
-        radius * 0.2 +
-        Math.sin(
-          (localWorld.time ?? 0) * 3 +
-            pickup.x,
-        ) *
-          radius *
-          0.08;
-
-      localCtx.save();
-      localCtx.translate(
-        projection.screenX,
-        centerY,
-      );
-      localCtx.globalCompositeOperation =
-        "lighter";
-      localCtx.strokeStyle =
-        "rgba(103,232,249,0.9)";
-      localCtx.lineWidth = Math.max(
-        1.4,
-        radius * 0.08,
-      );
-      localCtx.rotate(
-        (localWorld.time ?? 0) * 1.1,
-      );
-
-      localCtx.beginPath();
-      for (let side = 0; side < 6; side += 1) {
-        const angle =
-          side * (Math.PI / 3);
-        const x =
-          Math.cos(angle) * radius;
-        const y =
-          Math.sin(angle) * radius;
-
-        if (side === 0) {
-          localCtx.moveTo(x, y);
-        } else {
-          localCtx.lineTo(x, y);
-        }
-      }
-      localCtx.closePath();
-      localCtx.stroke();
-
-      localCtx.rotate(
-        -(localWorld.time ?? 0) * 1.1,
-      );
-      localCtx.globalAlpha = 0.5;
-
-      for (let line = -2; line <= 2; line += 1) {
-        localCtx.fillStyle =
-          "rgba(207,250,254,0.7)";
-        localCtx.fillRect(
-          -radius * 0.6,
-          line * radius * 0.2,
-          radius * 1.2,
-          1,
-        );
-      }
-
       localCtx.restore();
     },
   );
@@ -3942,20 +3801,9 @@ function drawEmeraldProjectedGrowth3D(
       projection,
       distance,
     ) => {
-      const height = Math.max(
-        34,
-        Math.min(
-          CANVAS_HEIGHT * 0.42,
-          projection.scale * 0.62,
-        ),
-      );
+      const height = projection.scale * 0.62;
       const width = height * 0.54;
-      const baseY =
-        CANVAS_HEIGHT * 0.69 +
-        Math.min(
-          CANVAS_HEIGHT * 0.08,
-          projection.scale * 0.025,
-        );
+      const baseY = sceneScreenY(projection.scale);
       const sway =
         Math.sin(
           (localWorld.time ?? 0) * 0.9 +
@@ -4015,70 +3863,19 @@ function drawEmeraldProjectedGrowth3D(
   );
 }
 
-function drawEmeraldProjectedWater3D(
-  ctx,
-  world,
-  props,
-) {
-  drawProjectedWorldProps(
-    ctx,
-    world,
-    props.emeraldWater,
-    11,
-    (
-      localCtx,
-      localWorld,
-      patch,
-      projection,
-      distance,
-    ) => {
-      const width = Math.max(
-        16,
-        Math.min(
-          CANVAS_WIDTH * 0.12,
-          projection.scale * 0.22,
-        ),
-      );
-      const centerY =
-        CANVAS_HEIGHT * 0.82 -
-        Math.min(
-          CANVAS_HEIGHT * 0.12,
-          projection.scale * 0.02,
-        );
-      const ripple =
-        Math.sin(
-          (localWorld.time ?? 0) * 2 +
-            patch.tileX +
-            patch.tileY,
-        );
-
-      localCtx.save();
-      localCtx.translate(
-        projection.screenX,
-        centerY,
-      );
-      localCtx.globalAlpha =
-        0.16 - Math.min(0.06, distance * 0.005);
-      localCtx.strokeStyle = "#bfdbfe";
-      localCtx.lineWidth = 1.1;
-
-      for (let line = 0; line < 3; line += 1) {
-        const y = line * 4;
-        localCtx.beginPath();
-        localCtx.moveTo(
-          -width * 0.6 + ripple * 1.4,
-          y,
-        );
-        localCtx.lineTo(
-          width * 0.6 + ripple * 1.4,
-          y,
-        );
-        localCtx.stroke();
-      }
-
-      localCtx.restore();
-    },
-  );
+function drawEmeraldProjectedWater3D(ctx, world, props) {
+  const patches = props.emeraldWater;
+  if (!patches?.length) return;
+  drawProjectedWorldProps(ctx,world,patches,12,(localCtx,localWorld,patch) => {
+    const points = [[-.35,-.25],[.35,-.25],[.35,.25],[-.35,.25]].map(([x,y]) => projectScenePoint(localWorld.player,[patch.x+x,patch.y+y,.006]));
+    if (points.some((p)=>!p)) return;
+    localCtx.fillStyle = "rgba(56,189,248,.13)";
+    localCtx.strokeStyle = "rgba(191,219,254,.25)";
+    localCtx.lineWidth = 1;
+    localCtx.beginPath();
+    points.forEach((p,i)=>i ? localCtx.lineTo(p.screenX,p.screenY) : localCtx.moveTo(p.screenX,p.screenY));
+    localCtx.closePath(); localCtx.fill(); localCtx.stroke();
+  });
 }
 
 function drawEmeraldInsects3D(ctx, world) {
@@ -4125,10 +3922,6 @@ function drawOrbitalRuinsIdentityGuaranteed(
   );
 
   if (world.viewMode === "3d") {
-    drawOrbitalProjectedWeaponPickups3D(
-      ctx,
-      world,
-    );
     return;
   }
 
@@ -5263,18 +5056,6 @@ function drawLinkedPortal3D(
   world,
   portal,
 ) {
-  if (
-    !hasLineOfSight(
-      world,
-      world.player.x,
-      world.player.y,
-      portal.x,
-      portal.y,
-    )
-  ) {
-    return;
-  }
-
   const projection =
     project3DSprite(
       world,
@@ -5285,27 +5066,16 @@ function drawLinkedPortal3D(
         Math.tan(
           VIEW_3D_FOV / 2,
         ),
+      .45,
     );
 
   if (!projection) {
     return;
   }
 
-  const height =
-    Math.max(
-      30,
-      Math.min(
-        CANVAS_HEIGHT * 0.5,
-        projection.scale * 0.72,
-      ),
-    );
+  const height = projection.scale * 1.3;
   const width = height * 0.34;
-  const centerY =
-    CANVAS_HEIGHT * 0.57 +
-    Math.min(
-      CANVAS_HEIGHT * 0.18,
-      projection.scale * 0.06,
-    );
+  const centerY = sceneScreenY(projection.scale, .65);
   const pulse =
     0.9 +
     0.1 *
@@ -5317,6 +5087,7 @@ function drawLinkedPortal3D(
       );
 
   ctx.save();
+  clip3DSceneSprite(ctx, world, projection);
   ctx.globalCompositeOperation =
     "lighter";
   ctx.shadowBlur = width * 0.8;

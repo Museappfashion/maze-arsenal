@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { DEFENSE_PATH, DEFENSE_WAVES, DEFENSE_TYPES, createDefenseGame, placeDefense, upgradeDefense, sellDefense, startDefenseWave, stepDefense, defenseTowerStats, defenseUpgradeCost, defenseWave, defensePosition, isDefensePath } from "../../src/game/towerDefense.js";
+import { DEFENSE_PATH, DEFENSE_WAVES, DEFENSE_TYPES, createDefenseGame, placeDefense, upgradeDefense, sellDefense, startDefenseWave, stepDefense, setDefenseSpeed, defenseTowerStats, defenseStatSummary, defenseUpgradeCost, defenseWave, defenseEnemyStats, defensePosition, isDefensePath } from "../../src/game/towerDefense.js";
 
 function running() { const game = createDefenseGame(); game.energy = 2000; startDefenseWave(game); game.queue = []; game.spawnIn = 100; return game; }
 function enemy(game, { x = 2.5, y = 2.5, hp = 100, armor = 0, distance = 2, speed = 0, ...rest } = {}) {
@@ -28,6 +28,21 @@ test("upgrades improve statistics, have escalating costs, stop at level 3, and s
   assert.equal(upgradeDefense(game, tower.id), false);
   const remaining = game.energy; assert.equal(sellDefense(game, tower.id), true); assert.equal(game.energy, remaining + Math.floor((90 + 72 + 117) * .7));
   assert.equal(sellDefense(game, tower.id), false); assert.equal(game.towers.length, 0);
+});
+
+test("upgrade previews use the same damage, cooldown, range, slow, splash, and chain values as combat", () => {
+  for (const type of Object.keys(DEFENSE_TYPES)) for (let level = 1; level < 3; level++) {
+    const game = createDefenseGame(); game.energy = 10000; placeDefense(game, type, 2, 1);
+    const tower = game.towers[0]; if (level === 2) upgradeDefense(game, tower.id);
+    const forecast = defenseStatSummary({ ...tower, level: tower.level + 1 });
+    upgradeDefense(game, tower.id); assert.equal(defenseStatSummary(tower), forecast);
+    const stats = defenseTowerStats(tower);
+    assert.ok(forecast.includes(`${stats.range.toFixed(2)} tile range`));
+    if (type === "frost") assert.ok(forecast.includes(`${Math.round((1 - stats.slow) * 100)}% slow`));
+    else assert.ok(forecast.includes(`${stats.damage} damage`) && forecast.includes(`${stats.cooldown.toFixed(2)}s cooldown`));
+    if (type === "demolition") assert.ok(forecast.includes(`${stats.splash.toFixed(2)} tile splash`));
+    if (type === "overcharge") assert.ok(forecast.includes(`${stats.chain} chain targets`));
+  }
 });
 
 test("frost slows every nearby enemy without damage or stacking overlapping fields", () => {
@@ -68,11 +83,53 @@ test("wave generation grows, uses familiar enemy types, and sends Wardens every 
   assert.equal(game.wave, 1); assert.ok(game.enemies[0].maxHp > 0);
 });
 
+test("later waves add real health pressure, veterans, rushes, armor, regeneration, and slow resistance", () => {
+  assert.ok(defenseEnemyStats("crawler", 20).hp > defenseEnemyStats("crawler", 5).hp * 5);
+  const ordinary = defenseEnemyStats("scout", 12, 1), veteran = defenseEnemyStats("scout", 12, 0);
+  assert.ok(veteran.hp > ordinary.hp && veteran.speed > ordinary.speed && veteran.slowFloor > ordinary.slowFloor);
+  assert.equal(defenseEnemyStats("scout", 10, 0).veteran, false);
+  const boss = defenseEnemyStats("warden", 10);
+  assert.equal(boss.boss, true); assert.ok(boss.maxHp > 2000 && boss.armor > .3 && boss.slowFloor >= .6);
+  assert.equal(defenseWave(13).filter((kind) => kind === "charger").length > defenseWave(13).length / 3, true);
+  assert.ok(defenseWave(14).includes("brute"));
+  const game = running(); placeDefense(game, "frost", 2, 1); upgradeDefense(game, game.towers[0].id); upgradeDefense(game, game.towers[0].id);
+  const resistant = enemy(game, { ...veteran, speed: 1 });
+  stepDefense(game, .01); assert.equal(resistant.slow, veteran.slowFloor);
+  const regeneration = running(); const crawler = enemy(regeneration, { ...defenseEnemyStats("crawler", 9), hp: 50, speed: 0 });
+  stepDefense(regeneration, .1); assert.ok(crawler.hp > 50);
+});
+
+test("Warden protection reduces nearby damage and Spitters rally nearby enemy movement", () => {
+  const protectedGame = running(); placeDefense(protectedGame, "rapidFire", 2, 1);
+  const protectedEnemy = enemy(protectedGame); enemy(protectedGame, { kind: "warden", x: 1.5, distance: 1, hp: 500 });
+  stepDefense(protectedGame, .01); assert.equal(protectedEnemy.protected, true); assert.ok(Math.abs(protectedEnemy.hp - 93.84) < 1e-8);
+  const rally = running(); const runner = enemy(rally, { speed: 1 }); enemy(rally, { kind: "spitter", x: 1.5, distance: 1 });
+  stepDefense(rally, .1); assert.ok(Math.abs(runner.distance - 2.112) < 1e-8);
+});
+
 test("pausing freezes all simulation and economy actions; large deltas cannot fast-forward a background tab", () => {
   const game = running(); placeDefense(game, "rapidFire", 2, 1); enemy(game); game.paused = true;
   const serialized = JSON.stringify(game); stepDefense(game, 100); assert.equal(JSON.stringify(game), serialized);
   assert.equal(upgradeDefense(game, game.towers[0].id), false); assert.equal(sellDefense(game, game.towers[0].id), false);
   game.paused = false; stepDefense(game, 100); assert.ok(game.time <= .250001);
+});
+
+test("1x, 2x, and 3x speed accelerate fixed simulation but return only actual active playtime", () => {
+  for (const speed of [1, 2, 3]) {
+    const game = running(); enemy(game, { speed: 1 });
+    assert.equal(setDefenseSpeed(game, speed), true);
+    const active = stepDefense(game, .2);
+    assert.ok(Math.abs(game.time - .2 * speed) < 1e-8);
+    assert.ok(Math.abs(active - .2) < 1e-8);
+    assert.ok(Math.abs(game.enemies[0].distance - (2 + .2 * speed)) < 1e-8);
+    game.paused = true; assert.equal(stepDefense(game, 1), 0);
+  }
+  const invalid = running(); enemy(invalid);
+  for (const value of [0, 4, -1, NaN, "3"]) assert.equal(setDefenseSpeed(invalid, value), false);
+  assert.equal(invalid.speed, 1);
+  setDefenseSpeed(invalid, 3); assert.ok(Math.abs(stepDefense(invalid, 100) - .25) < 1e-8); assert.ok(Math.abs(invalid.time - .75) < 1e-8);
+  const finishing = running(); placeDefense(finishing, "rapidFire", 2, 1); enemy(finishing, { hp: 1 }); setDefenseSpeed(finishing, 3);
+  const active = stepDefense(finishing, .2); assert.equal(finishing.status, "building"); assert.ok(active > 0 && active < .2);
 });
 
 test("escaped enemies damage the core without kill rewards; defeat stops the wave", () => {
@@ -100,7 +157,7 @@ test("path interpolation follows bends and reaches the core exactly", () => {
   assert.equal(Object.keys(DEFENSE_TYPES).length, 5);
 });
 
-test("all 20 waves are beatable using only the starting budget and earned energy", () => {
+test("all 20 waves are beatable with earned energy, while late assaults put core health at risk", () => {
   const game = createDefenseGame();
   for (const [x, y] of [[3, 4], [5, 6], [11, 5]]) assert.equal(placeDefense(game, "rapidFire", x, y), true);
   // A simple repeatable strategy: improve existing damage towers, then cover the most route.
@@ -128,5 +185,17 @@ test("all 20 waves are beatable using only the starting budget and earned energy
     while (game.status === "running" && steps++ < 4000) stepDefense(game, .25);
     assert.equal(game.status, wave === 20 ? "victory" : "building", `Wave ${wave} must be survivable`);
   }
-  assert.equal(game.wave, 20); assert.ok(game.lives > 0); assert.ok(game.kills >= 500);
+  assert.equal(game.wave, 20); assert.ok(game.lives > 0 && game.lives < 20); assert.ok(game.kills >= 500);
+});
+
+test("an affordable opening survives early waves, but ignoring all upgrades loses before the final waves", () => {
+  const game = createDefenseGame();
+  for (const [x, y] of [[3, 4], [5, 6], [11, 5]]) assert.equal(placeDefense(game, "rapidFire", x, y), true);
+  for (let wave = 1; wave <= 20; wave++) {
+    startDefenseWave(game); let steps = 0;
+    while (game.status === "running" && steps++ < 4000) stepDefense(game, .25);
+    if (wave <= 3) assert.equal(game.status, "building", `The starting budget must cover opening wave ${wave}`);
+    if (game.status === "defeat") break;
+  }
+  assert.equal(game.status, "defeat"); assert.ok(game.wave > 3 && game.wave < 15);
 });

@@ -593,70 +593,6 @@ function drawLegendaryPickups2D(ctx, world) {
   ctx.restore();
 }
 
-function drawLegendaryPickups3D(ctx, world) {
-  for (const pickup of world.pickups ?? []) {
-    if (
-      !pickup.legendary ||
-      !hasLineOfSight(
-        world,
-        world.player.x,
-        world.player.y,
-        pickup.x,
-        pickup.y,
-      )
-    ) {
-      continue;
-    }
-
-    const dx = pickup.x - world.player.x;
-    const dy = pickup.y - world.player.y;
-    const distance = Math.hypot(dx, dy);
-    const angle = angleDelta(
-      Math.atan2(dy, dx),
-      world.player.facing,
-    );
-
-    if (
-      distance > VIEW_3D_MAX_DISTANCE ||
-      Math.abs(angle) > VIEW_3D_FOV / 2
-    ) {
-      continue;
-    }
-
-    const x =
-      CANVAS_WIDTH *
-      (0.5 + angle / VIEW_3D_FOV);
-    const size =
-      Math.max(
-        10,
-        Math.min(55, 80 / Math.max(0.5, distance)),
-      );
-    const y =
-      CANVAS_HEIGHT *
-      (0.5 + Math.min(0.2, distance * 0.006));
-
-    ctx.save();
-    ctx.strokeStyle = LEGENDARY_GOLD;
-    ctx.fillStyle = LEGENDARY_WHITE;
-    ctx.shadowBlur = 22;
-    ctx.shadowColor = LEGENDARY_GOLD;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(
-      x,
-      y,
-      size,
-      0,
-      Math.PI * 2,
-    );
-    ctx.stroke();
-    ctx.font = `900 ${Math.max(14, size)}px system-ui`;
-    ctx.textAlign = "center";
-    ctx.fillText("★", x, y - size * 1.15);
-    ctx.restore();
-  }
-}
-
 function getVisibleTileBounds(world) {
   const camera = getCamera(world);
   const scale = DRAW_TILE * getWorldRenderZoom(world);
@@ -2347,7 +2283,6 @@ export function drawWorld(ctx, world) {
   }
 
   if (world.viewMode === "3d") {
-    drawLegendaryPickups3D(ctx, world);
     drawBladeProjectiles3D(ctx, world);
     drawSpecialHeldWeapon3D(ctx, world);
   } else {

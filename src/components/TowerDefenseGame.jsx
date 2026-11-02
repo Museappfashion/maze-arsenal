@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import { StatCard } from "./StatCard.jsx";
 import { ENEMY_TYPES } from "../config/enemies.js";
 import { recordActivePlay, flushPlayerProgress } from "../services/playerProgress.js";
 import { DEFENSE_COLUMNS, DEFENSE_ROWS, DEFENSE_TYPES, DEFENSE_WAVES, DEFENSE_SPEEDS, createDefenseGame, placeDefense, upgradeDefense, sellDefense, startDefenseWave, stepDefense, setDefenseSpeed, defenseTowerStats, defenseStatSummary, defenseUpgradeCost, defenseSellValue, defenseWave, defenseWaveBrief } from "../game/towerDefense.js";
-import { drawDefenseGame, DEFENSE_CANVAS_WIDTH, DEFENSE_CANVAS_HEIGHT } from "../game/towerDefenseRenderer.js";
+import { drawDefenseGame, drawDefensePowerIcon, DEFENSE_CANVAS_WIDTH, DEFENSE_CANVAS_HEIGHT } from "../game/towerDefenseRenderer.js";
 import "../styles/towerDefense.css";
 
 const powerKeys = Object.keys(DEFENSE_TYPES);
@@ -76,57 +77,61 @@ export function TowerDefenseGame({ onBack, playerName }) {
   const previewWave = Math.min(DEFENSE_WAVES, game.status === "building" ? game.wave + 1 : game.wave || 1);
   const wavePreview = [...new Set(defenseWave(previewWave))].map((key) => ENEMY_TYPES[key].label).join(" · ");
   return <main className="td-screen" data-revision={revision}>
-    <div className="td-content">
-      <header className="td-header">
-        <div><p className="td-kicker">MIST MAZE · SURVIVAL</p><h1>Powerup Defense</h1><p className="td-subtitle">Build your defenses. Keep the enemy waves away from the core.</p></div>
-        <button className="td-button" type="button" onClick={() => { flushPlayerProgress(); onBack(); }}>Back to first page</button>
-      </header>
-      <section className="td-stats" aria-label="Battle status">
-        <div><span>Core health</span><strong className={game.lives <= 5 ? "td-danger" : ""}>{game.lives} / 20</strong></div>
-        <div><span>Battlefield energy</span><strong className="td-energy">{game.energy}</strong></div>
-        <div><span>Wave</span><strong>{game.wave} / {DEFENSE_WAVES}</strong></div>
-        <div><span>Enemies defeated</span><strong>{game.kills}</strong></div>
-      </section>
-      <div className="td-layout">
-        <section className="td-arena-panel" aria-label="Defense arena">
-          <div className="td-arena-heading"><strong>Defend the crystal core</strong><span><i className="td-path-key" /> Enemy route</span></div>
-          <div className="td-canvas-wrap">
-            <canvas ref={canvasRef} className="td-canvas" tabIndex={0} role="application" aria-label="Tower defense board. Select a powerup, then click an empty tile. Keyboard: arrows choose tile, Enter places or selects, keys 1 to 5 choose powerup, Space starts or pauses, S changes speed." aria-describedby="td-board-help" onKeyDown={boardKeys}
-              onPointerMove={(event) => { hoverRef.current = pointerTile(event); }} onPointerLeave={() => { hoverRef.current = null; }}
-              onPointerDown={(event) => { if (event.button !== 0) return; event.currentTarget.focus({ preventScroll: true }); const tile = pointerTile(event); chooseTile(tile.x, tile.y); }} />
-            {(game.paused || ended) && <div className="td-overlay"><div><p className="td-kicker">{ended ? "RUN COMPLETE" : "TAKE YOUR TIME"}</p><h2>{game.status === "victory" ? "Core protected!" : game.status === "defeat" ? "The core has fallen" : "Paused"}</h2><p>{ended ? `${game.kills} enemies defeated · ${game.wave} waves reached` : "Your defenses and enemies are waiting."}</p><button type="button" className="td-button td-primary" onClick={ended ? restart : togglePause}>{ended ? "Play again" : "Resume battle"}</button></div></div>}
-          </div>
-          <div className="td-battle-controls">
-            {game.status === "building" && <button type="button" className="td-button td-primary" onClick={() => { startDefenseWave(game); refresh(); }}>Start wave {game.wave + 1}</button>}
-            {game.status === "running" && <button type="button" className="td-button td-primary" onClick={togglePause}>{game.paused ? "Resume" : "Pause"}</button>}
-            <div className="td-speed-controls" role="group" aria-label="Battle speed">{DEFENSE_SPEEDS.map((speed) => <button key={speed} type="button" className={`td-button ${game.speed === speed ? "td-speed-active" : ""}`} aria-pressed={game.speed === speed} disabled={ended} onClick={() => { setDefenseSpeed(game, speed); refresh(); }}>{speed}×</button>)}</div>
-            {!ended && <button type="button" className="td-button" onClick={restart}>Restart</button>}
-            <span>{game.status === "running" ? `${game.enemies.length} on the route · ${game.queue.length} approaching` : game.status === "building" ? "Build and upgrade before the next wave." : "A new run starts with 270 energy."}</span>
-          </div>
-          <p className="td-message" role="status">{game.message}</p>
-          <p className="td-wave-preview">{game.status === "building" ? "Next wave" : "This wave"}: {defenseWave(previewWave).length} enemies · {wavePreview}</p>
-          <p className="td-wave-traits">{defenseWaveBrief(previewWave)}</p>
-          <p id="td-board-help" className="td-help">Click or tap an empty tile to build; select a defense to upgrade or sell. Keyboard: arrows + Enter to build, 1–5 to choose a powerup, Space to start or pause, S to change speed. Playtime counts real active time at every speed.</p>
-        </section>
-        <aside className="td-shop" aria-label="Powerup defenses">
-          <div className="td-shop-heading"><h2>Place powerups</h2><p>Enemies arrive in waves. Your energy is earned here and resets each run.</p></div>
-          <div className="td-power-grid">{powerKeys.map((key, index) => {
-            const type = DEFENSE_TYPES[key];
-            return <button key={key} type="button" className={`td-power ${placing === key ? "td-power-selected" : ""}`} aria-pressed={placing === key} onClick={() => choose(key)} style={{ "--td-power-color": type.color }}>
-              <span className="td-power-symbol">{type.symbol}</span><span className="td-power-copy"><strong>{type.label}</strong><small>{type.description}</small><b>{type.cost} energy <span>· key {index + 1}</span></b></span>
-            </button>;
-          })}</div>
-          {selected && <section className="td-upgrade" aria-label="Selected defense">
-            <h3>{selectedStats.label} <span>Lv. {selected.level}</span></h3>
-            <p className="td-current-stats"><strong>Current:</strong> {defenseStatSummary(selected)}</p>
-            <p className="td-next-stats">{selected.level < 3 ? <><strong>Next · Lv. {selected.level + 1}:</strong> {defenseStatSummary({ ...selected, level: selected.level + 1 })}</> : <strong>Maximum level · these are your final stats.</strong>}</p>
-            <p>{selected.kills} enemies defeated</p>
-            <div>{selected.level < 3 ? <button type="button" className="td-button td-primary" disabled={game.energy < defenseUpgradeCost(selected) || game.paused || ended} onClick={() => { upgradeDefense(game, selected.id); refresh(); }}>Upgrade · {defenseUpgradeCost(selected)}</button> : <span className="td-maxed">Maximum level</span>}<button type="button" className="td-button" disabled={game.paused || ended} onClick={() => { sellDefense(game, selected.id); refresh(); }}>Sell · {defenseSellValue(selected)}</button></div>
-          </section>}
-          <p className="td-tip">Cover several bends with one defense. Frost holds groups in place for Demolition; Precision handles armored Brutes and Wardens. Win by surviving all 20 waves.</p>
-        </aside>
+    <section className="td-arena-panel" aria-label="Defense arena">
+      <div className="td-canvas-wrap">
+        <canvas ref={canvasRef} className="td-canvas" tabIndex={0} role="application" aria-label="Tower defense board. Select a powerup, then click an empty tile. Keyboard: arrows choose tile, Enter places or selects, keys 1 to 5 choose powerup, Space starts or pauses, S changes speed." aria-describedby="td-board-help" onKeyDown={boardKeys}
+          onPointerMove={(event) => { hoverRef.current = pointerTile(event); }} onPointerLeave={() => { hoverRef.current = null; }}
+          onPointerDown={(event) => { if (event.button !== 0) return; event.currentTarget.focus({ preventScroll: true }); const tile = pointerTile(event); chooseTile(tile.x, tile.y); }} />
+        <div className="td-arena-label"><strong>POWERUP DEFENSE</strong><span>Protect the core · Wave {game.wave || 1} / {DEFENSE_WAVES}</span></div>
+        <div className="td-arena-message" role="status">{game.message}</div>
+        {(game.paused || ended) && <div className="td-overlay"><div><p className="td-kicker">{ended ? "RUN COMPLETE" : "TAKE YOUR TIME"}</p><h2>{game.status === "victory" ? "Core protected!" : game.status === "defeat" ? "The core has fallen" : "Paused"}</h2><p>{ended ? `${game.kills} enemies defeated · ${game.wave} waves reached` : "Your defenses and enemies are waiting."}</p><button type="button" className="td-button td-primary" onClick={ended ? restart : togglePause}>{ended ? "Play again" : "Resume battle"}</button></div></div>}
       </div>
-    </div>
+    </section>
+    <aside className="td-sidebar" aria-label="Defense HUD">
+      <header className="td-header">
+        <div><p className="td-kicker">MIST MAZE · SURVIVAL</p><h1>Powerup Defense</h1></div>
+        <button className="td-button td-back" type="button" onClick={() => { flushPlayerProgress(); onBack(); }}>Back to first page</button>
+      </header>
+      <div className="td-live-hud">
+        <section className="td-stats" aria-label="Battle status">
+          <StatCard label="Core health" value={<strong className={game.lives <= 5 ? "td-danger" : ""}>{game.lives} / 20</strong>} />
+          <StatCard label="Energy" value={<strong className="td-energy">{game.energy}</strong>} />
+          <StatCard label="Wave" value={<strong>{game.wave} / {DEFENSE_WAVES}</strong>} />
+          <StatCard label="Defeated" value={<strong>{game.kills}</strong>} />
+        </section>
+        <div className="td-battle-controls">
+          {game.status === "building" && <button type="button" className="td-button td-primary" onClick={() => { startDefenseWave(game); refresh(); }}>Start wave {game.wave + 1}</button>}
+          {game.status === "running" && <button type="button" className="td-button td-primary" onClick={togglePause}>{game.paused ? "Resume" : "Pause"}</button>}
+          <div className="td-speed-controls" role="group" aria-label="Battle speed">{DEFENSE_SPEEDS.map((speed) => <button key={speed} type="button" className={`td-button ${game.speed === speed ? "td-speed-active" : ""}`} aria-pressed={game.speed === speed} disabled={ended} onClick={() => { setDefenseSpeed(game, speed); refresh(); }}>{speed}×</button>)}</div>
+          {!ended && <button type="button" className="td-button td-restart" onClick={restart}>Restart</button>}
+        </div>
+        {selected && <section className="td-upgrade" aria-label="Selected defense">
+          <h3>{selectedStats.label} <span>Lv. {selected.level}</span></h3>
+          <p className="td-current-stats"><strong>Current:</strong> {defenseStatSummary(selected)}</p>
+          <p className="td-next-stats">{selected.level < 3 ? <><strong>Next · Lv. {selected.level + 1}:</strong> {defenseStatSummary({ ...selected, level: selected.level + 1 })}</> : <strong>Maximum level · these are your final stats.</strong>}</p>
+          <p>{selected.kills} enemies defeated</p>
+          <div>{selected.level < 3 ? <button type="button" className="td-button td-primary" disabled={game.energy < defenseUpgradeCost(selected) || game.paused || ended} onClick={() => { upgradeDefense(game, selected.id); refresh(); }}>Upgrade · {defenseUpgradeCost(selected)}</button> : <span className="td-maxed">Maximum level</span>}<button type="button" className="td-button" disabled={game.paused || ended} onClick={() => { sellDefense(game, selected.id); refresh(); }}>Sell · {defenseSellValue(selected)}</button></div>
+        </section>}
+      </div>
+      <div className="td-shop" aria-label="Powerup defenses">
+        <div className="td-shop-heading"><h2>Powerups</h2><p>Select a powerup, then place it beside the enemy route.</p></div>
+        <div className="td-power-grid">{powerKeys.map((key, index) => {
+          const type = DEFENSE_TYPES[key];
+          return <button key={key} type="button" className={`td-power ${placing === key ? "td-power-selected" : ""}`} aria-pressed={placing === key} onClick={() => choose(key)} style={{ "--td-power-color": type.color }}>
+            <DefensePowerIcon type={key} /><span className="td-power-copy"><strong>{type.label}</strong><small>{type.description}</small><b>{type.cost} energy <span>· key {index + 1}</span></b></span>
+          </button>;
+        })}</div>
+        <div className="td-wave-details"><p className="td-wave-preview">{game.status === "building" ? "Next wave" : "This wave"}: {defenseWave(previewWave).length} enemies · {wavePreview}</p><p className="td-wave-traits">{defenseWaveBrief(previewWave)}</p></div>
+        <p className="td-tip">Cover several bends with one defense. Frost holds groups in place for Demolition; Precision handles armored Brutes and Wardens. Win by surviving all 20 waves.</p>
+        <p id="td-board-help" className="td-help">Click or tap an empty tile to build; select a defense to upgrade or sell. Arrows + Enter to build · 1–5 choose powerup · Space starts or pauses · S changes speed. Energy resets each run; playtime counts real active time at every speed.</p>
+      </div>
+    </aside>
   </main>;
+}
+
+function DefensePowerIcon({ type }) {
+  const canvas = useRef(null);
+  useEffect(() => { drawDefensePowerIcon(canvas.current.getContext("2d"), type); }, [type]);
+  return <canvas ref={canvas} className="td-power-symbol" width="44" height="44" aria-hidden="true" />;
 }
 export default TowerDefenseGame;

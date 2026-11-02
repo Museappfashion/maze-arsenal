@@ -28,7 +28,7 @@ function getWorld() {
 }
 
 function getCanvas() {
-  return document.querySelector(".maze-frame > canvas");
+  return document.querySelector(".maze-game-root .maze-frame > canvas");
 }
 
 function ensureRoot() {

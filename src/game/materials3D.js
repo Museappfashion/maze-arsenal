@@ -1,4 +1,5 @@
 import { orbitalPlatformSample } from "./outdoorScenes3D.js";
+import { createOutdoorMesh, createOutdoorRaster, renderOutdoorMeshes } from "./outdoorGeometry3D.js";
 // Cached, world-anchored outdoor materials. These never affect maze collision.
 const cache = new Map();
 let floorSurface = null;
@@ -76,18 +77,13 @@ function materials(key) {
   f.putImageData(floorImage, 0, 0);
   if (key === "medieval") paintFlagstones(f);
   if (key === "space") {
-    // Faceted asteroid rock uses the same cool greys as the solid barriers.
-    // Large patches read as physical ground; small mineral flecks add scale.
-    for (let i = 0; i < 15; i++) {
+    // A faint continuous gravity field gives navigation a readable floor while
+    // leaving the stars and distant nebula visible under every footstep.
+    f.fillStyle = "#22394c"; f.fillRect(0, 0, 128, 128);
+    f.strokeStyle = "#607d9022"; f.lineWidth = .6;
+    for (let i = 0; i < 6; i++) {
       const x = noise(i, 71) * 128, y = noise(i, 72) * 128;
-      f.fillStyle = ["#313b5352", "#0f172b70", "#53607730"][i % 3];
-      f.beginPath(); f.moveTo(x, y); f.lineTo(x + 6, y - 8); f.lineTo(x + 24, y - 2); f.lineTo(x + 18, y + 12); f.lineTo(x - 3, y + 6); f.closePath(); f.fill();
-    }
-    f.strokeStyle = "#272d3d"; f.lineWidth = 1.1;
-    f.beginPath(); f.moveTo(5, 12); f.lineTo(38, 47); f.lineTo(29, 71); f.moveTo(38, 47); f.lineTo(72, 55); f.lineTo(83, 78); f.stroke();
-    for (let i = 0; i < 20; i++) {
-      f.fillStyle = i % 3 ? "#6e829a2a" : "#769eb83d";
-      f.fillRect(noise(i, 73) * 128, noise(i, 74) * 128, 1.4, .7);
+      f.beginPath(); f.ellipse(x, y, 5 + noise(i, 73) * 12, 2, -.3, 0, TAU); f.stroke();
     }
   } else if (key === "jungle") {
     for (let i = 0; i < 72; i++) {
@@ -148,16 +144,59 @@ function materials(key) {
   cache.set(key, result); return result;
 }
 
+const orbitalBeltCache = new WeakMap();
+function orbitalBelt(world) {
+  let belt = orbitalBeltCache.get(world);
+  if (belt) return belt;
+  belt = [];
+  const mapWidth = world.width || world.grid?.[0]?.length || 60, mapHeight = world.height || world.grid?.length || 60;
+  for (let y = -24; y <= mapHeight + 24; y += 7) for (let x = -24; x <= mapWidth + 24; x += 7) {
+    const rock = createOutdoorMesh("space", x, y);
+    const scale = .45 + noise(x, y, 93) * 1.25, z = -3.5 - noise(x, y, 94) * 7;
+    const dx = (noise(x, y, 95) - .5) * 5, dy = (noise(x, y, 96) - .5) * 5;
+    const vertex = (v) => [rock.x + dx + (v[0] - rock.x) * scale, rock.y + dy + (v[1] - rock.y) * scale, z + v[2] * scale];
+    belt.push({ x: rock.x + dx, y: rock.y + dy, radius: scale, triangles: rock.triangles.map(({ a, b, c, color }) => ({ a: vertex(a), b: vertex(b), c: vertex(c), color })) });
+  }
+  orbitalBeltCache.set(world, belt); return belt;
+}
+
+let orbitalBeltSurface;
+function drawOrbitalBelt(ctx, belt, camera, plane, width, height, horizon) {
+  // The deep belt uses its own small raster; it never replaces the depth map
+  // of the playable scene. Perspective and near clipping share the same code.
+  const scale = 3, w = Math.ceil(width / scale), h = Math.ceil(height / scale);
+  if (!orbitalBeltSurface || orbitalBeltSurface.width !== w || orbitalBeltSurface.height !== h) {
+    const surface = canvas(w, h); if (!surface) return;
+    const context = surface.getContext("2d");
+    orbitalBeltSurface = { ...createOutdoorRaster(w, h), surface, context, image: context.createImageData(w, h) };
+  }
+  const target = orbitalBeltSurface;
+  renderOutdoorMeshes(target, belt, camera, { plane: plane / scale, horizon: horizon / scale, maxDistance: 48, theme: "space" });
+  target.image.data.set(target.pixels); target.context.putImageData(target.image, 0, 0);
+  ctx.imageSmoothingEnabled = false; ctx.globalAlpha = .65; ctx.drawImage(target.surface, 0, 0, width, height); ctx.globalAlpha = 1;
+}
+
 export function draw3DSky(ctx, world, width, horizon, height = horizon) {
   if (world.labyrinthMode) return;
   const key = world.level.themeKey;
   ctx.save(); ctx.globalAlpha = 1;
   if (key === "space") {
     ctx.fillStyle = "#02040d"; ctx.fillRect(0, 0, width, height);
-    for (const [angle, y, hue] of [[-.3, .2, "#182c4b"], [.5, .8, "#251e48"]]) {
-      const offset = Math.atan2(Math.sin(angle - world.player.facing), Math.cos(angle - world.player.facing));
-      const x = width / 2 + Math.tan(offset) * width * .74;
-      if (Math.abs(offset) < 1) { const cloud = ctx.createRadialGradient(x, height * y, 2, x, height * y, width * .45); cloud.addColorStop(0, hue); cloud.addColorStop(1, "#02040d00"); ctx.fillStyle = cloud; ctx.fillRect(0, 0, width, height); }
+    // Distant clouds have fixed positions in the world. Moving changes their
+    // parallax as well as their bearing; they never turn into a horizon or moon.
+    const plane = width * .74, cos = Math.cos(world.player.facing), sin = Math.sin(world.player.facing);
+    const cloudSpacing = 44;
+    const centerX = Math.floor(world.player.x / cloudSpacing), centerY = Math.floor(world.player.y / cloudSpacing);
+    for (let cy = centerY - 2; cy <= centerY + 2; cy++) for (let cx = centerX - 2; cx <= centerX + 2; cx++) {
+      const wx = cx * cloudSpacing + 17, wy = cy * cloudSpacing + 23;
+      const dx = wx - world.player.x, dy = wy - world.player.y;
+      const depth = dx * cos + dy * sin, side = -dx * sin + dy * cos;
+      if (depth < 8 || depth > 110 || Math.abs(side) > depth * 1.4) continue;
+      const x = width / 2 + side * plane / depth, y = horizon + 11 * plane / depth;
+      const radius = 24 * plane / depth;
+      const cloud = ctx.createRadialGradient(x, y, 0, x, y, radius);
+      cloud.addColorStop(0, "#4d326b"); cloud.addColorStop(.27, "#2b345e"); cloud.addColorStop(.65, "#172c493b"); cloud.addColorStop(1, "#02040d00");
+      ctx.fillStyle = cloud; ctx.fillRect(0, 0, width, height);
     }
     for (let i = 0; i < 900; i++) {
       let angle = noise(i, 61) * TAU - world.player.facing; angle = Math.atan2(Math.sin(angle), Math.cos(angle));
@@ -165,21 +204,11 @@ export function draw3DSky(ctx, world, width, horizon, height = horizon) {
       const x = width / 2 + Math.tan(angle) * width * .74, y = noise(i, 62) * height;
       ctx.globalAlpha = .4 + noise(i, 63) * .6; ctx.fillStyle = i % 6 ? "#d4e0ef" : "#8bb3df"; ctx.fillRect(x, y, i % 11 ? 1 : 2, i % 11 ? 1 : 2);
     }
-    // A sparse distant belt makes the setting an asteroid field. These tiny
-    // world-anchored silhouettes never cover the traversable near geometry.
-    ctx.globalAlpha = 1;
-    for (let i = 0; i < 18; i++) {
-      let angle = noise(i, 81) * TAU - world.player.facing; angle = Math.atan2(Math.sin(angle), Math.cos(angle));
-      if (Math.abs(angle) > .8) continue;
-      const x = width / 2 + Math.tan(angle) * width * .74, y = horizon * (.17 + noise(i, 82) * .55), radius = 2 + noise(i, 83) * 6;
-      ctx.fillStyle = i % 2 ? "#303743" : "#434752"; ctx.beginPath();
-      for (let j = 0; j < 7; j++) {
-        const a = j * TAU / 7, r = radius * (.72 + noise(i, j, 84) * .3);
-        const px = x + Math.cos(a) * r, py = y + Math.sin(a) * r * .7;
-        if (j) ctx.lineTo(px, py); else ctx.moveTo(px, py);
-      }
-      ctx.closePath(); ctx.fill();
-    }
+    // A loose belt hangs several metres BELOW the traversable field. Each
+    // faceted body is projected from fixed world vertices, so walking and
+    // turning reveal different sides without screen-facing scenery strips.
+    const belt = orbitalBelt(world);
+    drawOrbitalBelt(ctx, belt, world.player, plane, width, height, horizon);
   } else if (key === "city") {
     const sky = ctx.createLinearGradient(0, 0, 0, horizon); sky.addColorStop(0, "#242a31"); sky.addColorStop(1, "#67717a"); ctx.fillStyle = sky; ctx.fillRect(0, 0, width, horizon);
   } else if (key === "jungle") {
@@ -208,7 +237,7 @@ export function drawPerspectiveFloor(ctx, world, plane, width, height, horizon, 
       const tx = Math.floor(wx * frequency) & 127, ty = Math.floor(wy * frequency) & 127;
       const from = (ty * 128 + tx) * 4, to = (row * w + col) * 4;
       const platform = key === "space" && depth <= maxDistance ? orbitalPlatformSample(world, wx, wy) : key === "space" ? 0 : 1;
-      const bevel = key === "space" && platform === 2 ? 1.18 : 1;
+      const bevel = key === "space" && platform === 2 ? 2.1 : 1;
       dst[to] = src[from] * shade * bevel; dst[to + 1] = src[from + 1] * shade * bevel; dst[to + 2] = src[from + 2] * shade * bevel;
       if (key === "jungle") {
         const fog = Math.min(1, Math.max(0, depth - 6) / maxDistance);
@@ -216,7 +245,7 @@ export function drawPerspectiveFloor(ctx, world, plane, width, height, horizon, 
         dst[to + 1] = dst[to + 1] * (1 - fog) + 58 * fog;
         dst[to + 2] = dst[to + 2] * (1 - fog) + 35 * fog;
       }
-      dst[to + 3] = platform ? 255 : 0;
+      dst[to + 3] = key === "space" ? (platform === 2 ? 135 : platform ? 58 : 0) : platform ? 255 : 0;
       wx -= forwardY * sideStep; wy += forwardX * sideStep;
     }
   }

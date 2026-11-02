@@ -68,23 +68,15 @@ export function createOutdoorMesh(theme, tileX, tileY) {
     }
   } else {
     const low = .13 + noise(tileX, tileY, 11) * .065;
-    const height = 1.05 + noise(tileX, tileY, 12) * 1.05;
+    const height = 1.02 + noise(tileX, tileY, 12) * 1.2;
     const dx = (noise(tileX, tileY, 14) - .5) * .2, dy = (noise(tileX, tileY, 15) - .5) * .2;
     const stone = noise(tileX, tileY, 16);
-    const color = [101 + stone * 32, 105 + stone * 28, 119 + stone * 30];
+    const color = [81 + stone * 57, 88 + stone * 43, 101 + stone * 43];
     // The closed, pointed underside floats above the route instead of growing
     // out of it like a cliff. Its wide middle still covers the collision tile
     // at eye height; the slanted upper faces make each rock a separate body.
-    solidFootprint(mesh, [[x + dx, y + dy, low, 0], [x, y, .3, 1.04], [x, y, .68, 1.09], [x - dx, y - dy, Math.max(.82, height * .78), .72], [x + dx, y + dy, height, .24], [x + dx, y + dy, height + .03, 0]], color, seed);
-    // Dark scars lie on actual rock faces, retaining the same perspective.
-    const faces = mesh.triangles.slice();
-    for (let i = 0; i < faces.length; i++) {
-      if (noise(seed, i, 31) > .12) continue;
-      const { a, b, c } = faces[i];
-      const center = a.map((v, axis) => (v + b[axis] + c[axis]) / 3);
-      const points = [a, b, c].map((v) => v.map((n, axis) => center[axis] + (n - center[axis]) * .55 + (axis === 2 ? .001 : 0)));
-      triangle(mesh, ...points, [48, 47, 48]);
-    }
+    solidFootprint(mesh, [[x + dx, y + dy, low, 0], [x, y, .3, 1.04], [x, y, .68, 1.02], [x - dx, y - dy, Math.max(.78, height * .65), .96], [x + dx, y + dy, height * .88, .74], [x + dx, y + dy, height, .36], [x + dx, y + dy, height + .035, 0]], color, seed);
+
   }
   return mesh;
 }
@@ -95,9 +87,11 @@ export function createOrbitalShelfMesh(tileX, tileY, edges) {
   for (let side = 0; side < 4; side++) {
     if (!(edges & 1 << side)) continue;
     const a = corners[side], b = corners[(side + 1) % 4];
-    const topA = [...a, 0], topB = [...b, 0], lowA = [...a, -.18], lowB = [...b, -.18];
-    triangle(mesh, topA, lowA, topB, [34, 40, 56]);
-    triangle(mesh, topB, lowA, lowB, [23, 28, 43]);
+    const topA = [...a, 0], topB = [...b, 0], lowA = [...a, -.018], lowB = [...b, -.018];
+    // A thin boundary is the edge of the transparent gravity route. It has
+    // no rock underside and never creates seams between walkable cells.
+    triangle(mesh, topA, lowA, topB, [49, 71, 85]);
+    triangle(mesh, topB, lowA, lowB, [28, 45, 59]);
   }
   return mesh;
 }

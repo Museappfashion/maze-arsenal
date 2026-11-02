@@ -13,6 +13,9 @@ const server = await createServer({ root:fileURLToPath(new URL("../../",import.m
 try {
   const {createWorld} = await server.ssrLoadModule("/src/game/world-enhanced.js");
   const {drawWorld} = await server.ssrLoadModule("/src/game/rendering-2.0.js");
+  const {collectVisualDecorations3D} = await server.ssrLoadModule("/src/features/visualPolish.js");
+  const {registerSceneDecorations3D} = await server.ssrLoadModule("/src/game/sceneDecorations3D.js");
+  registerSceneDecorations3D(collectVisualDecorations3D);
   const core = await server.ssrLoadModule("/src/game/rendering.js?core");
   const {projectScenePoint,scenePickupShape} = await server.ssrLoadModule("/src/game/sceneProjection3D.js");
   const results=[];

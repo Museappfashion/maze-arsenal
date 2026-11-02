@@ -25,6 +25,14 @@ test("defense UI switches speed, shows exact next stats under current stats, and
     const byClass=(tree,name)=>nodes(tree).find((n)=>n.props?.className?.split(" ").includes(name));
     const button=(tree,value)=>nodes(tree).find((n)=>n.type==="button"&&text(n)===value);
     let tree=render();
+    // The stage owns the first column; the compact HUD owns every control.
+    // A dashboard header or stats row must not shrink the game viewport again.
+    assert.equal(tree.props.children[0].props.className,"td-arena-panel");
+    assert.equal(tree.props.children[1].type,"aside");
+    const sidebar=byClass(tree,"td-sidebar");
+    assert.ok(byClass(sidebar,"td-speed-controls"));
+    assert.ok(byClass(sidebar,"td-stats"));
+    assert.equal(nodes(tree.props.children[0]).some(n=>n.props?.className==="td-stats"),false);
     button(tree,"3×").props.onClick();tree=render();
     assert.equal(button(tree,"3×").props["aria-pressed"],true);
     const game=hooks.slot(0).current;assert.equal(game.speed,3);
@@ -36,6 +44,8 @@ test("defense UI switches speed, shows exact next stats under current stats, and
     assert.match(text(current),/Current:.*7 damage.*0\.24s cooldown.*2\.80 tile range/);
     assert.match(text(next),/Next · Lv\. 2:.*11 damage.*0\.21s cooldown.*3\.15 tile range/);
     const upgrade=byClass(tree,"td-upgrade");
+    assert.equal(byClass(byClass(tree,"td-live-hud"),"td-upgrade"),upgrade);
+    assert.equal(byClass(byClass(tree,"td-shop"),"td-upgrade"),undefined);
     const paragraphs=upgrade.props.children.filter((n)=>n?.type==="p");
     assert.equal(paragraphs[0],current);assert.equal(paragraphs[1],next);
     button(tree,`Upgrade · ${engine.defenseUpgradeCost(tower)}`).props.onClick();tree=render();

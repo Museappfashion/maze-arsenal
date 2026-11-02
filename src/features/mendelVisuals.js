@@ -927,7 +927,7 @@ function paint() {
 
   const frame =
     document.querySelector(
-      ".maze-frame",
+      ".maze-game-root .maze-frame",
     );
 
   const base =

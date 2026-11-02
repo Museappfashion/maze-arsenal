@@ -61,10 +61,10 @@ test("Orbital route supports every walkable point and has no detached pads or in
   const world = { grid: [[1, 1, 1, 1], [1, 0, 0, 1], [1, 0, 0, 1], [1, 1, 1, 1]] };
   const before = JSON.stringify(world.grid);
   for (let x = 0; x < 100; x++) for (let y = 0; y < 100; y++) {
-    assert.ok([1, 2].includes(orbitalPlatformSample(world, 1 + x / 50, 1 + y / 50)), "every point over a walkable cell has real rock footing");
+    assert.ok([1, 2].includes(orbitalPlatformSample(world, 1 + x / 50, 1 + y / 50)), "every walkable point has a continuous gravity route");
   }
-  assert.equal(orbitalPlatformSample(world, 2, 2), 1, "tile joins are continuous rock instead of a blue lattice");
-  assert.equal(orbitalPlatformSample(world, 1.01, 1.5), 2, "only a genuine route edge has a stone bevel");
+  assert.equal(orbitalPlatformSample(world, 2, 2), 1, "tile joins stay continuous without a blue lattice");
+  assert.equal(orbitalPlatformSample(world, 1.01, 1.5), 2, "only a genuine route edge has a quiet boundary");
   assert.equal(orbitalPlatformSample(world, .5, .5), 0, "asteroid cells leave starfield below their volume");
   assert.equal(orbitalPlatformSample(world, -1, -1), 0);
   assert.equal(JSON.stringify(world.grid), before, "rendering never changes collision");
@@ -90,12 +90,12 @@ test("thick trees and asteroid bases cover their actual collision square from ev
   }
 });
 
-test("floating route edges are real vertical stone with thickness and no interior faces", () => {
+test("gravity route edges are thin field boundaries with no interior faces", () => {
   const empty = createOrbitalShelfMesh(4, 7, 0), edge = createOrbitalShelfMesh(4, 7, 1 | 4);
   assert.equal(empty.triangles.length, 0);
   assert.equal(edge.triangles.length, 4);
   const vertices = edge.triangles.flatMap(({ a, b, c }) => [a, b, c]);
-  assert.ok(vertices.some((v) => v[2] === 0) && vertices.some((v) => v[2] === -.18));
+  assert.ok(vertices.some((v) => v[2] === 0) && vertices.some((v) => v[2] === -.018));
   assert.ok(vertices.every((v) => v[1] === 7 || v[1] === 8), "only the requested exposed north/south edges are drawn");
 });
 

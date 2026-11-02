@@ -33,9 +33,10 @@ try {
   assert.equal(await page.locator(".td-energy").innerText(), "0");
   await page.clock.install();
   await page.getByRole("button", { name: "Start wave 1", exact: true }).click();
-  await page.clock.runFor(12000);
+  await page.clock.runFor(4000);
   const progress = () => page.evaluate(async () => (await import("/src/services/playerProgress.js")).getPlayerProgress("oibougvovov").playedSeconds);
-  const beforePause = await progress(); assert.ok(beforePause > 10);
+  const beforePause = await progress();
+  assert.ok(beforePause > 3 && beforePause < 5);
   assert.ok(Number(await page.locator(".td-stats > div").nth(3).locator("strong").innerText()) > 0);
   await page.getByRole("button", { name: "Pause", exact: true }).click();
   const pausedTime = await progress();
@@ -58,7 +59,7 @@ try {
   await page.getByRole("button", { name: /Floor map/ }).click();
   const mapTime = await progress(); await page.clock.runFor(2000); assert.equal(await progress(), mapTime);
   await page.getByRole("button", { name: /Close map/ }).click();
-  await page.getByRole("button", { name: /First page/, exact: false }).click();
+  await page.getByRole("button", { name: /first page/i, exact: false }).click();
   // Set up a real saved checkpoint at the first staircase, then use the UI to climb.
   await page.evaluate(async () => {
     const m = await import("/src/game/hundredFloorMaze.js");
@@ -67,17 +68,17 @@ try {
   });
   await page.getByRole("button", { name: "Enter The Hundred Floors", exact: true }).click();
   await page.getByRole("button", { name: /Climb stairs/ }).click();
-  await page.locator(".hundred-stat strong").filter({ hasText: "Floor 2" }).waitFor();
-  await page.getByRole("button", { name: /First page/, exact: false }).click();
+  await page.locator(".hundred-status-grid").getByText("2 / 100", { exact: true }).waitFor();
+  await page.getByRole("button", { name: /first page/i, exact: false }).click();
   await page.reload();
   await page.getByRole("button", { name: "Enter The Hundred Floors", exact: true }).click();
-  await page.locator(".hundred-stat strong").filter({ hasText: "Floor 2" }).waitFor();
+  await page.locator(".hundred-status-grid").getByText("2 / 100", { exact: true }).waitFor();
   await page.getByRole("button", { name: "Pause", exact: true }).click();
   await page.getByRole("button", { name: "Start a new climb", exact: true }).click();
   await page.keyboard.press("Escape");
   await page.getByRole("heading", { name: "Climb paused" }).waitFor();
   await page.getByRole("button", { name: "Keep climbing", exact: true }).click();
-  await page.getByRole("button", { name: /First page/, exact: false }).click();
+  await page.getByRole("button", { name: /first page/i, exact: false }).click();
   // Time gates belong to the selected profile, even after another profile unlocks them.
   await page.locator("#progress-player").fill("A new explorer");
   await page.getByRole("button", { name: "Use name", exact: true }).click();
@@ -92,7 +93,7 @@ try {
     await mobile.screenshot({ path: `${out}/${file}.png` });
     if (selector === ".hundred-page") {
       assert.equal(await mobile.getByRole("group", { name: "Movement joystick" }).isVisible(), true);
-      await mobile.getByRole("button", { name: /First page/, exact: false }).click();
+      await mobile.getByRole("button", { name: /first page/i, exact: false }).click();
     } else await mobile.getByRole("button", { name: "Back to first page", exact: true }).click();
   }
   assert.deepEqual(errors, []);

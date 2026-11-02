@@ -1,0 +1,30 @@
+COMPLETE REPLACEMENT GAME — October 26, 2026
+
+This maze-arsenal-ready folder is the complete project. It starts from your
+Downloads copy and includes only the latest graphics and unlock-mode fixes.
+Your App, menu, controls, currencies, cosmetics, saves, API, database scripts,
+settings, existing support files, and all four music files are retained.
+Old patch folders are kept for reference; you do not need to apply them.
+
+Replace your old project code with the contents of this maze-arsenal-ready
+folder, including src, public, api, scripts, supabase, and root configuration.
+Do not put the new src folder inside your old src folder.
+Keep any existing private .env.local file and deployment environment variables.
+Keep the same website address to use the same browser-local saved progress.
+
+To run from this folder:
+  npm install
+  npm run dev
+If your existing local game uses port 5189, use:
+  npm run dev -- --port 5189
+
+To build: npm run build
+To validate: npm run verify
+Tests: node --test scripts/tests/*.test.mjs
+
+The dist folder contains the production build, including music assets.
+node_modules and private environment files are not included.
+
+REPLACEMENT-CONTENTS.json, beside this project folder, lists every preserved
+and updated file. The audit script follows actual game imports so old unused
+patch snippets do not break validation. This does not change gameplay.

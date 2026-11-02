@@ -2,6 +2,7 @@
 import { drawOutdoorWalls3D } from "./outdoorScenes3D.js";
 import { clipOutdoorSprite, hasOutdoorDepth, outdoorDepthAt } from "./outdoorGeometry3D.js";
 import { projectSceneBox, sceneFaceDepthAt, scenePickupShape, sceneScreenY } from "./sceneProjection3D.js";
+import { getSceneDecorations3D } from "./sceneDecorations3D.js";
 import { cosmeticPerkStatus } from "./cosmeticPerks.js";
 import { MAX_AMMO } from "../config/ammo.js";
 import { getBowDrawProgress, isMedievalArcheryWeapon } from "../config/archery.js";
@@ -3458,7 +3459,7 @@ export function draw3DSprites(
   zBuffer,
   projectionPlane,
 ) {
-  const sprites = [];
+  const sprites = [...getSceneDecorations3D(world)];
   const exitProjection = project3DSprite(
     world,
     world.exit.x + 0.5,
@@ -3588,7 +3589,9 @@ export function draw3DSprites(
       }
       ctx.clip();
     }
-    if (sprite.type === "exit") {
+    if (sprite.type === "decoration") {
+      sprite.draw(ctx);
+    } else if (sprite.type === "exit") {
       draw3DExit(ctx, sprite.projection);
     } else if (sprite.type === "enemy") {
       draw3DEnemy(

@@ -23,22 +23,6 @@ const aliasTargets = new Map(
   ]),
 );
 
-function collectSourceFiles(directory) {
-  return fs
-    .readdirSync(directory, { withFileTypes: true })
-    .flatMap((entry) => {
-      const entryPath = path.join(directory, entry.name);
-
-      if (entry.isDirectory()) {
-        return collectSourceFiles(entryPath);
-      }
-
-      return /\.(?:js|jsx)$/.test(entry.name)
-        ? [entryPath]
-        : [];
-    });
-}
-
 function extractImports(source) {
   const imports = [];
   const staticPattern =
@@ -97,17 +81,18 @@ function resolveImport(importer, specifier) {
     : aliasTargets.get(resolved) ?? resolved;
 }
 
-const files = collectSourceFiles(sourceRoot);
+// Retain historical patch copies in the full replacement, but audit the
+// actual game graph. Unimported archived snippets are not application modules.
 const graph = new Map();
 
-for (const file of files) {
+function dependenciesFor(file) {
+  if (graph.has(file)) return graph.get(file);
   const imports = extractImports(fs.readFileSync(file, "utf8"));
-  graph.set(
-    file,
-    imports
-      .map((specifier) => resolveImport(file, specifier))
-      .filter(Boolean),
-  );
+  const dependencies = imports
+    .map((specifier) => resolveImport(file, specifier))
+    .filter(Boolean);
+  graph.set(file, dependencies);
+  return dependencies;
 }
 
 const states = new Map();
@@ -118,7 +103,7 @@ function visit(file) {
   states.set(file, "visiting");
   stack.push(file);
 
-  for (const dependency of graph.get(file) ?? []) {
+  for (const dependency of dependenciesFor(file)) {
     const dependencyState = states.get(dependency);
 
     if (dependencyState === "visiting") {
@@ -140,11 +125,7 @@ function visit(file) {
   states.set(file, "visited");
 }
 
-for (const file of files) {
-  if (!states.has(file)) {
-    visit(file);
-  }
-}
+visit(path.join(sourceRoot, "main.jsx"));
 
 if (cycles.size) {
   console.error("Import cycles detected:");
@@ -156,6 +137,6 @@ if (cycles.size) {
   process.exitCode = 1;
 } else {
   console.log(
-    `Import-cycle audit passed: ${files.length} source modules, ${aliasTargets.size} Vite aliases.`,
+    `Import-cycle audit passed: ${graph.size} reachable source modules, ${aliasTargets.size} Vite aliases.`,
   );
 }

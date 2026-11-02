@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { activateHundredFloorCompass, ascendHundredFloor, createHundredFloorRun, hundredFloorSaveKey, loadHundredFloorRun, nearHundredFloorStairs, saveHundredFloorRun, updateHundredFloorRun } from "../game/hundredFloorMaze.js";
-import { drawHundredFloorMaze } from "../game/hundredFloorRendering.js";
+import { drawHundredFloorMaze, hundredFloorArtworkWorld } from "../game/hundredFloorRendering.js";
+import { MinimapPanel } from "./GameUi.jsx";
+import { StatCard } from "./StatCard.jsx";
+import { GAME_STYLES } from "../styles/gameStyles.js";
 import { recordActivePlay, flushPlayerProgress } from "../services/playerProgress.js";
 import "../styles/hundredFloorMaze.css";
 
@@ -104,7 +107,7 @@ function HundredFloorRun({ onBack, playerName }) {
       refresh += dt;
       if (refresh > .1) { setSnapshot(snapshotOf(world)); refresh = 0; }
       context.setTransform(viewport.ratio, 0, 0, viewport.ratio, 0, 0);
-      drawHundredFloorMaze(context, world, viewport.width, viewport.height, mapRef.current);
+      drawHundredFloorMaze(context, world, viewport.width, viewport.height, mapRef.current, playerName);
       frame = requestAnimationFrame(loop);
     };
     frame = requestAnimationFrame(loop);
@@ -130,28 +133,56 @@ function HundredFloorRun({ onBack, playerName }) {
   useEffect(() => () => { saveHundredFloorRun(latest.current.playerName, latest.current.world); }, []);
 
   const busy = paused || mapOpen || snapshot.completed || restartConfirm;
-  return <main className="hundred-page">
-    <header className="hundred-header">
-      <div><span className="hundred-kicker">Mist Maze · The long climb</span><h1>Hundred-floor maze</h1><p>100 × 100 tiles per floor · 100 floors</p></div>
-      <div className="hundred-stat"><strong>Floor {snapshot.floor}<small> / 100</small></strong><span>{snapshot.theme}</span><span>{timer(snapshot.elapsed)}</span></div>
-      <div className="hundred-actions"><button type="button" onClick={() => pause(!paused)} disabled={snapshot.completed || restartConfirm}>{paused ? "Resume" : "Pause"}</button><button type="button" onClick={leave}>← First page</button></div>
-    </header>
-    <div className="hundred-progress" aria-label={`${snapshot.completed ? 100 : snapshot.floor - 1} of 100 floors cleared`}><span style={{ width: `${snapshot.completed ? 100 : snapshot.floor - 1}%` }} /></div>
-    <div className="hundred-stage">
-      <canvas className="hundred-canvas" ref={canvasRef} tabIndex="0" aria-label="Hundred-floor maze. WASD or arrows to move, E to climb nearby stairs, Q for a compass trail, M for the map, Escape to pause." />
-      <div className="hundred-message" role="status">{saveFailed ? "Saving is unavailable in this browser. Keep this tab open to continue this run." : snapshot.message}</div>
-      {!busy && <div className="hundred-touch"><TowerJoystick onMove={(next) => { joystick.current = next; }} /><button type="button" disabled={!snapshot.nearStairs} onClick={climb}>{snapshot.floor === 100 ? "SUMMIT" : "CLIMB"}<small>E</small></button></div>}
+  const artwork = hundredFloorArtworkWorld(world, playerName);
+  const mapPercent = Math.floor(artwork.player.discoveredFloor / Math.max(1, artwork.floorCount) * 100);
+  return <main className="hundred-page mode-2d">
+    <style>{GAME_STYLES}</style>
+    <div className="maze-game-shell">
+      <section className="maze-stage hundred-stage" aria-label="Hundred-floor maze play area">
+        <div className="maze-frame hundred-frame">
+          <canvas className="hundred-canvas" ref={canvasRef} tabIndex="0" aria-label="Hundred-floor maze. WASD or arrows to move, E to climb nearby stairs, Q for a compass trail, M for the map, Escape to pause." />
+          <div className="hundred-message" role="status">{saveFailed ? "Saving is unavailable in this browser. Keep this tab open to continue this run." : snapshot.message}</div>
+          {!busy && <div className="hundred-touch"><TowerJoystick onMove={(next) => { joystick.current = next; }} /><button type="button" disabled={!snapshot.nearStairs} onClick={climb}>{snapshot.floor === 100 ? "SUMMIT" : "CLIMB"}<small>E</small></button></div>}
       {(paused || snapshot.completed || restartConfirm) && <div className="hundred-overlay"><section className="hundred-dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="hundred-dialog-title">
         <span className="hundred-kicker">{snapshot.completed ? "100 floors cleared" : restartConfirm ? "Start a new climb" : saveFailed ? "Saving unavailable" : "Checkpoint saved"}</span>
         <h2 id="hundred-dialog-title">{restartConfirm ? "Restart from floor 1?" : snapshot.completed ? "You reached the summit." : "Climb paused"}</h2>
         <p>{restartConfirm ? `This replaces your saved climb on floor ${snapshot.floor}. Your other game progress stays saved.` : snapshot.completed ? `All 100 floors, each 10,000 tiles. Your climb took ${timer(snapshot.elapsed)}.` : saveFailed ? "Your browser could not save this climb. Keep this screen open to preserve your current position." : `Your position on floor ${snapshot.floor}, explored map, and power-ups are saved for this player name.`}</p>
         <div className="hundred-dialog-actions">{restartConfirm ? <><button type="button" onClick={() => { setRestartConfirm(false); if (!snapshot.completed) pause(true); }}>Keep this climb</button><button type="button" className="hundred-primary" onClick={restart}>Restart all 100 floors</button></> : <>{!snapshot.completed && <button type="button" className="hundred-primary" onClick={() => pause(false)}>Keep climbing</button>}<button type="button" onClick={leave}>Save and return</button><button type="button" onClick={() => { pause(true); setRestartConfirm(true); }}>Start a new climb</button></>}</div>
       </section></div>}
+        </div>
+      </section>
+      <aside className="maze-sidebar hundred-sidebar" aria-label="Hundred-floor maze status and controls">
+        <MinimapPanel world={artwork} />
+        <header className="hundred-panel hundred-header">
+          <h1>Mist Maze</h1>
+          <div className="hundred-kicker">Hundred-floor maze · {snapshot.theme}</div>
+          <p>Find the green exit and climb through 100 floors. Every floor is a 100 × 100 maze with its own saved checkpoint.</p>
+        </header>
+        <section className="hundred-panel" aria-label="Climb status">
+          <h2>Status</h2>
+          <div className="hundred-status-grid">
+            <StatCard label="Floor" value={`${snapshot.floor} / 100`} />
+            <StatCard label="Time" value={timer(snapshot.elapsed)} />
+            <StatCard label="Map" value={`${mapPercent}%`} />
+            <StatCard label="Maze" value="100 × 100" />
+            <StatCard label="Theme" value={snapshot.theme} />
+            <StatCard label="Cleared" value={`${snapshot.completed ? 100 : snapshot.floor - 1} / 100`} />
+          </div>
+          <div className="hundred-progress" aria-label={`${snapshot.completed ? 100 : snapshot.floor - 1} of 100 floors cleared`}><span style={{ width: `${snapshot.completed ? 100 : snapshot.floor - 1}%` }} /></div>
+          <div className="hundred-actions"><button type="button" onClick={() => pause(!paused)} disabled={snapshot.completed || restartConfirm}>{paused ? "Resume" : "Pause"}</button><button type="button" onClick={leave}>Back to first page</button></div>
+        </section>
+        <section className="hundred-panel">
+          <h2>Power-ups</h2>
+          <div className="hundred-buffs"><span className={snapshot.haste > 0 ? "is-active" : ""}><i className="hundred-haste" /> Haste {snapshot.haste > 0 ? `· ${Math.ceil(snapshot.haste)}s` : "· faster movement"}</span><span className={snapshot.sonar > 0 ? "is-active" : ""}><i className="hundred-sonar" /> Sonar {snapshot.sonar > 0 ? `· ${Math.ceil(snapshot.sonar)}s` : "· reveals the floor"}</span></div>
+          <div className="hundred-controls"><button type="button" onClick={compass} disabled={busy || snapshot.compassCooldown > 0}><kbd>Q</kbd> Compass {snapshot.compassCooldown > 0 ? `· ${Math.ceil(snapshot.compassCooldown)}s` : "· ready"}</button><button type="button" onClick={() => showMap(!mapOpen)} disabled={paused || snapshot.completed || restartConfirm}><kbd>M</kbd> {mapOpen ? "Close map" : "Floor map"}</button><button type="button" className="hundred-primary" onClick={climb} disabled={busy || !snapshot.nearStairs}><kbd>E</kbd> {snapshot.floor === 100 ? "Reach summit" : "Climb stairs"}</button></div>
+        </section>
+        <section className="hundred-panel hundred-help">
+          <h2>Controls</h2>
+          <p>Move: WASD, arrow keys, or touch joystick<br />Compass: Q · 10-second route hint<br />Stairs: E · Map: M · Pause: Esc</p>
+          <p>Auto-saves every 5 seconds and at every staircase.</p>
+        </section>
+      </aside>
     </div>
-    <footer className="hundred-footer">
-      <div className="hundred-controls"><button type="button" onClick={compass} disabled={busy || snapshot.compassCooldown > 0}><kbd>Q</kbd> Compass {snapshot.compassCooldown > 0 ? `· ${Math.ceil(snapshot.compassCooldown)}s` : "· ready"}</button><button type="button" onClick={() => showMap(!mapOpen)} disabled={paused || snapshot.completed || restartConfirm}><kbd>M</kbd> {mapOpen ? "Close map" : "Floor map"}</button><button type="button" className="hundred-primary" onClick={climb} disabled={busy || !snapshot.nearStairs}><kbd>E</kbd> {snapshot.floor === 100 ? "Reach summit" : "Climb stairs"}</button><div className="hundred-buffs"><span className={snapshot.haste > 0 ? "is-active" : ""}>Haste {snapshot.haste > 0 ? `${Math.ceil(snapshot.haste)}s` : "· green diamond"}</span><span className={snapshot.sonar > 0 ? "is-active" : ""}>Sonar {snapshot.sonar > 0 ? `${Math.ceil(snapshot.sonar)}s` : "· cyan diamond"}</span></div></div>
-      <p>WASD / arrows: move · Q: 10-second route hint · E: stairs · M: map · Esc: pause <span>Auto-saves every 5 seconds and at every staircase.</span></p>
-    </footer>
   </main>;
 }
 

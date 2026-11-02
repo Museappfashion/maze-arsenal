@@ -18,8 +18,8 @@ function outdoorMeshes(world) {
       if (Math.hypot(x + .5 - px, y + .5 - py) > range) continue;
       if (world.grid[y][x] === 0) {
         if (key === "space") {
-          // Give each exposed route edge a real stone underside. Adjacent
-          // walkable cells share their shelf without internal grid seams.
+          // A quiet edge marks the translucent field only against solid
+          // obstacles. Walkable neighbours never get an internal grid seam.
           const edges = (world.grid[y - 1]?.[x] !== 0 ? 1 : 0) | (world.grid[y]?.[x + 1] !== 0 ? 2 : 0) | (world.grid[y + 1]?.[x] !== 0 ? 4 : 0) | (world.grid[y]?.[x - 1] !== 0 ? 8 : 0);
           if (edges) {
             const shelf = `s${y * world.width + x}:${edges}`;
@@ -43,10 +43,9 @@ export function drawOutdoorWalls3D(ctx, world, plane, width, height, horizon) {
   drawOutdoorMeshScene(ctx, world, outdoorMeshes(world), { plane, width, height, horizon });
 }
 
-// The floating route follows the collision map exactly. Earlier 2×2 pads left
-// walkable positions over visually empty space and made pickups look detached
-// from the floor. A continuous rock shelf now supports every walkable point;
-// its edge receives a quiet bevel only beside an actual asteroid barrier.
+// The continuous gravity route follows the collision map exactly. Its faint
+// translucent surface and thin boundary leave the starfield visible underfoot,
+// without holes, detached pads, or grid seams between walkable neighbours.
 export function orbitalPlatformSample(world, x, y) {
   const tx = Math.floor(x), ty = Math.floor(y);
   if (world.grid[ty]?.[tx] !== 0) return 0;

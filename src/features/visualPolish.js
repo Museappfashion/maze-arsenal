@@ -12,6 +12,8 @@ import {
   visibleStrengthAt,
 } from "../game/gameplay.js";
 import { hasLineOfSight } from "../game/maze.js";
+import { sceneScreenY } from "../game/sceneProjection3D.js";
+import { registerSceneDecorations3D } from "../game/sceneDecorations3D.js";
 
 const STYLE_ID = "mist-visual-polish-style";
 const CANVAS_ID = "mist-visual-polish-canvas";
@@ -1260,6 +1262,7 @@ function project3D(world, prop) {
   const plane = CANVAS_WIDTH / 2 / Math.tan(VIEW_3D_FOV / 2);
   return {
     distance,
+    depth,
     screenX: CANVAS_WIDTH / 2 + Math.tan(relative) * plane,
     scale: plane / depth,
   };
@@ -1301,105 +1304,95 @@ function propList3D(cache) {
   return [];
 }
 
-function draw3D(ctx, world, cache) {
+export function collectVisualDecorations3D(world) {
   const time = world.time ?? 0;
-  const props = propList3D(cache)
+  return propList3D(getCache(world))
     .map((prop) => ({ prop, projection: project3D(world, prop) }))
     .filter((entry) => entry.projection)
-    .sort((a, b) => b.projection.distance - a.projection.distance)
-    .slice(0, 18);
+    .sort((a, b) => b.projection.depth - a.projection.depth)
+    .slice(-18)
+    .map(({ prop, projection }) => ({
+      type: "decoration",
+      projection,
+      draw(ctx) {
+        ctx.save();
+        ctx.translate(projection.screenX, sceneScreenY(projection.scale));
+        ctx.globalAlpha = clamp(1 - projection.distance / 15, 0.28, 0.94);
+        if (prop.type === "spaceDebris") {
+          drawSpaceDebris(
+            ctx,
+            projection.scale * 0.18,
+            prop.seed,
+            time * 0.35,
+            0.9,
+          );
+        } else if (prop.type === "spaceBeacon") {
+          drawBeacon(
+            ctx,
+            projection.scale * 0.15,
+            prop.seed,
+            time,
+          );
+        } else if (prop.type === "plant") {
+          drawPlant(
+            ctx,
+            projection.scale * 0.22,
+            prop.seed,
+            time,
+          );
+        } else if (prop.type === "log") {
+          drawIdol(
+            ctx,
+            projection.scale * 0.21,
+            prop.seed,
+          );
+        } else if (prop.type === "statue") {
+          drawStatue(
+            ctx,
+            projection.scale * 0.25,
+            prop.seed,
+            0.88,
+          );
+        } else if (prop.type === "torch") {
+          drawTorch(
+            ctx,
+            projection.scale * 0.16,
+            prop.seed,
+            time,
+          );
+        } else if (prop.type === "sign") {
+          drawSign(
+            ctx,
+            projection.scale * 0.17,
+            prop.seed,
+            time,
+          );
+        } else if (prop.type === "lamp") {
+          drawLamp(
+            ctx,
+            projection.scale * 0.18,
+            prop.seed,
+            time,
+          );
+        } else if (prop.type === "monolith") {
+          drawMonolith(
+            ctx,
+            projection.scale * 0.22,
+            prop.seed,
+            time,
+          );
+        } else if (prop.type === "rune") {
+          drawRune(
+            ctx,
+            projection.scale * 0.12,
+            prop.seed,
+            time,
+          );
+        }
 
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT * 0.77);
-  ctx.clip();
-
-  for (const { prop, projection } of props) {
-    const fade = clamp(1 - projection.distance / 15, 0.28, 0.94);
-    const y =
-      CANVAS_HEIGHT * 0.66 +
-      Math.min(CANVAS_HEIGHT * 0.09, projection.scale * 0.024);
-
-    ctx.save();
-    ctx.translate(projection.screenX, y);
-    ctx.globalAlpha = fade;
-
-    if (prop.type === "spaceDebris") {
-      drawSpaceDebris(
-        ctx,
-        clamp(projection.scale * 0.18, 16, 120),
-        prop.seed,
-        time * 0.35,
-        0.9,
-      );
-    } else if (prop.type === "spaceBeacon") {
-      drawBeacon(
-        ctx,
-        clamp(projection.scale * 0.15, 14, 92),
-        prop.seed,
-        time,
-      );
-    } else if (prop.type === "plant") {
-      drawPlant(
-        ctx,
-        clamp(projection.scale * 0.22, 18, 120),
-        prop.seed,
-        time,
-      );
-    } else if (prop.type === "log") {
-      drawIdol(
-        ctx,
-        clamp(projection.scale * 0.21, 22, 135),
-        prop.seed,
-      );
-    } else if (prop.type === "statue") {
-      drawStatue(
-        ctx,
-        clamp(projection.scale * 0.25, 28, 160),
-        prop.seed,
-        0.88,
-      );
-    } else if (prop.type === "torch") {
-      drawTorch(
-        ctx,
-        clamp(projection.scale * 0.16, 16, 100),
-        prop.seed,
-        time,
-      );
-    } else if (prop.type === "sign") {
-      drawSign(
-        ctx,
-        clamp(projection.scale * 0.17, 18, 105),
-        prop.seed,
-        time,
-      );
-    } else if (prop.type === "lamp") {
-      drawLamp(
-        ctx,
-        clamp(projection.scale * 0.18, 18, 110),
-        prop.seed,
-        time,
-      );
-    } else if (prop.type === "monolith") {
-      drawMonolith(
-        ctx,
-        clamp(projection.scale * 0.22, 22, 135),
-        prop.seed,
-        time,
-      );
-    } else if (prop.type === "rune") {
-      drawRune(
-        ctx,
-        clamp(projection.scale * 0.12, 12, 72),
-        prop.seed,
-        time,
-      );
-    }
-
-    ctx.restore();
-  }
-
-  ctx.restore();
+        ctx.restore();
+      },
+    }));
 }
 
 function drawAtmosphere(ctx, world) {
@@ -1614,7 +1607,7 @@ function paint() {
   const world = globalThis.__mistMazeWorld;
   if (!world) return;
 
-  const frame = document.querySelector(".maze-frame");
+  const frame = document.querySelector(".maze-game-root .maze-frame");
   const base = frame?.querySelector(
     `:scope > canvas:not(#${CANVAS_ID})`,
   );
@@ -1626,7 +1619,16 @@ function paint() {
     return;
   }
 
+  // 3D props are now painted inside the main renderer, before weapons/HUD,
+  // with the same floor projection and depth as enemies and pickups.
+  if (world.viewMode === "3d") {
+    const previous = frame.querySelector(`#${CANVAS_ID}`);
+    if (previous) previous.style.display = "none";
+    return;
+  }
+
   const overlay = ensureCanvas(frame, base);
+  overlay.style.display = "block";
   const ctx = overlay.getContext("2d");
   if (!ctx) return;
 
@@ -1638,11 +1640,7 @@ function paint() {
   );
 
   const cache = getCache(world);
-  if (world.viewMode === "3d") {
-    draw3D(ctx, world, cache);
-  } else {
-    draw2D(ctx, world, cache);
-  }
+  draw2D(ctx, world, cache);
   drawAtmosphere(ctx, world);
   ctx.restore();
 }
@@ -1656,6 +1654,7 @@ export function installVisualPolish() {
   }
 
   globalThis[INSTALLED_KEY] = true;
+  registerSceneDecorations3D(collectVisualDecorations3D);
   ensureStyle();
 
   let active = true;
@@ -1672,6 +1671,7 @@ export function installVisualPolish() {
   return () => {
     active = false;
     if (frameId) window.cancelAnimationFrame(frameId);
+    registerSceneDecorations3D(null);
     document.getElementById(CANVAS_ID)?.remove();
     document.getElementById(STYLE_ID)?.remove();
     globalThis[INSTALLED_KEY] = false;

@@ -1,9 +1,10 @@
 const UPDATES = [
+  "November 1: The Cube replaces the separate Hundred Floors with one connected 1,000 × 100 × 1,000 3D maze, repeated ramps rising 1–10 stories, and an interactive 3D minimap.",
+  "Powerup Defense now runs for 60 waves, with more powerup defenses, stronger upgrades, and increasingly difficult enemy formations.",
   "October 26: Powerup Defense and The Hundred Floors now use the original maze drawing routines and game-screen layout, including the compact sidebar and cyan controls.",
   "Powerup Defense adds 1× / 2× / 3× speed, tougher varied waves, enemy support abilities, and next-upgrade stats directly beneath current stats.",
   "Fixed the old 3D decoration overlay: scenery now shares the same floor projection and obstacle depth as pickups and enemies. Wilds trees have thick trunks and roots.",
-  "New playtime unlocks: Powerup Defense at 1 hour and The Hundred Floors at 2 hours. Active play and floor checkpoints save for each player name in this browser.",
-  "Powerup Defense lets you place and improve powerup defenses against waves of enemies. The Hundred Floors has 100 stories, each 100 × 100 tiles.",
+  "Playtime unlocks stay the same: Powerup Defense at 1 hour and The Cube at 2 hours. Active play and maze progress save for each player name in this browser.",
   "Added small equipped-skin perks: Lucky Peck, Alien Recovery, Slip Away, Ember Strike, and Crystal Shell. Alien stays 10,000 MIZ; turkey stays 1,000 hux.",
   "Rebalanced one-use powers to 250–2,500 MIZ and separated player cosmetics from coin and counter decorations.",
   "Orbital Ruins now has rounded suspended asteroids and translucent paths above stars, a moving nebula, and a distant 3D asteroid belt.",

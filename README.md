@@ -169,7 +169,7 @@ changes. The existing menus, themes, and Free the Flock artwork are retained.
 - Every combat maze has **50 additional ammo pickups and 50 additional medkits**, on distinct reachable tiles. Labyrinth remains free of combat supplies.
 - Every Labyrinth difficulty now shifts at **30-second intervals**.
 - Rankings show unnamed opponents as **Random Player**. Your custom name includes **(you)**; an entry already named You does not repeat the suffix.
-- 3D environments use perspective floor textures, stable world-anchored wall materials, and wall-depth clipping for sprites. Abandoned City has skyscrapers of varying heights, windowed facades, foundations, and textured asphalt. Orbital Ruins has broken platforms and luminous connections suspended above a starfield, with space visible beneath them. Emerald Wilds has individual trees with trunks, roots, and leafy canopies. Fallen Keep has large, weathered flagstones.
+- 3D environments use perspective floor textures, stable world-anchored wall materials, and wall-depth clipping for sprites. Abandoned City has skyscrapers of varying heights, windowed facades, foundations, and textured asphalt. Orbital Ruins has translucent connected routes suspended above stars, a nebula, and an asteroid belt. Emerald Wilds has individual trees with thick trunks, roots, and leafy canopies. Fallen Keep has large, weathered flagstones.
 - Coin cosmetics cost **20–180 MIZ**. Blobby Alien costs **10,000 MIZ**; Turkey Disguise costs **1,000 hux**. One-use powers cost **250–2,500 MIZ**.
 
 The **MYST POWERS** control in a combat run activates purchased charges. A
@@ -330,66 +330,87 @@ Ammo/health perks affect ground pickups only. Wisp and Crystal do not spend
 their effects on immune hits. Ember counts real melee and projectile hits,
 not misses, defeated enemies, or reflected enemy attacks.
 
-3D scene update: Emerald Wilds barriers use thick trees with broad roots,
-substantial trunks, and canopies. Orbital Ruins uses suspended asteroid barriers
-and continuous dark rock routes surrounded by a starfield. The routes follow
-the walkable map, with visible rock thickness and void beyond the shelves.
+3D scene update, October 26: Emerald Wilds barriers use thick trees with broad
+roots, substantial trunks, and canopies. Orbital Ruins uses rounded suspended
+asteroid barriers and continuous translucent routes. Stars, a world-positioned
+nebula, and a 3D asteroid belt remain visible beneath the paths. Moving changes
+their perspective and parallax. The routes follow the existing walkable map.
 World-space triangles, camera clipping, and per-pixel depth fix the stretched
 strips seen when approaching or turning beside walls. Pickups are shaded 3D
 boxes/cubes with faces that change naturally as the camera moves. Pickup feet,
-enemies, exits, and decorations use the same floor projection. Duplicate fixed
-screen pickup holograms and legendary rings were removed from the 3D view;
-their 2D artwork is preserved. Maze collision and routes remain the same.
+enemies, exits, and decorations use the same floor projection. The old browser
+decoration overlay is now disabled in 3D; its scenery draws inside the normal
+entity pass with shared obstacle clipping and depth ordering. The original 2D
+overlay and artwork are preserved. Maze collision and routes remain the same.
 
-## Playtime modes — October 22 update
+## Playtime modes — November 1 update
 
 The opening page has a **Playtime unlocks** panel. Select a player name with
 **Use name**; the same name entered before a normal maze uses the same progress.
 Names are case-insensitive. Blank names share an anonymous profile. Saves are
 local to this browser and origin, so they do not sync between devices.
 
-- At **one hour** of active play, **Powerup Defense** unlocks. Players place
-  powerup defenses; familiar enemies arrive in waves. Five defenses provide
-  rapid shots, frost slowing, explosive splash, armor-piercing precision, and
-  chain lightning. Upgrade and sell defenses using battlefield energy earned
-  during that run. Survive all 20 waves to win. **1× / 2× / 3×** controls change
-  battle speed; **S** cycles speed while the board is focused. Playtime unlocks
-  still count real active seconds. A selected defense shows its current stats,
-  then the exact next level's stats directly underneath, before purchase.
-  Previewed damage, cooldown, range, slow, splash, and chain limits use the same
-  formulas as combat. Rushes, armored sieges, boss waves, veterans, regenerating
-  Crawlers, Spitter rallies, and Warden protection create a rising challenge.
-  Difficulty follows a fixed progression. Upgrading and combining defenses
-  matters: the reference earned-budget strategy wins with 4/20 core health.
-- At **two hours**, **The Hundred Floors** unlocks. Each of its 100 stories is
-  a connected **100 × 100 tile** maze, for 10,000 tiles per floor. Find stairs
-  and press **E** to climb; complete floor 100 to reach the summit. **Q** gives
-  a rechargeable route hint; Haste and Sonar pickups help exploration. **M**
-  opens the full map and pauses play. Keyboard and touch movement are supported.
-  Position, explored map, collected powers, floor, and timer save every five
-  active seconds and at checkpoints, pause, and exit. Only the current floor
-  is allocated; returning with the same name resumes the climb.
-- Active play in the original mazes, Labyrinth, Free the Flock, and both new
-  modes counts. Menus, paused modes, completed runs, and hidden tabs do not.
+At **one hour**, **Powerup Defense** unlocks. Place and upgrade eleven familiar
+powerup defenses beside the enemy route and protect the core through **60 waves**.
+Rapid Fire, Frost Field, Demolition, Precision, and Overcharge are joined by
+Scattershot, Berserk, Sonar, Bounty, Regeneration, and Shield. Support powers
+provide distinct damage, vulnerability, income, repair, and protection effects;
+their upgrade previews explain the actual effect before spending energy.
+Six upgrade tiers keep defenses useful against later waves. Enemy health,
+formations, armor, veteran traits, and boss pressure increase with the waves.
+Difficulty follows the wave schedule, without changing based on purchases.
+
+**1× / 2× / 3×** changes battle speed; **S** cycles speeds while the board is
+focused. The selected defense shows current statistics, then exact next-level
+statistics directly underneath. Unlock progress always counts real active time.
+
+At **two hours**, **The Cube** unlocks. It replaces the separate Hundred Floors
+mode with **one connected 3D maze**, 1,000 units long × 100 wide × 1,000 tall.
+One story is four maze units, so the vertical span contains 250 stories.
+There are many ramps with each rise from **one through ten stories**, throughout
+the volume. Walk onto a ramp to climb or descend continuously; there is no
+staircase button, floor loading screen, or teleport between separate mazes.
+The deterministic passage network loads nearby geometry as needed, so it does
+not allocate a 100-million-cell voxel array. Your seed keeps its layout stable.
+
+The **3D minimap** lets you orbit, pan, zoom, inspect altitude bands, and recenter
+on the player. Expand it with **M** to plan a route; expanded map navigation
+pauses movement and active playtime. Ramps show their actual 3D elevations.
+The green summit beacon marks the destination. **Q** activates a route hint.
+Haste and Sonar pickups help exploration.
+
+Cube controls:
+
+- **WASD**: walk forward/back and strafe. **↑ / ↓** also walk; **← / →** turn.
+- **Drag the view** to look. **Page Up / Page Down** look vertically.
+- On touchscreens, use the separate **MOVE** and **LOOK** joysticks.
+- **Q**: compass hint. **M**: expand/close the navigable 3D map. **Escape**: pause.
+- Walk onto ramps to climb or descend. The **Level view** button resets pitch.
+
+Cube position, explored junctions, seed, timers, and powerups save for each
+player name every five active seconds and on pause or exit. Its new save key
+keeps old Hundred Floors saves intact. The old unlock profile and two-hour
+requirement remain unchanged. Original maze saves, wallets, cosmetics, controls,
+and Free the Flock remain separate from these updates.
 
 Entering **oibougvovov** as the player name immediately unlocks both modes and
-adds **1,000,000 MIZ + 10,000 hux** to the existing wallets. The reward is granted
-once per saved wallet; retyping the name or reloading does not add it again.
-Previously owned items and inventory are preserved.
+adds **1,000,000 MIZ + 10,000 hux** to existing wallets once. Reloading or retyping
+the name does not repeat the reward. Existing owned items remain unchanged.
 
-Both playtime modes use the original navy/slate and cyan HUD style. The Hundred
-Floors shares the main game's tile, powerup, player, and exit drawing routines,
-with its canvas and compact sidebar arranged like the original maze screen.
-Powerup Defense uses the same geometric glowing powerup/enemy language; its
-crystal core has three shaded cube faces.
+Both playtime modes keep the original navy/slate and cyan game-screen layout,
+compact sidebar, and shared StatCard controls.
 
-Run `npm run verify` and `node --test scripts/tests/*.test.mjs` for the build,
-import audit, and automated regressions. Browser scenarios for the new modes
-and camera angles are in `scripts/tests/expedition-browser.mjs` and
-`scripts/tests/outdoor-scenes-browser.mjs` (use a locally available Playwright
-installation via `PLAYWRIGHT_MODULE_PATH` if it is not installed in the project).
-Optional native Canvas2D render verification is in
-`scripts/tests/native-scenes-qa.mjs`. Supply `GAME_CANVAS_MODULE_PATH` when using
-a bundled `@napi-rs/canvas` installation. It checks the full aliased renderer
-at 24 camera positions/angles, steady-frame stability, cubes hidden by walls,
-four views around a cube, the defense board, and all four Hundred Floor themes.
+Validation:
+
+```bash
+npm run verify
+node --test scripts/tests/*.test.mjs
+```
+
+With a locally available Playwright installation, set `PLAYWRIGHT_MODULE_PATH`
+and run `scripts/tests/expedition-browser.mjs` for the updated unlock modes.
+The Cube tests check connected volume topology, repeated ramp spans, continuous
+ascent/descent, solid bounds, deterministic streaming, and saved progress.
+TD tests cover the added power mechanics, upgrade previews, escalating waves,
+and an earned-energy strategy through wave 60. Existing original-maze regression
+checks remain in the test suite.

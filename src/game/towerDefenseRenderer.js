@@ -60,6 +60,10 @@ export function drawDefenseGame(ctx, game, hover, placingType) {
   polygon(ctx, [[0, -22], [19, -11], [0, 0], [-19, -11]], "#a5f3fc", "#cffafe");
   polygon(ctx, [[-19, -11], [0, 0], [0, 23], [-19, 12]], "#0891b2", "#67e8f9");
   polygon(ctx, [[0, 0], [19, -11], [19, 12], [0, 23]], "#155e75", "#67e8f9"); ctx.restore();
+  if (game.coreShield > 0) {
+    ctx.strokeStyle = "#60a5fa"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(end.x * TILE, end.y * TILE, 30, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = "#bfdbfe"; ctx.font = "bold 11px system-ui"; ctx.fillText(`+${game.coreShield}`, end.x * TILE, end.y * TILE + 39);
+  }
   ctx.save(); ctx.translate(world.player.x * TILE, world.player.y * TILE); ctx.scale(TILE / DRAW_TILE, TILE / DRAW_TILE);
   drawPlayerBody(ctx, world, 0, 0); ctx.restore();
   const selected = game.towers.find((tower) => tower.id === game.selectedId);
@@ -71,7 +75,7 @@ export function drawDefenseGame(ctx, game, hover, placingType) {
   }
   for (const tower of game.towers) {
     const stats = defenseTowerStats(tower), x = tower.x * TILE, y = tower.y * TILE;
-    if (tower.type === "frost") { circle(ctx, x, y, stats.range * TILE, "#67e8f90a"); ctx.strokeStyle = "#67e8f933"; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, stats.range * TILE, 0, Math.PI * 2); ctx.stroke(); }
+    if (["frost", "berserk", "sonar", "bounty"].includes(tower.type)) { circle(ctx, x, y, stats.range * TILE, `${stats.color}0a`); ctx.strokeStyle = `${stats.color}33`; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, stats.range * TILE, 0, Math.PI * 2); ctx.stroke(); }
     ctx.save(); ctx.translate(x, y); ctx.scale(1.75, 1.75);
     drawPickupBody(ctx, world, { type: "powerup", x: tower.x, y: tower.y, color: stats.color, powerUp: tower.type }, 0, 0);
     ctx.restore();
@@ -83,13 +87,14 @@ export function drawDefenseGame(ctx, game, hover, placingType) {
     const x = enemy.x * TILE, y = enemy.y * TILE, radius = Math.max(7, enemy.radius * TILE * .8);
     circle(ctx, x + 2, y + 3, radius + 2, "#0005");
     if (enemy.slow < 1) circle(ctx, x, y, radius + 4, "#67e8f950");
+    if (enemy.vulnerability > 0) { ctx.strokeStyle = "#2dd4bf"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, radius + 7, 0, Math.PI * 2); ctx.stroke(); }
     if (enemy.kind === "warden") { ctx.strokeStyle = "#a78bfa35"; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, TILE * 2.2, 0, Math.PI * 2); ctx.stroke(); }
     if (enemy.protected) { ctx.strokeStyle = "#a78bfa"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, radius + 3, 0, Math.PI * 2); ctx.stroke(); }
     ctx.save(); ctx.translate(x, y); ctx.scale(TILE / DRAW_TILE, TILE / DRAW_TILE);
     drawEnemyBody(ctx, world, { ...enemy, awake: true }, 0, 0);
     ctx.restore();
-    if (enemy.veteran || enemy.boss) { ctx.strokeStyle = enemy.boss ? "#ddd6fe" : "#f8fafc"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, radius + 5, 0, Math.PI * 2); ctx.stroke(); }
-    if (enemy.veteran) { ctx.fillStyle = "#f8fafc"; ctx.font = "bold 10px system-ui"; ctx.fillText("+", x, y + radius + 8); }
+    if (enemy.veteran || enemy.boss || enemy.elite) { ctx.strokeStyle = enemy.boss ? "#ddd6fe" : enemy.elite ? "#fbbf24" : "#f8fafc"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, radius + 5, 0, Math.PI * 2); ctx.stroke(); }
+    if (enemy.veteran || enemy.elite) { ctx.fillStyle = enemy.elite ? "#fbbf24" : "#f8fafc"; ctx.font = "bold 10px system-ui"; ctx.fillText(enemy.elite ? "++" : "+", x, y + radius + 8); }
     if (enemy.hp < enemy.maxHp) { ctx.fillStyle = "#020617"; ctx.fillRect(x - 14, y - radius - 7, 28, 4); ctx.fillStyle = enemy.slow < 1 ? "#67e8f9" : "#4ade80"; ctx.fillRect(x - 14, y - radius - 7, 28 * Math.max(0, enemy.hp / enemy.maxHp), 4); }
   }
   for (const effect of game.effects) {

@@ -3,7 +3,8 @@ import { ENEMY_TYPES } from "../config/enemies.js";
 
 export const DEFENSE_COLUMNS = 18;
 export const DEFENSE_ROWS = 12;
-export const DEFENSE_WAVES = 20;
+export const DEFENSE_WAVES = 60;
+export const DEFENSE_MAX_LEVEL = 6;
 export const DEFENSE_SPEEDS = Object.freeze([1, 2, 3]);
 export const DEFENSE_TYPES = Object.freeze({
   rapidFire: { ...POWER_UPS.rapidFire, cost: 90, damage: 7, cooldown: .24, range: 2.8, symbol: "R", description: "Fast bolts pick off the leading enemy." },
@@ -11,6 +12,12 @@ export const DEFENSE_TYPES = Object.freeze({
   demolition: { ...POWER_UPS.demolition, cost: 180, damage: 28, cooldown: 1.25, range: 3.1, splash: 1.2, symbol: "D", description: "Explosive blasts damage groups of enemies." },
   precision: { ...POWER_UPS.precision, cost: 150, damage: 42, cooldown: 1.5, range: 4.5, symbol: "P", description: "Long-range shots break through Brute and Warden armor." },
   overcharge: { ...POWER_UPS.overcharge, cost: 200, damage: 13, cooldown: .75, range: 3.1, symbol: "O", description: "Lightning jumps between three nearby enemies." },
+  scattershot: { ...POWER_UPS.scattershot, cost: 150, damage: 10, cooldown: .8, range: 2.8, symbol: "S", description: "A volley hits three different enemies at once." },
+  berserk: { ...POWER_UPS.berserk, cost: 180, damage: 0, cooldown: 0, range: 2.6, support: true, symbol: "B", description: "Nearby attacking powerups deal 20% more damage. Auras do not stack." },
+  sonar: { ...POWER_UPS.sonar, cost: 145, damage: 0, cooldown: 0, range: 2.8, support: true, symbol: "N", description: "Enemies in range take 15% more damage and cannot regenerate. Does not stack." },
+  bounty: { ...POWER_UPS.bounty, cost: 160, damage: 0, cooldown: 0, range: 3.1, support: true, symbol: "$", description: "Defeats inside this field give 2 extra energy. Only the strongest field pays." },
+  regen: { ...POWER_UPS.regen, cost: 220, damage: 0, cooldown: 18, range: 0, support: true, symbol: "+", description: "Repair 1 core health every 18 active battle seconds. Only the strongest repair runs." },
+  shield: { ...POWER_UPS.shield, cost: 210, damage: 0, cooldown: 0, range: 0, support: true, symbol: "G", description: "Absorb 2 core damage each wave. The strongest shield refreshes when a wave starts." },
 });
 
 // A fixed, winding route makes each placement readable and never lets towers block enemies.
@@ -30,7 +37,7 @@ export const isDefensePath = (x, y) => pathCells.has(`${x},${y}`);
 
 export function createDefenseGame() {
   return { status: "building", paused: false, speed: 1, wave: 0, lives: 20, energy: 270, kills: 0, time: 0,
-    towers: [], enemies: [], effects: [], queue: [], spawnIn: 0, nextId: 1, selectedId: null,
+    towers: [], enemies: [], effects: [], queue: [], spawnIn: 0, nextId: 1, selectedId: null, coreShield: 0, repairIn: 18, coreDamageTaken: 0, coreDamageBlocked: 0, coreRepairs: 0,
     message: "Place your powerups beside the route, then start wave 1." };
 }
 
@@ -42,21 +49,33 @@ export function setDefenseSpeed(game, speed) {
 
 export function defenseTowerStats(tower) {
   const type = DEFENSE_TYPES[tower.type];
-  const tier = tower.level - 1;
-  return { ...type, damage: Math.round(type.damage * (1 + tier * .6)), range: type.range + tier * .35,
-    cooldown: type.cooldown / (1 + tier * .12), slow: .6 - tier * .08,
-    chain: 3 + tier, splash: (type.splash || 0) + tier * .2 };
+  const tier = Math.max(0, Math.min(DEFENSE_MAX_LEVEL - 1, (tower.level || 1) - 1));
+  const advanced = Math.max(0, tier - 2);
+  return { ...type, damage: Math.round(type.damage * (1 + tier * .6 + advanced * advanced * .5)),
+    range: type.range > 0 ? type.range + tier * .35 : 0,
+    cooldown: type.cooldown / (1 + tier * .12 + advanced * .12), slow: Math.max(.25, .6 - tier * .08),
+    chain: 3 + tier, targets: 3 + tier, splash: (type.splash || 0) + tier * .2,
+    damageBoost: .2 + tier * .05, vulnerability: .15 + tier * .04,
+    bounty: 2 + tier, repair: 1 + Math.floor(tier / 2), shieldCapacity: 2 + tier };
 }
 export const defenseUpgradeCost = (tower) => Math.round(DEFENSE_TYPES[tower.type].cost * (.8 + (tower.level - 1) * .5));
 export const defenseSellValue = (tower) => Math.floor(tower.spent * .7);
 
-/** Shared by the current and next-level rows so the preview uses the actual combat values. */
+/** The same values drive combat and both stat rows, including support effects. */
 export function defenseStatSummary(tower) {
   const stats = defenseTowerStats(tower);
-  const parts = tower.type === "frost" ? [`${Math.round((1 - stats.slow) * 100)}% slow`] : [`${stats.damage} damage`, `${stats.cooldown.toFixed(2)}s cooldown`];
-  parts.push(`${stats.range.toFixed(2)} tile range`);
+  const percent = (value) => Math.round(value * 100);
+  const parts = tower.type === "frost" ? [`${percent(1 - stats.slow)}% slow`]
+    : tower.type === "berserk" ? [`+${percent(stats.damageBoost)}% nearby tower damage`, "strongest aura only"]
+    : tower.type === "sonar" ? [`+${percent(stats.vulnerability)}% damage taken`, "blocks regeneration", "strongest field only"]
+    : tower.type === "bounty" ? [`+${stats.bounty} energy per nearby defeat`, "strongest field only"]
+    : tower.type === "regen" ? [`${stats.repair} core repair`, `${stats.cooldown.toFixed(2)}s cooldown`, "strongest repair only"]
+    : tower.type === "shield" ? [`${stats.shieldCapacity} core shield per wave`, "strongest shield only"]
+    : [`${stats.damage} damage`, `${stats.cooldown.toFixed(2)}s cooldown`];
+  parts.push(stats.range ? `${stats.range.toFixed(2)} tile range` : "whole core");
   if (tower.type === "demolition") parts.push(`${stats.splash.toFixed(2)} tile splash`);
   if (tower.type === "overcharge") parts.push(`${stats.chain} chain targets`);
+  if (tower.type === "scattershot") parts.push(`${stats.targets} volley targets`);
   if (tower.type === "precision") parts.push("ignores armor");
   return parts.join(" · ");
 }
@@ -85,7 +104,7 @@ export function placeDefense(game, type, x, y) {
 export function upgradeDefense(game, id) {
   const tower = game.towers.find((t) => t.id === id);
   if (!tower || game.paused || !["building", "running"].includes(game.status)) return false;
-  if (tower.level >= 3) { game.message = "This powerup is already level 3."; return false; }
+  if (tower.level >= DEFENSE_MAX_LEVEL) { game.message = `This powerup is already level ${DEFENSE_MAX_LEVEL}.`; return false; }
   const cost = defenseUpgradeCost(tower);
   if (game.energy < cost) { game.message = "Not enough battlefield energy to upgrade."; return false; }
   game.energy -= cost; tower.spent += cost; tower.level++;
@@ -112,7 +131,11 @@ export function defenseWave(wave) {
 }
 
 export function defenseWaveBrief(wave) {
+  if (wave === 60) return "Final assault: twelve Wardens lead elite packs. Combine upgraded damage, area attacks, auras, and core support.";
+  if (wave >= 40 && wave % 5 === 0) return "Elite Warden assault: hardened armor and protection. Use Precision, Sonar and Berserk together.";
   if (wave % 5 === 0) return "Warden assault: heavy armor and a protective aura. Precision bypasses armor.";
+  if (wave >= 31) return "Elite legions: faster armored veterans join dense waves. Six upgrade tiers and support combinations matter.";
+  if (wave >= 21) return "Reinforcements: denser packs, stronger veterans and increasing energy rewards. Add support fields and advanced upgrades.";
   if (wave >= 8 && wave % 5 === 3) return "Rush: Chargers surge past gaps in your defenses. Slow them across several bends.";
   if (wave >= 8 && wave % 5 === 4) return "Siege: armored Brutes protect regenerating Crawlers. Focus sustained damage.";
   if (wave >= 11) return "Veterans: every fourth enemy has more health, speed, and resistance to slowing.";
@@ -126,11 +149,12 @@ export function defenseEnemyStats(kind, wave, index = 0) {
   const type = ENEMY_TYPES[kind], age = Math.max(0, wave - 1);
   const veteran = wave >= 11 && index % 4 === 0 && kind !== "warden";
   const boss = kind === "warden";
-  const hp = Math.round(type.hp * (1 + age * .18 + age * age * .045) * (veteran ? 1.45 : 1) * (boss ? 3.5 : 1));
+  const elite = wave >= 31 && index % 6 === 0;
+  const hp = Math.round(type.hp * (1 + age * .18 + age * age * .045) * (veteran ? 1.45 : 1) * (boss ? 3.5 : 1) * (elite ? 1.25 : 1));
   return { hp, maxHp: hp, speed: type.speed * .42 * (1 + age * .024) * (veteran ? 1.15 : 1),
-    radius: type.radius * (boss ? 1.35 : veteran ? 1.12 : 1), color: type.color, veteran, boss,
-    armor: boss ? .38 : kind === "brute" ? .28 : 0,
-    reward: 5 + Math.round(type.hp / 16) + (veteran ? 2 : 0) + (boss ? 30 : 0),
+    radius: type.radius * (boss ? 1.35 : veteran ? 1.12 : 1), color: type.color, veteran, boss, elite,
+    armor: Math.min(.5, (boss ? .38 : kind === "brute" ? .28 : 0) + (elite ? .08 : 0)),
+    reward: 5 + Math.round(type.hp / 16) + (veteran ? 2 : 0) + (boss ? 30 : 0) + Math.floor(Math.max(0, wave - 20) / 8),
     leak: boss ? 4 : kind === "brute" ? 2 : 1,
     slowFloor: boss ? .65 : veteran ? .55 : .25,
     regeneration: kind === "crawler" && wave >= 8 ? hp * .012 : 0 };
@@ -138,6 +162,7 @@ export function defenseEnemyStats(kind, wave, index = 0) {
 
 export function startDefenseWave(game) {
   if (game.status !== "building" || game.paused || game.wave >= DEFENSE_WAVES) return false;
+  game.coreShield = Math.max(0, ...game.towers.filter((tower) => tower.type === "shield").map((tower) => defenseTowerStats(tower).shieldCapacity));
   game.wave++; game.queue = defenseWave(game.wave); game.spawned = 0; game.spawnIn = .3; game.status = "running";
   game.message = `Wave ${game.wave}: ${defenseWaveBrief(game.wave)}`;
   return true;
@@ -155,8 +180,8 @@ function spawnEnemy(game, kind) {
 const separation = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 function hurt(game, tower, enemy, damage) {
   if (enemy.hp <= 0) return;
-  enemy.hp -= damage * (tower.type === "precision" ? 1 : 1 - Math.min(.65, enemy.armor + (enemy.protected ? .12 : 0)));
-  if (enemy.hp <= 0) { game.kills++; tower.kills++; game.energy += enemy.reward; }
+  enemy.hp -= damage * (1 + (tower.damageBoost || 0)) * (1 + (enemy.vulnerability || 0)) * (tower.type === "precision" ? 1 : 1 - Math.min(.65, enemy.armor + (enemy.protected ? .12 : 0)));
+  if (enemy.hp <= 0) { game.kills++; tower.kills++; game.energy += enemy.reward + (enemy.bounty || 0); }
 }
 function beam(game, tower, target, color) {
   game.effects.push({ type: "beam", x: tower.x, y: tower.y, x2: target.x, y2: target.y, color, ttl: .13, maxTtl: .13 });
@@ -173,12 +198,34 @@ export function stepDefense(game, elapsed) {
     game.effects = game.effects.filter((effect) => (effect.ttl -= dt) > 0);
     game.spawnIn -= dt;
     if (game.queue.length && game.spawnIn <= 0) { spawnEnemy(game, game.queue.shift()); game.spawnIn += Math.max(.3, .86 - game.wave * .026); }
+    const wardens = game.enemies.filter((enemy) => enemy.hp > 0 && enemy.kind === "warden");
+    const spitters = game.enemies.filter((enemy) => enemy.hp > 0 && enemy.kind === "spitter");
+    const fields = game.towers.map((tower) => ({ tower, stats: defenseTowerStats(tower) }));
+    const damageAuras = fields.filter(({ tower }) => tower.type === "berserk");
+    const sonars = fields.filter(({ tower }) => tower.type === "sonar");
+    const bounties = fields.filter(({ tower }) => tower.type === "bounty");
+    const repair = fields.filter(({ tower }) => tower.type === "regen").sort((a,b) => b.stats.repair / b.stats.cooldown - a.stats.repair / a.stats.cooldown)[0];
+    if (repair) {
+      game.repairIn = Math.max(0, Math.min(game.repairIn ?? repair.stats.cooldown, repair.stats.cooldown) - dt);
+      if (game.repairIn <= 0) {
+        if (game.lives < 20) {
+          const restored = Math.min(20 - game.lives, repair.stats.repair);
+          game.lives += restored; game.coreRepairs = (game.coreRepairs || 0) + restored;
+          game.effects.push({ type: "blast", x: DEFENSE_PATH.at(-1).x, y: DEFENSE_PATH.at(-1).y, radius: .8, color: repair.stats.color, ttl: .4, maxTtl: .4 });
+        }
+        game.repairIn = repair.stats.cooldown;
+      }
+    }
     for (const enemy of game.enemies) {
       enemy.slow = 1;
-      enemy.protected = game.enemies.some((other) => other.hp > 0 && other.kind === "warden" && other !== enemy && separation(other, enemy) <= 2.2);
+      enemy.protected = wardens.some((other) => other !== enemy && separation(other, enemy) <= 2.2);
+      enemy.vulnerability = Math.max(0, ...sonars.filter(({tower,stats}) => separation(tower,enemy) <= stats.range).map(({stats}) => stats.vulnerability));
+      enemy.bounty = Math.max(0, ...bounties.filter(({tower,stats}) => separation(tower,enemy) <= stats.range).map(({stats}) => stats.bounty));
     }
     for (const tower of game.towers) {
       const stats = defenseTowerStats(tower);
+      if (stats.support) continue;
+      tower.damageBoost = Math.max(0, ...damageAuras.filter(({tower: aura,stats: auraStats}) => separation(tower,aura) <= auraStats.range).map(({stats: auraStats}) => auraStats.damageBoost));
       if (tower.type === "frost") {
         for (const enemy of game.enemies) if (separation(tower, enemy) <= stats.range) enemy.slow = Math.min(enemy.slow, Math.max(stats.slow, enemy.slowFloor || 0));
         continue;
@@ -200,24 +247,35 @@ export function stepDefense(game, elapsed) {
           if (next && jump < stats.chain - 1) beam(game, current, next, stats.color);
           current = next;
         }
+      } else if (tower.type === "scattershot") {
+        for (const enemy of targets.slice(0, stats.targets)) {
+          if (enemy !== target) beam(game, tower, enemy, stats.color);
+          hurt(game, tower, enemy, stats.damage);
+        }
       } else hurt(game, tower, target, stats.damage);
     }
     for (const enemy of game.enemies) {
       if (enemy.hp <= 0) continue;
-      if (enemy.regeneration) enemy.hp = Math.min(enemy.maxHp, enemy.hp + enemy.regeneration * dt);
+      if (enemy.regeneration && !enemy.vulnerability) enemy.hp = Math.min(enemy.maxHp, enemy.hp + enemy.regeneration * dt);
       // Chargers surge in pulses. Spitters steadily march; Brutes and Wardens carry armor.
       const charge = enemy.kind === "charger" && Math.sin(game.time * 2 + enemy.id) > .65 ? 1.7 : 1;
-      const rally = game.enemies.some((other) => other.hp > 0 && other.kind === "spitter" && other !== enemy && separation(other, enemy) <= 1.5) ? 1.12 : 1;
+      const rally = spitters.some((other) => other.hp > 0 && other !== enemy && separation(other, enemy) <= 1.5) ? 1.12 : 1;
       enemy.distance += enemy.speed * enemy.slow * charge * rally * dt;
       Object.assign(enemy, defensePosition(enemy.distance));
-      if (enemy.distance >= DEFENSE_PATH.length - 1) { game.lives = Math.max(0, game.lives - enemy.leak); enemy.hp = 0; enemy.escaped = true; }
+      if (enemy.distance >= DEFENSE_PATH.length - 1) {
+        const absorbed = Math.min(game.coreShield || 0, enemy.leak);
+        game.coreShield = Math.max(0, (game.coreShield || 0) - absorbed);
+        game.coreDamageBlocked = (game.coreDamageBlocked || 0) + absorbed;
+        game.coreDamageTaken = (game.coreDamageTaken || 0) + Math.min(game.lives, enemy.leak - absorbed);
+        game.lives = Math.max(0, game.lives - (enemy.leak - absorbed)); enemy.hp = 0; enemy.escaped = true;
+      }
     }
     game.enemies = game.enemies.filter((enemy) => enemy.hp > 0);
     if (game.lives === 0) { game.status = "defeat"; game.message = `The core fell on wave ${game.wave}. Try covering several bends with each powerup.`; }
     else if (!game.queue.length && !game.enemies.length) {
       const bonus = 25 + game.wave * 6; game.energy += bonus;
       game.status = game.wave >= DEFENSE_WAVES ? "victory" : "building";
-      game.message = game.status === "victory" ? "All 20 waves defeated. The core is safe!" : `Wave ${game.wave} cleared! +${bonus} energy. Build, upgrade, then start the next wave.`;
+      game.message = game.status === "victory" ? `All ${DEFENSE_WAVES} waves defeated. The core is safe!` : `Wave ${game.wave} cleared! +${bonus} energy. Build, upgrade, then start the next wave.`;
       game.effects = [];
     }
   }

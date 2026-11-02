@@ -1,0 +1,24 @@
+NOVEMBER 1 RELEASE VERIFICATION
+
+PASS npm run verify: import graph audit and production build.
+PASS node --test scripts/tests/*.test.mjs: 155 tests, zero failures.
+PASS 12 Cube engine tests: every story connected across all250 stories;
+repeated1–10story ramps; gradual bidirectional movement; walls and bounds;
+seed regeneration; bounded cache; true connected hints; powerups; saves; goal.
+PASS 6 3D renderer tests: real eye altitude and pitch, sloped geometry,
+32 close/ramp camera views, depth ordering, map altitude, bounded overview.
+PASS 23 TD engine/UI tests: all eleven powers, support nonstacking, previews,
+shortcuts, upgrades, 60wave victory at1x/3x, late damage, no-upgrade defeat.
+PASS actual browser: unlocks, one-timegift, TD placement/speed/preview/wave;
+Cube walking, continuous ramp ascent/descent, expandedmap orbit/zoom/slice/
+overview/follow, map pause, stuck-key regression, saves and reload, separate
+profiles, mobile movement/look joysticks, visiblemobilemap, viewport layout.
+No browser page errors.
+
+Whole-cube overview is sampled for readability. Altitude slices show detailed
+nearby passages; all topology comes from the same continuous maze engine.
+One story is4 mazeunits:1000tall means250stories, with many1–10storyramps.
+Existing Hundred Floors saves remain in their old key; Cube uses a newkey.
+All original API/database/publicmusic files are byte-for-byte unchanged.
+The replacement productionJS/CSS matches the tested source build exactly.
+The existing production bundle-size advisory remains.

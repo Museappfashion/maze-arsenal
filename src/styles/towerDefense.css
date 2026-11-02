@@ -41,3 +41,5 @@
 @media(max-width:480px) { .td-sidebar { padding:12px; }.td-power-grid { grid-template-columns:1fr; }.td-stats { gap:5px; }.td-stats>div { padding:9px 7px!important; }.td-stats>div>div:first-child { font-size:8px!important; }.td-stats strong { font-size:15px; }.td-arena-label { top:8px; left:8px; padding:6px 8px; }.td-arena-label strong { font-size:9px; }.td-arena-label span { font-size:8px; }.td-arena-message { bottom:8px; left:8px; padding:6px 8px; font-size:9px; max-width:calc(100% - 16px); } }
 @media(max-height:600px) and (min-width:901px) { .td-sidebar { overflow:auto; }.td-shop { flex-shrink:0; overflow:visible; }.td-header { gap:8px; }.td-stats>div { padding:7px 10px!important; }.td-upgrade { padding:9px; }.td-upgrade p { font-size:9px; } }
 @media(prefers-reduced-motion:reduce) { .td-screen * { scroll-behavior:auto; } }
+
+.td-core-shield { display:block; color:#93c5fd; font-size:10px; line-height:1.5; }

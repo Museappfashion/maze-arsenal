@@ -26,6 +26,8 @@ try {
   await page.screenshot({ path: `${out}/unlocked-menu.png` });
   await page.getByRole("button", { name: "Enter Powerup Defense", exact: true }).click();
   const board = page.locator(".td-canvas"); await board.waitFor();
+  assert.equal(await page.locator(".td-power").count(),11,"all eleven distinct powerups are in the store");
+  assert.match(await page.locator(".td-arena-label").innerText(), /60/);
   const cell = async (x, y) => { const b = await board.boundingBox(); await page.mouse.click(b.x + (x + .5) / 18 * b.width, b.y + (y + .5) / 12 * b.height); };
   await cell(0, 2);
   await page.getByRole("status").filter({ hasText: "route must stay clear" }).waitFor();
@@ -46,39 +48,80 @@ try {
   assert.equal(await page.getByRole("button", { name: "3×", exact: true }).getAttribute("aria-pressed"), "true");
   assert.equal(await page.locator(".td-current-stats + .td-next-stats").count(), 1);
   await page.screenshot({ path: `${out}/tower-defense.png` });
-  await page.clock.runFor(35000);
+  await page.clock.runFor(10000);
   await page.getByRole("button", { name: "Start wave 2", exact: true }).waitFor();
   await page.getByRole("button", { name: "Back to first page", exact: true }).click();
-  await page.getByRole("button", { name: "Enter The Hundred Floors", exact: true }).click();
-  await page.locator(".hundred-canvas").waitFor();
-  await page.clock.runFor(100);
+  await page.getByRole("button", { name: "Enter The Cube", exact: true }).click();
+  await page.locator(".cube-canvas").waitFor();
+  await page.waitForFunction(() => Boolean(globalThis.__mistCubeMazeWorld));
+  const cubeState = () => page.evaluate(() => { const w = globalThis.__mistCubeMazeWorld; return { seed:w.seed, x:w.player.x, y:w.player.y, z:w.player.z, elapsed:w.elapsed, visited:w.visited.size }; });
+  const spawn = await cubeState();
+  await page.locator(".cube-canvas").focus();
+  await page.keyboard.down("w"); await page.clock.runFor(800); await page.keyboard.up("w");
+  const walked = await cubeState();
+  assert.ok(Math.hypot(walked.x-spawn.x,walked.y-spawn.y) > .5, "W walks along a real corridor");
   await page.getByRole("button", { name: /Compass.*ready/ }).click();
-  await page.clock.runFor(100);
-  assert.match(await page.locator(".hundred-message").innerText(), /Compass/);
-  await page.screenshot({ path: `${out}/hundred-floors.png` });
-  await page.getByRole("button", { name: /Floor map/ }).click();
-  const mapTime = await progress(); await page.clock.runFor(2000); assert.equal(await progress(), mapTime);
-  await page.getByRole("button", { name: /Close map/ }).click();
-  await page.getByRole("button", { name: /first page/i, exact: false }).click();
-  // Set up a real saved checkpoint at the first staircase, then use the UI to climb.
+  assert.ok(await page.evaluate(() => globalThis.__mistCubeMazeWorld.compass > 0));
+  await page.screenshot({ path: `${out}/cube-maze.png` });
+  await page.getByRole("button", { name: /Explore 3D map/ }).click();
+  const map = page.locator(".cube-minimap-expanded"); await map.waitFor();
+  const mapBounds=await map.boundingBox();
+  assert.ok(mapBounds.width>800&&mapBounds.height>500,"expanded map uses the viewport rather than the narrow sidebar");
+  assert.equal(await map.locator("canvas").evaluate(el=>document.activeElement===el),true,"map receives keyboard navigation focus");
+  const frozen = await cubeState();
+  const beforeMap = await map.locator("canvas").evaluate((canvas) => canvas.toDataURL());
+  await map.getByRole("button", { name: "Rotate map right", exact:true }).click();
+  await map.getByRole("button", { name: "Zoom map in", exact:true }).click();
+  const slider = map.getByRole("slider", { name: "Map altitude slice" });
+  await slider.focus(); await page.keyboard.press("Home"); await page.keyboard.press("ArrowRight");
+  await page.clock.runFor(250);
+  assert.notEqual(await map.locator("canvas").evaluate((canvas) => canvas.toDataURL()), beforeMap, "orbit, zoom and altitude change the actual 3D map");
+  assert.match(await map.locator(".cube-map-heading").innerText(), /Free navigation/);
+  await map.getByRole("button", { name:/Whole cube/ }).click();
+  await page.clock.runFor(200);
+  assert.match(await map.locator(".cube-map-heading").innerText(), /Whole volume/);
+  await page.screenshot({ path: `${out}/cube-overview.png` });
+  await map.getByRole("button", { name:"Follow you",exact:true }).click();
+  await page.clock.runFor(200);
+  assert.match(await map.locator(".cube-map-heading").innerText(), /Following you/);
+  assert.deepEqual(await cubeState(), frozen, "expanded-map navigation never moves the player or earns playtime");
+  await map.getByRole("button", { name:/Close map/ }).click();
+  // Releasing movement over the inline map must still clear the game input.
+  await page.locator(".cube-canvas").focus();
+  await page.keyboard.down("w");await page.clock.runFor(100);
+  await page.locator(".cube-map-canvas").focus();await page.keyboard.up("w");
+  const released=await cubeState();await page.clock.runFor(250);const afterRelease=await cubeState();
+  for(const key of ["x","y","z"]) assert.equal(afterRelease[key],released[key],"map focus cannot leave movement stuck");
+  // A legal midpoint of a generated ramp exercises actual continuous ascent
+  // and descent through the UI movement loop, without a staircase transition.
   await page.evaluate(async () => {
-    const m = await import("/src/game/hundredFloorMaze.js");
-    const w = m.loadHundredFloorRun("oibougvovov"); w.player = { ...w.stairs };
-    m.saveHundredFloorRun("oibougvovov", w);
+    const m=await import("/src/game/cubeMaze.js"),w=globalThis.__mistCubeMazeWorld;
+    const a=m.getCubeNode(w,"r0:9:a"),ramp=m.getCubeNodeEdges(w,a.id).find(edge=>edge.kind==="ramp");
+    const b=ramp.b;
+    Object.assign(w.player,{x:a.x+(b.x-a.x)*.3,y:a.y+(b.y-a.y)*.3,z:a.z+(b.z-a.z)*.3,facing:Math.atan2(b.y-a.y,b.x-a.x),pitch:Math.atan2(b.z-a.z,Math.hypot(b.x-a.x,b.y-a.y))});
+    w.activeRamp=ramp;w.currentNode=a.id;
   });
-  await page.getByRole("button", { name: "Enter The Hundred Floors", exact: true }).click();
-  await page.getByRole("button", { name: /Climb stairs/ }).click();
-  await page.locator(".hundred-status-grid").getByText("2 / 100", { exact: true }).waitFor();
-  await page.getByRole("button", { name: /first page/i, exact: false }).click();
+  await page.locator(".cube-canvas").focus();
+  const rampStart=await cubeState();
+  await page.keyboard.down("w"); await page.clock.runFor(1000); await page.keyboard.up("w");
+  const upRamp=await cubeState();
+  assert.ok(upRamp.z > rampStart.z+.5 && upRamp.z < rampStart.z+8, "ramp ascent is gradual, not a floor jump");
+  assert.equal(upRamp.seed,rampStart.seed);
+  await page.screenshot({path:`${out}/cube-ramp.png`});
+  await page.keyboard.down("s"); await page.clock.runFor(1000); await page.keyboard.up("s");
+  assert.ok((await cubeState()).z < upRamp.z-.5,"walking backward descends the same ramp");
+  const savedPosition=await cubeState();
+  await page.getByRole("button", { name:"Back to first page",exact:true }).click();
   await page.reload();
-  await page.getByRole("button", { name: "Enter The Hundred Floors", exact: true }).click();
-  await page.locator(".hundred-status-grid").getByText("2 / 100", { exact: true }).waitFor();
-  await page.getByRole("button", { name: "Pause", exact: true }).click();
-  await page.getByRole("button", { name: "Start a new climb", exact: true }).click();
-  await page.keyboard.press("Escape");
-  await page.getByRole("heading", { name: "Climb paused" }).waitFor();
-  await page.getByRole("button", { name: "Keep climbing", exact: true }).click();
-  await page.getByRole("button", { name: /first page/i, exact: false }).click();
+  await page.getByRole("button", { name:"Enter The Cube",exact:true }).click();
+  await page.waitForFunction(() => Boolean(globalThis.__mistCubeMazeWorld));
+  const resumed=await cubeState();
+  for(const key of ["seed","x","y","z"]) assert.equal(resumed[key],savedPosition[key],`Cube resumes ${key}`);
+  await page.getByRole("button", { name:"Pause",exact:true }).click();
+  await page.getByRole("heading",{name:"Maze paused",exact:true}).waitFor();
+  const pausedPosition=await cubeState();await page.clock.runFor(1000);assert.deepEqual(await cubeState(),pausedPosition);
+  await page.getByRole("button",{name:"Keep exploring",exact:true}).click();
+  await page.getByRole("button", { name:"Back to first page",exact:true }).click();
   // Time gates belong to the selected profile, even after another profile unlocks them.
   await page.locator("#progress-player").fill("A new explorer");
   await page.getByRole("button", { name: "Use name", exact: true }).click();
@@ -87,15 +130,26 @@ try {
   mobile.on("pageerror", (error) => errors.push(error.message));
   await mobile.route("**/*", (route) => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
   await mobile.goto(baseUrl); await mobile.locator("#progress-player").fill("oibougvovov"); await mobile.getByRole("button", { name: "Use name", exact: true }).click();
-  for (const [button, selector, file] of [["Enter Powerup Defense", ".td-screen", "tower-mobile"], ["Enter The Hundred Floors", ".hundred-page", "floors-mobile"]]) {
+  for (const [button, selector, file] of [["Enter Powerup Defense", ".td-screen", "tower-mobile"], ["Enter The Cube", ".hundred-page", "cube-mobile"]]) {
     await mobile.getByRole("button", { name: button, exact: true }).click(); await mobile.locator(selector).waitFor();
     assert.equal(await mobile.locator(selector).evaluate((el) => el.scrollWidth > el.clientWidth + 1), false);
     await mobile.screenshot({ path: `${out}/${file}.png` });
     if (selector === ".hundred-page") {
       assert.equal(await mobile.getByRole("group", { name: "Movement joystick" }).isVisible(), true);
+      assert.equal(await mobile.getByRole("group", { name: "Look joystick" }).isVisible(), true);
+      await mobile.getByRole("button",{name:/Expand map/}).click();
+      const expanded=mobile.locator(".cube-minimap-expanded");await expanded.waitFor();
+      const mobileMapBounds=await expanded.boundingBox();
+      assert.ok(mobileMapBounds.y>=0&&mobileMapBounds.y+mobileMapBounds.height<=845,"mobile map fits the viewport");
+      const toolbarBounds=await expanded.locator(".cube-map-toolbar").boundingBox();
+      assert.ok(toolbarBounds.y+toolbarBounds.height<=845,"mobile map navigation remains on screen");
+      await mobile.waitForFunction(()=>{const canvas=document.querySelector(".cube-minimap-expanded canvas");if(!canvas)return false;const d=canvas.getContext("2d").getImageData(0,0,canvas.width,canvas.height).data;let bright=0;for(let i=0;i<d.length;i+=4)if(d[i]>170&&d[i+1]>210&&d[i+2]>230&&d[i+3]>200)bright++;return bright>10;});
+      assert.equal(await expanded.evaluate(el=>el.scrollWidth>el.clientWidth+1),false);
+      await mobile.screenshot({path:`${out}/cube-map-mobile.png`});
+      await expanded.getByRole("button",{name:/Close map/}).click();
       await mobile.getByRole("button", { name: /first page/i, exact: false }).click();
     } else await mobile.getByRole("button", { name: "Back to first page", exact: true }).click();
   }
   assert.deepEqual(errors, []);
-  console.log("Expedition UI passed: locks, single-credit gift, placements, wave victory, pause accounting, floor stairs/checkpoint/reload, separate names, mobile layout, no browser errors.");
+  console.log("Expedition UI passed: locks, single-credit gift, TD wave and speed/preview, connected Cube walking, continuous ramp ascent/descent, interactive 3D map and overview, save/reload, pause accounting, separate names, mobile controls/layout, no page errors.");
 } finally { await browser.close(); }

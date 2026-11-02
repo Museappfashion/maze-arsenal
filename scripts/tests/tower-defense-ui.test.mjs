@@ -54,10 +54,22 @@ test("defense UI switches speed, shows exact next stats under current stats, and
     assert.equal(text(byClass(tree,"td-next-stats")),"Next · Lv. 3: "+engine.defenseStatSummary({...tower,level:3}));
     const cost=engine.defenseUpgradeCost(tower);assert.equal(button(tree,`Upgrade · ${cost}`).props.disabled,true);
     game.energy=cost;tree=render();button(tree,`Upgrade · ${cost}`).props.onClick();tree=render();
-    assert.equal(tower.level,3);assert.match(text(byClass(tree,"td-next-stats")),/Maximum level/);
+    assert.equal(tower.level,3);assert.match(text(byClass(tree,"td-next-stats")),/Next · Lv\. 4/);
+    game.energy=10000;
+    while(tower.level<engine.DEFENSE_MAX_LEVEL){tree=render();button(tree,`Upgrade · ${engine.defenseUpgradeCost(tower)}`).props.onClick();}
+    tree=render();assert.equal(tower.level,6);assert.match(text(byClass(tree,"td-next-stats")),/Maximum level/);
+    assert.equal(nodes(byClass(tree,"td-shop")).filter(n=>n.props?.className?.split(" ").includes("td-power")).length,11);
     button(tree,"Start wave 1").props.onClick();tree=render();button(tree,"Pause").props.onClick();tree=render();
     assert.equal(game.paused,true);assert.equal(button(tree,`Sell · ${engine.defenseSellValue(tower)}`).props.disabled,true);
     button(tree,"Resume battle").props.onClick();tree=render();assert.equal(game.paused,false);
     nodes(tree).find((n)=>n.type==="canvas").props.onKeyDown({key:"s",preventDefault(){}});assert.equal(game.speed,1);
+    nodes(tree).find(n=>n.type==="canvas").props.onKeyDown({key:"0",preventDefault(){}});tree=render();
+    assert.match(text(byClass(tree,"td-power-selected")),/Regeneration.*key 0/);
+    nodes(tree).find(n=>n.type==="canvas").props.onKeyDown({key:"-",preventDefault(){}});tree=render();
+    assert.match(text(byClass(tree,"td-power-selected")),/Shield.*key -/);
+    nodes(tree).find(n=>n.type==="canvas").props.onPointerDown({button:0,clientX:75,clientY:75,currentTarget:{focus(){},getBoundingClientRect(){return {left:0,top:0,width:900,height:600};}}});tree=render();
+    assert.match(text(byClass(tree,"td-current-stats")),/2 core shield per wave/);
+    assert.match(text(byClass(tree,"td-next-stats")),/3 core shield per wave/);
+
   } finally {await server.close();}
 });

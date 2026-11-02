@@ -1,30 +1,42 @@
-COMPLETE REPLACEMENT GAME — October 26, 2026
+FULL GAME — NOVEMBER 1 UPDATE
 
-This maze-arsenal-ready folder is the complete project. It starts from your
-Downloads copy and includes only the latest graphics and unlock-mode fixes.
-Your App, menu, controls, currencies, cosmetics, saves, API, database scripts,
-settings, existing support files, and all four music files are retained.
-Old patch folders are kept for reference; you do not need to apply them.
+This is the complete game with the latest updates applied.
+The original game style, mazes, music, wallets, cosmetics, API configuration,
+and other existing features are preserved. Old patch folders are reference
+files only; no old patches need to be applied.
 
-Replace your old project code with the contents of this maze-arsenal-ready
-folder, including src, public, api, scripts, supabase, and root configuration.
-Do not put the new src folder inside your old src folder.
-Keep any existing private .env.local file and deployment environment variables.
-Keep the same website address to use the same browser-local saved progress.
+THE CUBE
+The two-hour unlock is now one connected 3D maze: 1,000 units long,
+100 units wide, and 1,000 units tall. One story is four units (250 stories).
+Repeated ramps rise 1–10 stories. Walk up or down them continuously.
+WASD walks, arrows move/turn, drag looks, Q hints, M opens the 3D map.
+The map orbits, pans, zooms, inspects altitude slices, and shows a whole-volume
+overview. Expanded map pauses movement and active playtime.
+Cube saves use a separate key. Your old Hundred Floors save is preserved.
 
-To run from this folder:
+POWERUP DEFENSE
+60 increasingly difficult waves; eleven powers; six upgrade tiers.
+New: Scattershot, Berserk, Sonar, Bounty, Regeneration, Shield.
+Controls and accurate current/next upgrade stats retain the original style.
+Select powers with 1–9, 0, minus; S cycles 1x/2x/3x battle speed.
+
+INSTALL TWO ZIP FILES
+Extract CUBE-GAME-PART-1.zip and CUBE-GAME-PART-2.zip.
+Move the public and PREVIEWS folders from Part 2 into Part 1, beside src
+and package.json.
+The combined Part 1 folder is your complete project. Use its entire contents
+to replace your old code. Keep your private .env.local if you have one.
+
+Open a terminal in that combined folder:
   npm install
   npm run dev
-If your existing local game uses port 5189, use:
+For the same local address as before, use:
   npm run dev -- --port 5189
+Keep the same website address to retain browser-local saved progress.
 
-To build: npm run build
-To validate: npm run verify
-Tests: node --test scripts/tests/*.test.mjs
+Production build: npm run build
+Validation: npm run verify
+Regression checks: node --test scripts/tests/*.test.mjs
 
-The dist folder contains the production build, including music assets.
-node_modules and private environment files are not included.
-
-REPLACEMENT-CONTENTS.json, beside this project folder, lists every preserved
-and updated file. The audit script follows actual game imports so old unused
-patch snippets do not break validation. This does not change gameplay.
+All public music and the production dist build are included.
+node_modules, private environment files, and Git history are not distributed.

@@ -456,7 +456,12 @@ export function LevelSelectScreen({
     : null;
 
   const openStartPrompt = (levelKey) => {
-    setDraftPlayerName(sanitizePlayerName(initialPlayerName));
+    const savedName = sanitizePlayerName(initialPlayerName);
+    if (savedName && !LEVELS[levelKey]?.labyrinthMode) {
+      onSelectLevel(levelKey, viewMode, savedName, {});
+      return;
+    }
+    setDraftPlayerName(savedName);
 
     if (LEVELS[levelKey]?.labyrinthMode) {
       setLabyrinthDifficulty(LABYRINTH_DEFAULT_DIFFICULTY);

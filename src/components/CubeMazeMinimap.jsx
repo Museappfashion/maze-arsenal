@@ -6,10 +6,11 @@ import "../styles/cubeMazeMinimap.css";
 
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 const origin = (world) => ({ x: world.player.x, y: world.player.y, z: world.player.z });
+const overviewScale=1000/Math.max(CUBE_DIMENSIONS.length,CUBE_DIMENSIONS.width,CUBE_DIMENSIONS.height);
 const initialView = (world) => ({ center: origin(world), yaw: -.65, tilt: .65, zoom: 1, band: 20, follow: true });
 
 /** The map owns its camera. Orbiting, panning and changing slices never move the player. */
-export function CubeMazeMinimap({ world, expanded = false, onToggle }) {
+export function CubeMazeMinimap({ world, expanded = false, compact = false, onToggle }) {
   const canvas = useRef(null), dialog = useRef(null), pointer = useRef(null), viewRef = useRef(initialView(world));
   const [view, setView] = useState(() => initialView(world));
   const [panMode, setPanMode] = useState(false);
@@ -19,7 +20,7 @@ export function CubeMazeMinimap({ world, expanded = false, onToggle }) {
     const next=typeof update === "function" ? update(current) : { ...current,...update };
     viewRef.current=next;setView(next);
   };
-  const zoom = (factor) => change((current) => ({ ...current, zoom: clamp(current.zoom * factor, current.overview ? .025 : .4, current.overview ? .12 : 4) }));
+  const zoom = (factor) => change((current) => ({ ...current, zoom: clamp(current.zoom * factor, current.overview ? .025*overviewScale : .4, current.overview ? .12*overviewScale : 4) }));
   const recenter = () => change((current) => ({ ...current, center: origin(world), follow: true, overview:false, zoom:current.overview ? 1 : current.zoom, band:20 }));
   const pan = (x, y) => change((current) => ({ ...current, follow: false, center: { ...current.center, x: clamp(current.center.x + x, 0, CUBE_DIMENSIONS.length), y: clamp(current.center.y + y, 0, CUBE_DIMENSIONS.width) } }));
   const rotate = (yaw, tilt = 0) => change((current) => ({ ...current, yaw: current.yaw + yaw, tilt: clamp(current.tilt + tilt, .12, 1.4) }));
@@ -50,7 +51,7 @@ export function CubeMazeMinimap({ world, expanded = false, onToggle }) {
     const wheel=(event)=>{
       event.preventDefault();event.stopPropagation();
       const current=viewRef.current;
-      const next={...current,zoom:clamp(current.zoom*Math.exp(-event.deltaY*.0015),current.overview ? .025 : .4,current.overview ? .12 : 4)};
+      const next={...current,zoom:clamp(current.zoom*Math.exp(-event.deltaY*.0015),current.overview ? .025*overviewScale : .4,current.overview ? .12*overviewScale : 4)};
       viewRef.current=next;setView(next);
     };
     element.addEventListener("wheel",wheel,{passive:false});
@@ -118,19 +119,21 @@ export function CubeMazeMinimap({ world, expanded = false, onToggle }) {
   };
   const stopPointer = () => { pointer.current = null; };
   const selectedAltitude = view.follow ? location.z : view.center.z;
-  const map=<section className={`cube-minimap ${expanded ? "cube-minimap-expanded" : ""}`} aria-label="Navigable 3D minimap">
-    <header className="cube-map-heading"><div><h2 id={expanded ? "cube-expanded-map-title" : "cube-minimap-title"}>3D minimap</h2><span>{view.overview ? "Whole volume" : view.follow ? "Following you" : "Free navigation"} · {Math.round(selectedAltitude)} altitude</span></div>{onToggle && <button type="button" className="cube-map-expand" onClick={onToggle}>{expanded ? "Close map" : "Expand map"}<small>M</small></button>}</header>
+  const map=<section className={`cube-minimap ${expanded ? "cube-minimap-expanded" : ""} ${compact ? "cube-minimap-compact" : ""}`} aria-label="Navigable 3D minimap">
+    <header className="cube-map-heading"><div><h2 id={expanded ? "cube-expanded-map-title" : "cube-minimap-title"}>3D minimap</h2>{(!compact||expanded)&&<span>{view.overview ? "Whole volume" : view.follow ? "Following you" : "Free navigation"} · {Math.round(selectedAltitude)} altitude</span>}</div>{onToggle && <button type="button" className="cube-map-expand" onClick={onToggle}>{expanded ? "Close map" : "Expand map"}<small>M</small></button>}</header>
     <canvas ref={canvas} tabIndex={0} className="cube-map-canvas" role="application" aria-label="3D maze map. Drag to orbit, Shift drag or Pan mode to pan. Arrow keys orbit; Shift arrows pan; plus and minus zoom; Page Up and Page Down change altitude; Home follows the player." onKeyDown={keyDown} onKeyUp={(event) => event.stopPropagation()} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={stopPointer} onPointerCancel={stopPointer} onLostPointerCapture={stopPointer} onContextMenu={(event) => event.preventDefault()} />
+    {(!compact||expanded)&&<>
     <div className="cube-map-toolbar" role="group" aria-label="Map camera controls">
       <button type="button" aria-label="Rotate map left" onClick={() => rotate(-.25)}>↶</button><button type="button" aria-label="Rotate map right" onClick={() => rotate(.25)}>↷</button>
       <button type="button" aria-label="Zoom map out" onClick={() => zoom(1 / 1.25)}>−</button><button type="button" aria-label="Zoom map in" onClick={() => zoom(1.25)}>+</button>
       <button type="button" aria-pressed={panMode} onClick={() => setPanMode(!panMode)}>{panMode ? "Pan on" : "Pan"}</button>
       <button type="button" className="cube-map-follow" aria-pressed={view.follow} onClick={recenter}>Follow you</button>
     </div>
-    <button type="button" className="cube-map-overview" aria-pressed={Boolean(view.overview)} onClick={() => change(cubeMapOverviewView())}>Whole cube · 1,000 × 100 × 1,000</button>
+    <button type="button" className="cube-map-overview" aria-pressed={Boolean(view.overview)} onClick={() => change(cubeMapOverviewView())}>Whole cube · {CUBE_DIMENSIONS.length} × {CUBE_DIMENSIONS.width} × {CUBE_DIMENSIONS.height}</button>
     <div className="cube-map-slice"><label htmlFor={expanded ? "cube-expanded-altitude" : "cube-altitude"}>Altitude slice <strong>{Math.round(selectedAltitude)} / {CUBE_DIMENSIONS.height}</strong></label><input id={expanded ? "cube-expanded-altitude" : "cube-altitude"} aria-label="Map altitude slice" type="range" min="0" max={CUBE_DIMENSIONS.height - CUBE_STORY_HEIGHT} step={CUBE_STORY_HEIGHT} value={selectedAltitude} onChange={(event) => altitude(Number(event.target.value))} /></div>
-    <div className="cube-map-bottom"><span><i className="cube-map-corridor-key" />Passages</span><span><i className="cube-map-ramp-key" />Ramps · 1–10 stories</span><span><i className="cube-map-you-key" />You</span></div>
+    <div className="cube-map-bottom"><span><i className="cube-map-corridor-key" />Passages</span><span><i className="cube-map-ramp-key" />Ramps · 1–10 stories</span><span><i className="cube-map-lift-key" />Lifts · 1–10 stories</span><span><i className="cube-map-you-key" />You</span></div>
     <p className="cube-map-help">Drag to orbit · Shift-drag to pan · Scroll to zoom. Move the altitude slider to inspect passages above and below you.</p>
+    </>}
   </section>;
   if(!expanded) return map;
   return createPortal(<div className="cube-map-modal" ref={dialog} role="dialog" aria-modal="true" aria-labelledby="cube-expanded-map-title" onKeyDown={dialogKeys} onPointerDown={(event)=>{if(event.target===event.currentTarget)onToggle?.();}}>{map}</div>,document.body);

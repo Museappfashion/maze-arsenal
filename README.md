@@ -343,62 +343,66 @@ decoration overlay is now disabled in 3D; its scenery draws inside the normal
 entity pass with shared obstacle clipping and depth ordering. The original 2D
 overlay and artwork are preserved. Maze collision and routes remain the same.
 
-## Playtime modes — November 1 update
+## Player name — November 2 update
 
-The opening page has a **Playtime unlocks** panel. Select a player name with
-**Use name**; the same name entered before a normal maze uses the same progress.
-Names are case-insensitive. Blank names share an anonymous profile. Saves are
-local to this browser and origin, so they do not sync between devices.
+New players choose a name once before the first page. It saves on this device
+and is used in every mode. Existing named profiles migrate automatically.
+Existing anonymous playtime transfers once using the higher of anonymous and
+named playtime, preserving earned unlocks without duplicating hours or rewards.
+Rename using Player name / Use name on the first page. Normal combat mazes
+start directly; Labyrinth keeps its settings dialog without asking for a name.
 
-At **one hour**, **Powerup Defense** unlocks. Place and upgrade eleven familiar
-powerup defenses beside the enemy route and protect the core through **60 waves**.
-Rapid Fire, Frost Field, Demolition, Precision, and Overcharge are joined by
-Scattershot, Berserk, Sonar, Bounty, Regeneration, and Shield. Support powers
-provide distinct damage, vulnerability, income, repair, and protection effects;
-their upgrade previews explain the actual effect before spending energy.
-Six upgrade tiers keep defenses useful against later waves. Enemy health,
-formations, armor, veteran traits, and boss pressure increase with the waves.
-Difficulty follows the wave schedule, without changing based on purchases.
+The existing developer analytics endpoint receives the named visitor as soon
+as the name is chosen, before any game starts. Blank analytics events retain
+the saved name. The existing developer dashboard reads that player name;
+no new database migration is required. The existing Supabase/Vercel analytics
+configuration is still used.
 
-**1× / 2× / 3×** changes battle speed; **S** cycles speeds while the board is
-focused. The selected defense shows current statistics, then exact next-level
-statistics directly underneath. Unlock progress always counts real active time.
+## Playtime modes — November 2 update
 
-At **two hours**, **The Cube** unlocks. It replaces the separate Hundred Floors
-mode with **one connected 3D maze**, 1,000 units long × 100 wide × 1,000 tall.
-One story is four maze units, so the vertical span contains 250 stories.
-There are many ramps with each rise from **one through ten stories**, throughout
-the volume. Walk onto a ramp to climb or descend continuously; there is no
-staircase button, floor loading screen, or teleport between separate mazes.
-The deterministic passage network loads nearby geometry as needed, so it does
-not allocate a 100-million-cell voxel array. Your seed keeps its layout stable.
+**Powerup Defense** unlocks after one hour of active play. It now includes all
+**20 original powerups**, with **14 damaging defenses**, six upgrade tiers,
+and **60 increasingly difficult waves** on each of four selectable levels:
+Abandoned City, Orbital Ruins, Emerald Wilds, and Fallen Keep. Each level has
+its own route, obstacles, native maze artwork, enemies, and defender artwork.
+Changing maps asks before discarding an active battle. Currencies and other
+mode progress remain untouched. Use 1–9, 0, minus, and the displayed letters
+to choose defenses; S cycles 1× / 2× / 3×. Current and next statistics remain
+visible before an upgrade. Playtime counts real active seconds at every speed.
 
-The **3D minimap** lets you orbit, pan, zoom, inspect altitude bands, and recenter
-on the player. Expand it with **M** to plan a route; expanded map navigation
-pauses movement and active playtime. Ramps show their actual 3D elevations.
-The green summit beacon marks the destination. **Q** activates a route hint.
-Haste and Sonar pickups help exploration.
+**The Cube** unlocks after two hours. It is one connected **100 × 100 × 100**
+maze, with four units per story (25 stories), repeated ramps rising 1–10 stories,
+and twenty gated lift shafts covering every 1–10-story span in both directions.
+Ramps carry the player continuously. Lifts call a real moving platform, board
+it, and carry the player smoothly; they do not teleport between separate mazes.
+Floors, room ceilings, passage portals, and the outer shell are sealed to close
+visible gaps. An absent lift platform stays behind a closed gate.
+
+The Cube now fills the whole viewport. It has no status dock or compass.
+Its compact **3D minimap** remains; expand it with M to orbit, pan, zoom, inspect
+altitude slices, follow the player, or see the whole volume. Gold lines are
+lifts and cyan lines are ramps. The map does not move the player.
 
 Cube controls:
 
-- **WASD**: walk forward/back and strafe. **↑ / ↓** also walk; **← / →** turn.
-- **Drag the view** to look. **Page Up / Page Down** look vertically.
-- On touchscreens, use the separate **MOVE** and **LOOK** joysticks.
-- **Q**: compass hint. **M**: expand/close the navigable 3D map. **Escape**: pause.
-- Walk onto ramps to climb or descend. The **Level view** button resets pitch.
+- **Click once** to capture mouse look; move the mouse without holding a button.
+- **First Escape** releases the cursor and suspends movement. **Second Escape**
+  saves and returns to the first page. Clicking the maze captures the mouse again.
+- **WASD** walks; arrows move/turn. **Page Up / Page Down** look vertically.
+- **E** calls or rides a lift upward. **Shift+E** goes down. Contextual buttons
+  appear beside a lift; the platform must arrive before boarding.
+- **M** opens/closes the navigable 3D map and releases the cursor for its controls.
+- On touchscreens, use the MOVE and LOOK joysticks, contextual lift buttons,
+  and Back. Continue maze resumes after the app loses focus.
 
-Cube position, explored junctions, seed, timers, and powerups save for each
-player name every five active seconds and on pause or exit. Its new save key
-keeps old Hundred Floors saves intact. The old unlock profile and two-hour
-requirement remain unchanged. Original maze saves, wallets, cosmetics, controls,
-and Free the Flock remain separate from these updates.
+The compact Cube uses a new save key. Previous large-Cube and Hundred Floors
+saves are preserved separately. Position, collected powers, explored junctions,
+and mid-flight lift rides save every five active seconds and on release or exit.
+The original mazes, wallets, cosmetics, music, and Free the Flock remain intact.
 
-Entering **oibougvovov** as the player name immediately unlocks both modes and
-adds **1,000,000 MIZ + 10,000 hux** to existing wallets once. Reloading or retyping
-the name does not repeat the reward. Existing owned items remain unchanged.
-
-Both playtime modes keep the original navy/slate and cyan game-screen layout,
-compact sidebar, and shared StatCard controls.
+Entering **oibougvovov** as the player name unlocks both modes immediately and
+adds **1,000,000 MIZ + 10,000 hux** once per wallet. Retyping or reloading does
+not repeat the reward. Existing items and inventories remain unchanged.
 
 Validation:
 
@@ -407,10 +411,10 @@ npm run verify
 node --test scripts/tests/*.test.mjs
 ```
 
-With a locally available Playwright installation, set `PLAYWRIGHT_MODULE_PATH`
-and run `scripts/tests/expedition-browser.mjs` for the updated unlock modes.
-The Cube tests check connected volume topology, repeated ramp spans, continuous
-ascent/descent, solid bounds, deterministic streaming, and saved progress.
-TD tests cover the added power mechanics, upgrade previews, escalating waves,
-and an earned-energy strategy through wave 60. Existing original-maze regression
-checks remain in the test suite.
+Browser scenarios use a locally available Playwright installation through
+`PLAYWRIGHT_MODULE_PATH`: `first-player-identity-browser.mjs`,
+`expedition-browser.mjs`, and `cube-mouse-controls-browser.mjs` in scripts/tests.
+Checks include all 20 power mechanics, four earned-budget 60-wave victories,
+first-time identity and the developer API boundary, connected compact topology,
+all lift spans, continuous platform movement, saved rides, sealed geometry,
+mouse release/two-Escape exit, and real desktop/mobile controls and map navigation.

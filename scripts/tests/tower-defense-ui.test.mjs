@@ -58,7 +58,7 @@ test("defense UI switches speed, shows exact next stats under current stats, and
     game.energy=10000;
     while(tower.level<engine.DEFENSE_MAX_LEVEL){tree=render();button(tree,`Upgrade · ${engine.defenseUpgradeCost(tower)}`).props.onClick();}
     tree=render();assert.equal(tower.level,6);assert.match(text(byClass(tree,"td-next-stats")),/Maximum level/);
-    assert.equal(nodes(byClass(tree,"td-shop")).filter(n=>n.props?.className?.split(" ").includes("td-power")).length,11);
+    assert.equal(nodes(byClass(tree,"td-shop")).filter(n=>n.props?.className?.split(" ").includes("td-power")).length,20);
     button(tree,"Start wave 1").props.onClick();tree=render();button(tree,"Pause").props.onClick();tree=render();
     assert.equal(game.paused,true);assert.equal(button(tree,`Sell · ${engine.defenseSellValue(tower)}`).props.disabled,true);
     button(tree,"Resume battle").props.onClick();tree=render();assert.equal(game.paused,false);
@@ -70,6 +70,20 @@ test("defense UI switches speed, shows exact next stats under current stats, and
     nodes(tree).find(n=>n.type==="canvas").props.onPointerDown({button:0,clientX:75,clientY:75,currentTarget:{focus(){},getBoundingClientRect(){return {left:0,top:0,width:900,height:600};}}});tree=render();
     assert.match(text(byClass(tree,"td-current-stats")),/2 core shield per wave/);
     assert.match(text(byClass(tree,"td-next-stats")),/3 core shield per wave/);
+    const levels=byClass(tree,"td-level-select");
+    assert.equal(nodes(levels).filter(n=>n.type==="button").length,4);
+    assert.equal(button(tree,"Orbital Ruins").props["aria-pressed"],true);
+    nodes(tree).find(n=>n.type==="canvas").props.onKeyDown({key:"f",preventDefault(){}});tree=render();
+    assert.match(text(byClass(tree,"td-power-selected")),/Phase Walk.*key f/);
+    button(tree,"Abandoned City").props.onClick();tree=render();
+    assert.equal(game.paused,true);assert.ok(byClass(tree,"td-level-modal"));
+    button(tree,"Keep this battle").props.onClick();tree=render();assert.equal(game.paused,false);assert.equal(hooks.slot(0).current,game);
+    button(tree,"Abandoned City").props.onClick();tree=render();button(tree,"Start selected level").props.onClick();tree=render();
+    const city=hooks.slot(0).current;assert.notEqual(city,game);assert.equal(city.levelKey,"city");assert.equal(city.wave,0);assert.equal(city.energy,270);assert.equal(city.towers.length,0);
+    assert.equal(button(tree,"Abandoned City").props["aria-pressed"],true);
+    button(tree,"Restart").props.onClick();tree=render();assert.equal(hooks.slot(0).current.levelKey,"city");
+    button(tree,"Emerald Wilds").props.onClick();tree=render();assert.equal(hooks.slot(0).current.levelKey,"jungle");assert.equal(byClass(tree,"td-level-modal"),undefined);
+
 
   } finally {await server.close();}
 });

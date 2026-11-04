@@ -1,5 +1,10 @@
 const UPDATES = [
-  "November 1: The Cube replaces the separate Hundred Floors with one connected 1,000 × 100 × 1,000 3D maze, repeated ramps rising 1–10 stories, and an interactive 3D minimap.",
+  "November 2: choose your player name once. It is saved for every game mode and appears with your activity in developer analytics.",
+  "Tower Defense now offers all 20 original powerups, including 14 damaging defenses, on four distinct maze maps. Every map has 60 waves.",
+  "The Cube is now 100 × 100 × 100, with repeated 1–10-story ramps and moving lifts, sealed floor and wall joins, and a compact 3D minimap. The status dock and compass are removed.",
+  "Cube controls: one click captures mouse look; first Escape releases the cursor; second Escape returns to the first page. E rides or calls a lift up; Shift+E goes down.",
+  "The Cube now uses the main mazes’ weathered stone, concrete, and earth palette, with textured floors and ramps. Mouse look captures the cursor; Escape releases it for menus and the 3D map.",
+  "The Cube is one connected three-dimensional maze, with continuous travel between elevations and an interactive 3D minimap.",
   "Powerup Defense now runs for 60 waves, with more powerup defenses, stronger upgrades, and increasingly difficult enemy formations.",
   "October 26: Powerup Defense and The Hundred Floors now use the original maze drawing routines and game-screen layout, including the compact sidebar and cyan controls.",
   "Powerup Defense adds 1× / 2× / 3× speed, tougher varied waves, enemy support abilities, and next-upgrade stats directly beneath current stats.",

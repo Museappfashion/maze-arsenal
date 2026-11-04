@@ -144,6 +144,15 @@ function materials(key) {
   cache.set(key, result); return result;
 }
 
+// The continuous Cube uses the same procedural surfaces on sloped geometry.
+// Reading the cached texels does not change the original maze render paths.
+export function get3DMaterialData(key) {
+  const material = materials(key);
+  if (!material) return null;
+  if (!material.wallPixels) material.wallPixels = material.wall.getContext("2d").getImageData(0, 0, material.wall.width, material.wall.height).data;
+  return { floor: material.floor, floorWidth: 128, floorHeight: 128, wall: material.wallPixels, wallWidth: material.wall.width, wallHeight: material.wall.height };
+}
+
 const orbitalBeltCache = new WeakMap();
 function orbitalBelt(world) {
   let belt = orbitalBeltCache.get(world);

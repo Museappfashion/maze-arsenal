@@ -1,19 +1,21 @@
 import { DRAW_TILE } from "../config/constants.js";
 import { drawMazeTile, drawEnemyBody, drawPickupBody, drawPlayerBody } from "./rendering.js?core";
-import { DEFENSE_COLUMNS, DEFENSE_ROWS, DEFENSE_PATH, DEFENSE_TYPES, defenseTowerStats, canPlaceDefense, isDefensePath } from "./towerDefense.js";
+import { DEFENSE_COLUMNS, DEFENSE_ROWS, DEFENSE_TYPES, defenseTowerStats, canPlaceDefense, isDefensePath, getDefensePath, getDefenseLevel } from "./towerDefense.js";
 
 export const DEFENSE_CANVAS_WIDTH = 900;
 export const DEFENSE_CANVAS_HEIGHT = 600;
 const TILE = DEFENSE_CANVAS_WIDTH / DEFENSE_COLUMNS;
 const artwork = new WeakMap();
 
-/** Reuse the same tile, pickup, enemy, and survivor artwork as Orbital Ruins. */
+/** Reuse each original maze's own tile, pickup, enemy, and player artwork. */
 function defenseArtwork(game) {
   let world = artwork.get(game);
   if (!world) {
+    const level=getDefenseLevel(game),end=getDefensePath(game).at(-1);
     world = { width: DEFENSE_COLUMNS * 2, height: DEFENSE_ROWS * 2,
-      level: { themeKey: "space" }, grid: Array.from({ length: DEFENSE_ROWS * 2 }, () => Array(DEFENSE_COLUMNS * 2).fill(0)),
-      player: { x: 17, y: 9.25, radius: .23, facing: Math.PI, weapon: "fists", powerUps: {} }, time: 0 };
+      level: { themeKey: level.themeKey }, grid: Array.from({ length: DEFENSE_ROWS * 2 }, () => Array(DEFENSE_COLUMNS * 2).fill(0)),
+      player: { x: Math.max(.5,end.x-.5), y: Math.max(.5,end.y-1.25), radius: .23, facing: Math.PI, weapon: "fists", powerUps: {} }, time: 0 };
+    for(const {x,y} of level.blocked) for(let dy=0;dy<2;dy++)for(let dx=0;dx<2;dx++)world.grid[y*2+dy][x*2+dx]=1;
     artwork.set(game, world);
   }
   world.time = game.time;
@@ -35,7 +37,7 @@ function polygon(ctx, points, fill, stroke) {
 export function drawDefenseGame(ctx, game, hover, placingType) {
   ctx.clearRect(0, 0, DEFENSE_CANVAS_WIDTH, DEFENSE_CANVAS_HEIGHT);
   ctx.fillStyle = "#020617"; ctx.fillRect(0, 0, DEFENSE_CANVAS_WIDTH, DEFENSE_CANVAS_HEIGHT);
-  const world = defenseArtwork(game);
+  const world = defenseArtwork(game), path=getDefensePath(game), level=getDefenseLevel(game);
   // Draw native-size maze tiles, rather than introducing a second board texture.
   const artScale = TILE / (DRAW_TILE * 2);
   ctx.save(); ctx.scale(artScale, artScale);
@@ -44,16 +46,16 @@ export function drawDefenseGame(ctx, game, hover, placingType) {
   }
   ctx.restore();
   for (let y = 0; y < DEFENSE_ROWS; y++) for (let x = 0; x < DEFENSE_COLUMNS; x++) {
-    if (!isDefensePath(x, y)) continue;
+    if (!isDefensePath(x, y, game)) continue;
     ctx.fillStyle = "rgba(103,232,249,.075)";
     ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
     ctx.strokeStyle = "rgba(103,232,249,.22)"; ctx.lineWidth = 1;
     ctx.strokeRect(x * TILE + .5, y * TILE + .5, TILE - 1, TILE - 1);
   }
   ctx.strokeStyle = "#67e8f92b"; ctx.lineWidth = 2; ctx.setLineDash([5, 10]); ctx.beginPath();
-  DEFENSE_PATH.forEach((point, i) => i ? ctx.lineTo(point.x * TILE, point.y * TILE) : ctx.moveTo(point.x * TILE, point.y * TILE));
+  path.forEach((point, i) => i ? ctx.lineTo(point.x * TILE, point.y * TILE) : ctx.moveTo(point.x * TILE, point.y * TILE));
   ctx.stroke(); ctx.setLineDash([]);
-  const start = DEFENSE_PATH[0], end = DEFENSE_PATH.at(-1);
+  const start = path[0], end = path.at(-1);
   circle(ctx, start.x * TILE, start.y * TILE, 18, "#5d2841");
   ctx.font = "bold 21px system-ui"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "#fda4af"; ctx.fillText("›", start.x * TILE, start.y * TILE - 1);
   ctx.save(); ctx.translate(end.x * TILE, end.y * TILE); ctx.lineWidth = 1.5; ctx.shadowColor = "#67e8f9"; ctx.shadowBlur = 16;
@@ -88,6 +90,8 @@ export function drawDefenseGame(ctx, game, hover, placingType) {
     circle(ctx, x + 2, y + 3, radius + 2, "#0005");
     if (enemy.slow < 1) circle(ctx, x, y, radius + 4, "#67e8f950");
     if (enemy.vulnerability > 0) { ctx.strokeStyle = "#2dd4bf"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, radius + 7, 0, Math.PI * 2); ctx.stroke(); }
+    if (enemy.phaseTime > 0) { ctx.strokeStyle="#818cf8";ctx.lineWidth=2;ctx.beginPath();ctx.arc(x,y,radius+8,0,Math.PI*2);ctx.stroke(); }
+    if (enemy.armorBreak > 0) { ctx.strokeStyle="#f97316";ctx.lineWidth=1;ctx.strokeRect(x-radius-2,y-radius-2,(radius+2)*2,(radius+2)*2); }
     if (enemy.kind === "warden") { ctx.strokeStyle = "#a78bfa35"; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, TILE * 2.2, 0, Math.PI * 2); ctx.stroke(); }
     if (enemy.protected) { ctx.strokeStyle = "#a78bfa"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, radius + 3, 0, Math.PI * 2); ctx.stroke(); }
     ctx.save(); ctx.translate(x, y); ctx.scale(TILE / DRAW_TILE, TILE / DRAW_TILE);

@@ -7,7 +7,9 @@ import { LevelSelectScreen } from "./components/LevelSelectScreen.jsx";
 import { ThanksgivingEvent } from "./components/ThanksgivingEvent.jsx";
 import { TowerDefenseGame } from "./components/TowerDefenseGame.jsx";
 import { HundredFloorMaze } from "./components/HundredFloorMaze.jsx";
-import { flushPlayerProgress, getLastPlayerName, getPlayerProgress, recordActivePlay, selectProgressPlayer } from "./services/playerProgress.js";
+import { FirstTimePlayerName } from "./components/FirstTimePlayerName.jsx";
+import { getPlayerIdentity, savePlayerIdentity } from "./services/playerIdentity.js";
+import { flushPlayerProgress, getPlayerProgress, recordActivePlay, selectProgressPlayer } from "./services/playerProgress.js";
 import { StatCard } from "./components/StatCard.jsx";
 import { MizCounter } from "./components/MizCounter.jsx";
 import { MystPowersPanel } from "./components/MystPowersPanel.jsx";
@@ -84,7 +86,7 @@ const [thanksgivingOpen, setThanksgivingOpen] = useState(false);
 const [bonusMode, setBonusMode] = useState(null);
 const [selectionMode, setSelectionMode] = useState("2d");
 const [gameMode, setGameMode] = useState("2d");
-const [playerName, setPlayerName] = useState(getLastPlayerName);
+const [playerName, setPlayerName] = useState(getPlayerIdentity);
 const [leaderboards, setLeaderboards] = useState(() => loadLeaderboards());
 const [userRanks, setUserRanks] = useState(() => createEmptyUserRanks());
 const [leaderboardStatus, setLeaderboardStatus] = useState(
@@ -99,18 +101,20 @@ const [, setRevision] = useState(0);
 
 const forceRefresh = useCallback(() => { setRevision((value) => value + 1); }, []);
 const changeProgressPlayer = useCallback((name) => {
-  const clean = sanitizePlayerName(name);
+  const clean = savePlayerIdentity(name);
+  if (!clean) return false;
   selectProgressPlayer(clean);
   setPlayerName(clean);
+  return true;
 }, []);
 const openBonusMode = useCallback((mode) => {
   if (["towerDefense", "hundredFloor"].includes(mode) && getPlayerProgress(playerName)[mode]) setBonusMode(mode);
 }, [playerName]);
-useEffect(() => { selectProgressPlayer(playerName); }, []);
+useEffect(() => { if (playerName) selectProgressPlayer(playerName); }, []);
 
 useEffect(() => {
-  void recordVisitorSeen();
-}, []);
+  if (playerName) void recordVisitorSeen(playerName);
+}, [playerName]);
 
 const flushPlayAnalytics = useCallback((world = worldRef.current) => {
   if (!selectedLevel || !world) {
@@ -608,7 +612,8 @@ const startLevel = useCallback((
   runOptions = {},
 ) => {
   const nextViewMode = requestedViewMode === "3d" ? "3d" : "2d";
-  const nextPlayerName = sanitizePlayerName(requestedPlayerName);
+  const nextPlayerName = savePlayerIdentity(requestedPlayerName || playerName);
+  if (!nextPlayerName) return;
   selectProgressPlayer(nextPlayerName);
   const nextWorld = createWorld(
     levelKey,
@@ -632,7 +637,7 @@ const startLevel = useCallback((
   setPlayerName(nextPlayerName);
   setSelectedLevel(levelKey);
   forceRefresh();
-}, [clearTouchInput, forceRefresh, selectionMode, startLevelAudio]);
+}, [clearTouchInput, forceRefresh, playerName, selectionMode, startLevelAudio]);
 
 const resetWorld = useCallback(() => {
   if (!selectedLevel) {
@@ -1060,6 +1065,10 @@ return () => {
   recordLeaderboardScore,
   selectedLevel,
 ]);
+
+if (!playerName) {
+  return <FirstTimePlayerName onSubmit={changeProgressPlayer} />;
+}
 
 if (bonusMode && !selectedLevel) {
   const Mode = bonusMode === "towerDefense" ? TowerDefenseGame : HundredFloorMaze;

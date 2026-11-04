@@ -166,7 +166,7 @@ test("path interpolation follows bends and reaches the core exactly", () => {
   assert.deepEqual(defensePosition(0), DEFENSE_PATH[0]); assert.deepEqual(defensePosition(999), DEFENSE_PATH.at(-1));
   const point = defensePosition(4.5); assert.deepEqual(point, { x: 4.5, y: 3 });
   assert.equal(isDefensePath(4, 3), true); assert.equal(isDefensePath(5, 3), false);
-  assert.equal(Object.keys(DEFENSE_TYPES).length, 11); assert.equal(DEFENSE_WAVES,60);
+  assert.equal(Object.keys(DEFENSE_TYPES).length, 20); assert.equal(DEFENSE_WAVES,60);
 });
 
 test("all 60 waves are beatable with earned energy at normal and fast speed, while late assaults damage the core", () => {

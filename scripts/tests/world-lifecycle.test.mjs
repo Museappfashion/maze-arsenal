@@ -70,7 +70,12 @@ test("HUD renders preserve the active world used by overlays in 2D and 3D", asyn
 
     for (const mode of ["2d", "3d"]) {
       hooks.resetHooks();
-      const menu = render();
+      let menu = render();
+      if (typeof menu.props.onSelectLevel !== "function") {
+        assert.equal(menu.type.name, "FirstTimePlayerName");
+        menu.props.onSubmit("Render regression");
+        menu = render();
+      }
       menu.props.onSelectLevel("level1", mode, "Render regression");
       const activeWorld = globalThis.__mistMazeWorld;
       activeWorld.time = 17.25;

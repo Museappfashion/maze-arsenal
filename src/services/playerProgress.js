@@ -7,7 +7,7 @@ export const PLAYER_PROGRESS_EVENT = "mist-maze-player-progress-updated";
 export const SPECIAL_UNLOCK_NAME = "oibougvovov";
 export const MODE_UNLOCK_SECONDS = Object.freeze({ towerDefense: 3600, hundredFloor: 7200 });
 const pending = new Map();
-let memory = { profiles: {}, lastPlayerName: "" };
+let memory = { profiles: {}, lastPlayerName: "", anonymousIdentityClaimedBy: "" };
 let unsaved = false;
 let lastObserved = null;
 let sinceFlush = 0;
@@ -25,7 +25,7 @@ function read() {
     for (const [key, profile] of Object.entries(value?.profiles || {})) {
       if (key.startsWith("p:")) profiles[key] = { seconds: seconds(profile?.seconds) };
     }
-    memory = { profiles, lastPlayerName: sanitizePlayerName(value?.lastPlayerName) };
+    memory = { profiles, lastPlayerName: sanitizePlayerName(value?.lastPlayerName), anonymousIdentityClaimedBy: sanitizePlayerName(value?.anonymousIdentityClaimedBy).toLowerCase() };
     lastObserved = raw;
     unsaved = false;
   } catch { /* Keep this session's progress if storage is unavailable. */ }
@@ -51,6 +51,25 @@ function write(state) {
 }
 
 export function getLastPlayerName() { return read().lastPlayerName; }
+
+/** Adopt old anonymous playtime once when that player chooses their first name.
+ * Copying the maximum preserves gates without summing time or duplicating rewards.
+ * The receipt belongs to the progress store, so losing the identity key cannot
+ * repeat adoption into another profile. The anonymous profile stays untouched.
+ */
+export function adoptAnonymousPlaytime(name) {
+  const clean = sanitizePlayerName(name);
+  if (!clean) return false;
+  flushPlayerProgress();
+  const state = read();
+  if (state.anonymousIdentityClaimedBy) return false;
+  const id = playerProgressId(clean);
+  const anonymous = seconds(state.profiles[playerProgressId("")]?.seconds);
+  const existing = seconds(state.profiles[id]?.seconds);
+  write({ ...state, anonymousIdentityClaimedBy: clean.toLowerCase(), profiles: { ...state.profiles, [id]: { seconds: Math.max(anonymous, existing) } } });
+  return true;
+}
+
 
 export function getPlayerProgress(name) {
   const id = playerProgressId(name);

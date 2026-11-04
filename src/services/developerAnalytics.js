@@ -4,6 +4,9 @@ import {
   supabase,
 } from "./leaderboard-enhanced.js";
 
+import { getPlayerIdentity } from "./playerIdentity.js";
+import { sanitizePlayerName } from "../utils/player.js";
+
 const PLAYTIME_HEARTBEAT_LIMIT_SECONDS = 120;
 const DEVELOPER_USAGE_ENDPOINT = "/api/developer-usage";
 
@@ -54,7 +57,7 @@ async function recordUsage({
       PLAYTIME_HEARTBEAT_LIMIT_SECONDS,
       Math.max(0, Math.round(Number(seconds) || 0)),
     ),
-    playerName: String(playerName ?? "").trim().slice(0, 20),
+    playerName: sanitizePlayerName(playerName) || getPlayerIdentity(),
   };
 
   try {
@@ -103,10 +106,8 @@ export function recordDonationAttempt(donationKey) {
   });
 }
 
-export function recordVisitorSeen() {
-  return recordUsage({
-    eventType: "visitor",
-  });
+export function recordVisitorSeen(playerName = getPlayerIdentity()) {
+  return recordUsage({ eventType: "visitor", playerName });
 }
 
 export function recordGameStarted(world) {

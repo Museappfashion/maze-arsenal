@@ -63,12 +63,12 @@ export const LEVELS = {
   level2: {
     ...CORE_LEVELS.level2,
     enemyBudgetMultiplier: 1.55,
-    enemyPopulationMultiplier: 1.35,
+    enemyPopulationMultiplier: 1.01,
   },
   level3: {
     ...CORE_LEVELS.level3,
     enemyBudgetMultiplier: 2,
-    enemyPopulationMultiplier: 1.7,
+    enemyPopulationMultiplier: 1.11,
   },
 };
 

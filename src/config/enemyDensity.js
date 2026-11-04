@@ -7,6 +7,14 @@ export const TILES_PER_ENEMY_BY_LEVEL = Object.freeze({
   level3: 41,
 });
 
+// These area targets were tuned with the previous population settings. Apply
+// subsequent population changes here too, so final density enforcement does
+// not refill enemies removed by the encounter spawner.
+const POPULATION_AT_DENSITY_BASELINE = Object.freeze({
+  level2: 1.35,
+  level3: 1.7,
+});
+
 export function getTargetEnemyCount(world) {
   const tilesPerEnemy =
     TILES_PER_ENEMY_BY_LEVEL[world?.levelKey];
@@ -22,11 +30,16 @@ export function getTargetEnemyCount(world) {
 
   const totalTiles =
     world.width * world.height;
+  const baselinePopulation = POPULATION_AT_DENSITY_BASELINE[world.levelKey];
+  const population = world.level?.enemyPopulationMultiplier;
+  const populationScale = baselinePopulation && Number.isFinite(population) && population > 0
+    ? population / baselinePopulation
+    : 1;
 
   return Math.max(
     1,
     Math.round(
-      totalTiles / tilesPerEnemy,
+      totalTiles / tilesPerEnemy * populationScale,
     ),
   );
 }

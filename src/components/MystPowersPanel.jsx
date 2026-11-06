@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { MIZ_STATE_CHANGED_EVENT, MYST_SHOP_ITEMS, loadMizState, getConsumableCount } from "../services/mizEconomy.js";
 import { activateMystPower } from "../game/mystPowers.js";
 
-export function MystPowersPanel({ world, onUse }) {
+export function MystPowersPanel({ world, onUse, embedded = false, onClose }) {
   const [open, setOpen] = useState(false);
   const [wallet, setWallet] = useState(loadMizState);
   const [message, setMessage] = useState("");
@@ -15,9 +15,12 @@ export function MystPowersPanel({ world, onUse }) {
   const powers = MYST_SHOP_ITEMS.filter((item) => item.kind === "oneTime");
   const count = powers.reduce((sum, item) => sum + getConsumableCount(item.key, wallet), 0);
   const visiblePowers = world.gameOver ? powers.filter((item) => item.key === "phoenixSpark") : powers;
-  return <div className="myst-powers-control" style={{ zIndex: world.gameOver ? 110 : 40 }} onKeyDown={(event) => {
-    if (open || [" ", "Enter"].includes(event.key)) event.stopPropagation();
-    if (open && event.key === "Escape") setOpen(false);
+  const visible = embedded || open;
+  const close = () => embedded ? onClose?.() : setOpen(false);
+  return <div className={`myst-powers-control${embedded ? " myst-powers-embedded" : ""}`} style={{ zIndex: world.gameOver ? 110 : 40 }} onKeyDown={(event) => {
+    if (embedded && event.key === "Tab") return;
+    if (visible || [" ", "Enter"].includes(event.key)) event.stopPropagation();
+    if (visible && event.key === "Escape") { event.preventDefault(); close(); }
   }}>
     <style>{`
       .myst-powers-control { position: absolute; left: 12px; top: 112px; z-index: 40; max-width: calc(100% - 24px); }
@@ -30,10 +33,12 @@ export function MystPowersPanel({ world, onUse }) {
       .myst-power-use small { display: block; font-size: 10px; margin-top: 4px; line-height: 1.5; color: #c4b7d5; }
       .myst-powers-message { margin: 10px 0 0; font-size: 11px; line-height: 1.5; color: #d2c1e0; }
       .touch-mobile .myst-powers-control { top: 72px; }
+      .myst-powers-control.myst-powers-embedded { position: static; max-width: 100%; }
+      .myst-powers-embedded .myst-powers-panel { width: 100%; max-height: none; margin-top: 0; overflow: visible; }
     `}</style>
-    <button type="button" className="myst-powers-toggle" aria-expanded={open} onClick={() => { document.exitPointerLock?.(); setOpen(!open); }}>MYST POWERS · {count}</button>
-    {open && <section className="myst-powers-panel" aria-label="Myst Powers">
-      <header><strong>Myst Powers</strong><button type="button" className="myst-powers-toggle" onClick={() => setOpen(false)}>Close</button></header>
+    {!embedded && <button type="button" className="myst-powers-toggle" aria-expanded={open} onClick={() => { document.exitPointerLock?.(); setOpen(!open); }}>MYST POWERS · {count}</button>}
+    {visible && <section className="myst-powers-panel" aria-label="Myst Powers">
+      <header><strong>Myst Powers</strong><button type="button" className="myst-powers-toggle" onClick={close}>Close</button></header>
       {visiblePowers.map((item) => <button type="button" className="myst-power-use" key={item.key} disabled={!getConsumableCount(item.key, wallet) || world.victory || (world.gameOver ? item.key !== "phoenixSpark" : item.key === "phoenixSpark")} onClick={() => { setMessage(activateMystPower(world, item.key).message); onUse(); }}><span>{item.name}<small>{item.effectLabel.replace("Activate in-game · ", "").replace("Activate after defeat · ", "")}</small></span><strong>×{getConsumableCount(item.key, wallet)}</strong></button>)}
       <p className="myst-powers-message" role="status">{message || "Powers are spent only when they can help. Exit Fold and revival make the run unranked."}</p>
     </section>}

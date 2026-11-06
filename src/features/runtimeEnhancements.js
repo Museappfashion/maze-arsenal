@@ -591,6 +591,7 @@ function handleKeyboardPowerSlot(event) {
   if (
     !world ||
     world.labyrinthMode ||
+    world.controllerPaused ||
     world.gameOver ||
     world.victory
   ) {

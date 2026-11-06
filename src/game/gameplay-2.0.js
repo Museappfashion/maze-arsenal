@@ -104,19 +104,6 @@ function enableJojoMode(world) {
   return true;
 }
 
-function normalizeMovement(x, y) {
-  const length = Math.hypot(x, y);
-
-  if (length <= 0.0001) {
-    return { x: 0, y: 0 };
-  }
-
-  return {
-    x: x / length,
-    y: y / length,
-  };
-}
-
 function clampJojoToWorld(world) {
   const margin = Math.max(
     0.02,
@@ -163,6 +150,7 @@ function stripJojoMovementKeys(world, keys) {
   safeKeys.d = false;
   safeKeys.ArrowUp = false;
   safeKeys.ArrowDown = false;
+  delete safeKeys.controllerMove;
 
   if (world.viewMode !== "3d") {
     safeKeys.ArrowLeft = false;
@@ -173,13 +161,10 @@ function stripJojoMovementKeys(world, keys) {
 }
 
 function getJojoMovement(world, keys) {
+  const input = enhanced.getPlayerMovementInput(keys, world.viewMode);
   if (world.viewMode === "3d") {
-    const forwardInput =
-      Number(Boolean(keys.w || keys.ArrowUp)) -
-      Number(Boolean(keys.s || keys.ArrowDown));
-    const strafeInput =
-      Number(Boolean(keys.d)) -
-      Number(Boolean(keys.a));
+    const forwardInput = -input.y;
+    const strafeInput = input.x;
 
     if (forwardInput === 0 && strafeInput === 0) {
       return { x: 0, y: 0 };
@@ -190,22 +175,13 @@ function getJojoMovement(world, keys) {
     const rightX = -forwardY;
     const rightY = forwardX;
 
-    return normalizeMovement(
-      forwardX * forwardInput +
-        rightX * strafeInput,
-      forwardY * forwardInput +
-        rightY * strafeInput,
-    );
+    return {
+      x: forwardX * forwardInput + rightX * strafeInput,
+      y: forwardY * forwardInput + rightY * strafeInput,
+    };
   }
 
-  const moveX =
-    Number(Boolean(keys.ArrowRight || keys.d)) -
-    Number(Boolean(keys.ArrowLeft || keys.a));
-  const moveY =
-    Number(Boolean(keys.ArrowDown || keys.s)) -
-    Number(Boolean(keys.ArrowUp || keys.w));
-
-  return normalizeMovement(moveX, moveY);
+  return input;
 }
 
 function moveJojoThroughWalls(world, keys, dt) {
@@ -227,7 +203,8 @@ function moveJojoThroughWalls(world, keys, dt) {
   if (
     world.viewMode !== "3d" &&
     !world.pointer.inside &&
-    !world.touchAimActive
+    !world.touchAimActive &&
+    !world.controllerAimActive
   ) {
     world.player.facing = Math.atan2(
       movement.y,

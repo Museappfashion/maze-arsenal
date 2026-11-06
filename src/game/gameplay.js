@@ -887,12 +887,30 @@ const weapon = WEAPONS[player.weapon]; const direction = getAimVector(world); pl
 
 if (weapon.type === "melee") { meleeAttack(world, weapon, direction); } else { rangedAttack(world, weapon, direction); } }
 
+// Return screen-space (2D) or camera-local (3D) movement. Keyboard and touch
+// directions take priority, while a controller keeps its analog magnitude.
+export function getPlayerMovementInput(keys, viewMode = "2d") {
+  const horizontalKeys = viewMode === "3d" ? ["a", "d"] : ["a", "d", "ArrowLeft", "ArrowRight"];
+  const movementKeys = ["w", "s", "ArrowUp", "ArrowDown", ...horizontalKeys];
+  if (movementKeys.some((key) => keys[key])) {
+    const x = viewMode === "3d"
+      ? Number(Boolean(keys.d)) - Number(Boolean(keys.a))
+      : Number(Boolean(keys.d || keys.ArrowRight)) - Number(Boolean(keys.a || keys.ArrowLeft));
+    const y = Number(Boolean(keys.s || keys.ArrowDown)) - Number(Boolean(keys.w || keys.ArrowUp));
+    return normalize(x, y);
+  }
+
+  const x = Number.isFinite(keys.controllerMove?.x) ? keys.controllerMove.x : 0;
+  const y = Number.isFinite(keys.controllerMove?.y) ? keys.controllerMove.y : 0;
+  const divisor = Math.max(1, Math.hypot(x, y));
+  return { x: x / divisor, y: y / divisor };
+}
+
 export function updatePlayer3D(world, keys, dt) {
   const player = world.player;
-  const forwardInput =
-    Number(Boolean(keys.w || keys.ArrowUp)) -
-    Number(Boolean(keys.s || keys.ArrowDown));
-  const strafeInput = Number(Boolean(keys.d)) - Number(Boolean(keys.a));
+  const input = getPlayerMovementInput(keys, "3d");
+  const forwardInput = -input.y;
+  const strafeInput = input.x;
   const turnInput =
     Number(Boolean(keys.ArrowRight)) - Number(Boolean(keys.ArrowLeft));
 
@@ -905,10 +923,10 @@ export function updatePlayer3D(world, keys, dt) {
     const forwardY = Math.sin(player.facing);
     const rightX = -forwardY;
     const rightY = forwardX;
-    const movement = normalize(
-      forwardX * forwardInput + rightX * strafeInput,
-      forwardY * forwardInput + rightY * strafeInput,
-    );
+    const movement = {
+      x: forwardX * forwardInput + rightX * strafeInput,
+      y: forwardY * forwardInput + rightY * strafeInput,
+    };
     const speed = getPlayerSpeed(world);
 
     trySmashWalls(world, player, movement.x, movement.y);
@@ -944,14 +962,11 @@ export function updatePlayer(world, keys, dt) {
   }
 
   const player = world.player;
-  let moveX = 0;
-  let moveY = 0;
+  const direction = getPlayerMovementInput(keys);
 
-if (keys.ArrowUp || keys.w) moveY -= 1; if (keys.ArrowDown || keys.s) moveY += 1; if (keys.ArrowLeft || keys.a) moveX -= 1; if (keys.ArrowRight || keys.d) moveX += 1;
+if (direction.x !== 0 || direction.y !== 0) { const speed = getPlayerSpeed(world); trySmashWalls(world, player, direction.x, direction.y); moveWithCollisions( world, player, direction.x * speed * dt, direction.y * speed * dt, );
 
-if (moveX !== 0 || moveY !== 0) { const direction = normalize(moveX, moveY); const speed = getPlayerSpeed(world); trySmashWalls(world, player, direction.x, direction.y); moveWithCollisions( world, player, direction.x * speed * dt, direction.y * speed * dt, );
-
-if (!world.pointer.inside && !world.touchAimActive) {
+if (!world.pointer.inside && !world.touchAimActive && !world.controllerAimActive) {
   player.facing = Math.atan2(direction.y, direction.x);
 }
 

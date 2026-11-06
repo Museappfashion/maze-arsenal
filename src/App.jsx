@@ -13,6 +13,10 @@ import { flushPlayerProgress, getPlayerProgress, recordActivePlay, selectProgres
 import { StatCard } from "./components/StatCard.jsx";
 import { MizCounter } from "./components/MizCounter.jsx";
 import { MystPowersPanel } from "./components/MystPowersPanel.jsx";
+import { ControllerPausePanel } from "./components/ControllerPausePanel.jsx";
+import { useBaseGameController } from "./input/useBaseGameController.js";
+import { scrollControllerSidebar, isControllerElementVisible } from "./input/controllerNavigation.js";
+import { LABYRINTH_LIGHT_ORDER } from "./config/labyrinthLights.js";
 import { MAX_AMMO } from "./config/ammo.js";
 import { getLabyrinthLight } from "./config/labyrinthLights.js";
 import { CANVAS_HEIGHT, CANVAS_WIDTH, DEFAULT_LEVEL_KEY, PASSAGE_WIDTH, VIEW_3D_MOUSE_SENSITIVITY, VIEW_3D_TOUCH_SENSITIVITY } from "./config/constants.js";
@@ -71,6 +75,7 @@ if (!worldRef.current) {
 const keysRef = useRef({});
 const touchKeysRef = useRef({});
 const touchAimActiveRef = useRef(false);
+const controllerResetRef = useRef(() => {});
 const frameRef = useRef(0);
 const lastTimeRef = useRef(0);
 const hudAccumulatorRef = useRef(0);
@@ -96,6 +101,9 @@ const [touchControlsEnabled, setTouchControlsEnabled] = useState(false);
 const [mobileMapExpanded, setMobileMapExpanded] = useState(false);
 const [rotatePromptDismissed, setRotatePromptDismissed] = useState(false);
 const [settingsOpen, setSettingsOpen] = useState(false);
+const [controllerPaused, setControllerPaused] = useState(false);
+const [controllerInventory, setControllerInventory] = useState(false);
+const controllerInventoryRef = useRef(null);
 const [audioStatus, setAudioStatus] = useState("Tap TEST SOUND to verify audio");
 const [, setRevision] = useState(0);
 
@@ -181,6 +189,8 @@ const clearTouchInput = useCallback(() => {
   world.pointer.down = false;
   world.pointer.inside = false;
   world.touchAimActive = false;
+  world.controllerAimActive = false;
+  controllerResetRef.current();
 }, []);
 
 useEffect(() => {
@@ -576,6 +586,9 @@ const returnToLevelSelect = useCallback(() => {
   audioRef.current?.stopMusic();
   keysRef.current = {};
   clearTouchInput();
+  worldRef.current.controllerPaused = false;
+  setControllerPaused(false);
+  setControllerInventory(false);
   setSelectedLevel(null);
 }, [clearTouchInput, flushPlayAnalytics]);
 
@@ -635,6 +648,8 @@ const startLevel = useCallback((
   setGameMode(nextViewMode);
   setSelectionMode(nextViewMode);
   setPlayerName(nextPlayerName);
+  setControllerPaused(false);
+  setControllerInventory(false);
   setSelectedLevel(levelKey);
   forceRefresh();
 }, [clearTouchInput, forceRefresh, playerName, selectionMode, startLevelAudio]);
@@ -698,12 +713,74 @@ const switchGameMode = useCallback(() => {
   forceRefresh();
 }, [clearTouchInput, forceRefresh, gameMode]);
 
+const pauseForController = useCallback((paused) => {
+  const world = worldRef.current;
+  world.controllerPaused = paused;
+  keysRef.current = {};
+  clearTouchInput();
+  if (document.pointerLockElement) document.exitPointerLock?.();
+  if (paused) flushPlayAnalytics(world);
+  else setControllerInventory(false);
+  setControllerPaused(paused);
+}, [clearTouchInput, flushPlayAnalytics]);
+
+const cycleControllerEquipment = useCallback((direction) => {
+  const world = worldRef.current;
+  const owned = world.labyrinthMode
+    ? LABYRINTH_LIGHT_ORDER.filter((key) => world.labyrinth.ownedLights[key])
+    : WEAPON_ORDER.filter((key) => world.player.ownedWeapons[key]);
+  if (!owned.length) return;
+  const equipped = world.labyrinthMode ? world.labyrinth.equippedLight : world.player.weapon;
+  const at = owned.indexOf(equipped);
+  const next = owned[at < 0 ? (direction > 0 ? 0 : owned.length - 1) : (at + direction + owned.length) % owned.length];
+  if (world.labyrinthMode) selectLabyrinthLight(world, next);
+  else selectWeapon(world, next);
+  forceRefresh();
+}, [forceRefresh]);
+
+const controller = useBaseGameController({
+  enabled: Boolean(playerName) && !bonusMode && !thanksgivingOpen,
+  playing: selectedLevel,
+  worldRef,
+  onExit: returnToLevelSelect,
+  onPause: pauseForController,
+  onPower: handleTouchPowerUp,
+  onBreaker: handleLabyrinthBreaker,
+  onCycle: cycleControllerEquipment,
+  onSidebar: (amount) => {
+    if (!scrollControllerSidebar(document.querySelector('.maze-game-root'), amount) && gameMode === '3d') setSettingsOpen(true);
+  },
+  onMap: () => {
+    const enabled = !isMinimapEnabled();
+    setMinimapEnabled(enabled);
+    setMessage(worldRef.current, enabled ? "Minimap on" : "Minimap off", 1);
+    forceRefresh();
+  },
+  onBack: () => {
+    if (controllerPaused) {
+      if (controllerInventory) setControllerInventory(false);
+      else pauseForController(false);
+      return;
+    }
+    const close = [...document.querySelectorAll('.first-page-header-actions button[aria-expanded="true"], [role="dialog"] button')]
+      .filter(isControllerElementVisible)
+      .find((button) => button.hasAttribute('aria-expanded') || /close|cancel|back/i.test(button.textContent + ' ' + button.getAttribute('aria-label')));
+    close?.click();
+  },
+});
+controllerResetRef.current = controller.reset;
+
+useEffect(() => {
+  if (controllerInventory) controllerInventoryRef.current?.querySelector('button:not(:disabled)')?.focus();
+}, [controllerInventory]);
+
 useEffect(() => {
 if (!selectedLevel) {
   return undefined;
 }
 
 const handleKeyDown = (event) => { const world = worldRef.current; const key = event.key;
+  if (world.controllerPaused) return;
 
   if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(key)) {
     event.preventDefault();
@@ -799,6 +876,8 @@ const refreshRect = () => {
 
 const handlePointerMove = (event) => {
   const world = worldRef.current;
+  if (world.controllerPaused) return;
+  world.controllerAimActive = false;
 
   if (world.viewMode === "3d") {
     if (document.pointerLockElement === canvas) {
@@ -821,6 +900,7 @@ const handlePointerMove = (event) => {
 
 const handlePointerDown = (event) => {
   const world = worldRef.current;
+  if (world.controllerPaused) return;
 
   if (world.viewMode === "3d") {
     if (document.pointerLockElement !== canvas) {
@@ -944,12 +1024,12 @@ const loop = (timestamp) => {
   }
 
   const elapsed = Math.max(0, (timestamp - lastTimeRef.current) / 1000);
-  const dt = document.hidden ? 0 : Math.min(0.033, elapsed);
+  const dt = document.hidden || worldRef.current.controllerPaused ? 0 : Math.min(0.033, elapsed);
   lastTimeRef.current = timestamp;
 
   const world = worldRef.current;
 
-  if (!world.gameOver && !world.victory) {
+  if (!world.gameOver && !world.victory && !world.controllerPaused) {
     recordActivePlay(world.playerName, Math.min(.25, elapsed));
     world.time += dt;
     world.fogPulse += dt;
@@ -967,9 +1047,17 @@ const loop = (timestamp) => {
     }
 
     if (!world.gameOver) {
+      const pad = controller.input.current;
+      if (pad.look.x || pad.look.y) {
+        world.pointer.inside = false;
+        world.controllerAimActive = true;
+        if (world.viewMode === "3d") world.player.facing += pad.look.x * 2.6 * controller.preferencesRef.current.sensitivity * dt;
+        else world.player.facing = Math.atan2(pad.look.y, pad.look.x);
+      }
+      const inputKeys = mergeInputKeys(keysRef.current, touchKeysRef.current);
       updatePlayer(
         world,
-        mergeInputKeys(keysRef.current, touchKeysRef.current),
+        { ...inputKeys, controllerMove: pad.move, " ": Boolean(inputKeys[" "] || pad.attack) },
         dt,
       );
       updateVisionCache(world);
@@ -1123,6 +1211,39 @@ return (
   }}
 >
   <style>{GAME_STYLES}</style>
+
+  <ControllerPausePanel
+    open={controllerPaused}
+    world={world}
+    controllerConnected={controller.connected}
+    onResume={() => pauseForController(false)}
+    onExit={returnToLevelSelect}
+    onInventory={() => setControllerInventory((open) => !open)}
+  >
+    {controllerInventory ? <div ref={controllerInventoryRef}>
+      <MystPowersPanel world={world} onUse={forceRefresh} embedded onClose={() => setControllerInventory(false)} />
+    </div> : <><SettingsControls
+      viewMode={gameMode}
+      onToggleViewMode={switchGameMode}
+      audioEnabled={audioEnabled}
+      musicVolume={musicVolume}
+      sfxVolume={sfxVolume}
+      onToggleAudio={toggleAudio}
+      onTestSound={handleTestSound}
+      onMusicVolumeChange={handleMusicVolumeChange}
+      onSfxVolumeChange={handleSfxVolumeChange}
+      audioStatus={audioStatus}
+    />
+    <div className="controller-preferences" aria-label="Controller settings">
+      <h3>Controller settings</h3>
+      <label>Look sensitivity · {controller.preferences.sensitivity.toFixed(2)}×
+        <input type="range" min="0.25" max="2" step="0.05" value={controller.preferences.sensitivity} onChange={(event) => controller.onPreferences({ ...controller.preferences, sensitivity: Number(event.target.value) })} />
+      </label>
+      <label>Stick deadzone · {Math.round(controller.preferences.deadzone * 100)}%
+        <input type="range" min="0.05" max="0.4" step="0.01" value={controller.preferences.deadzone} onChange={(event) => controller.onPreferences({ ...controller.preferences, deadzone: Number(event.target.value) })} />
+      </label>
+    </div></>}
+  </ControllerPausePanel>
 
   <div
     className={`maze-game-shell${gameMode === "3d" ? " mode-3d" : ""}`}

@@ -52,7 +52,7 @@ test("HUD renders preserve the active world used by overlays in 2D and 3D", asyn
         if (id === `\0${hooksId}`) return hooksSource;
       },
       transform(source, id) {
-        if (id.endsWith("/src/App.jsx")) {
+        if (id.endsWith("/src/App.jsx") || id.endsWith("/src/input/useBaseGameController.js")) {
           return source.replace('from "react";', `from "${hooksId}";`);
         }
       },

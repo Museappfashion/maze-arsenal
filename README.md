@@ -418,3 +418,41 @@ Checks include all 20 power mechanics, four earned-budget 60-wave victories,
 first-time identity and the developer API boundary, connected compact topology,
 all lift spans, continuous platform movement, saved rides, sealed geometry,
 mouse release/two-Escape exit, and real desktop/mobile controls and map navigation.
+
+## Controller support: the five base games
+
+Connect a standard-mapped Xbox or PlayStation controller and press a button.
+Controller support covers Abandoned City, Orbital Ruins, Emerald Wilds,
+Fallen Keep, and Labyrinth, in both 2D and 3D, plus their level menu,
+settings, and Myst Store. Cube, Powerup Defense, and Free the Flock keep
+their existing controls.
+
+| Control (PlayStation / Xbox) | While playing a base maze |
+| --- | --- |
+| Left stick | Analog movement |
+| Right stick | Aim in 2D; turn in 3D |
+| R2 / RT | Attack; activate one Wall Breaker in Labyrinth |
+| L1–R1 / LB–RB | Previous/next owned weapon or Labyrinth light |
+| Square / X | Use stored power-up slot 1 |
+| Triangle / Y | Use stored power-up slot 2 |
+| Cross / A | Use stored power-up slot 3 |
+| Circle / B | Scroll the in-game sidebar down; hold to continue scrolling |
+| L2 / LT | Leave the current maze and return to level selection |
+| D-pad Up | Toggle minimap |
+| Options / Menu | Pause/resume and open settings or purchased powers |
+
+The three stored slots apply to the four combat mazes. Labyrinth keeps its
+existing light and Wall Breaker inventory. In 3D, Circle opens the existing
+settings popover if it is closed and scrolls it when its contents overflow.
+
+In menus and shops, the D-pad moves focus or scrolls vertically; left/right
+adjusts a focused slider or selection. Cross/A selects and Circle/B closes
+the current menu. The shop can scroll even when all purchases are disabled.
+Owned Myst Store consumables are available from **Options → Purchased powers**;
+they stay separate from the three collected power-up slots.
+
+Look sensitivity and stick deadzone are saved under controller settings.
+Opening the pause menu stops the maze timer and active playtime. Disconnecting
+or leaving the browser pauses controller play; held controls must be released
+before a newly entered game or resumed run accepts input. Keyboard, mouse,
+touch, artwork, prices, maze balance, and saved progress retain their behavior.

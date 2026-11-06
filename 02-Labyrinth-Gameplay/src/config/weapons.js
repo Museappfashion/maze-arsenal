@@ -1,0 +1,10 @@
+// src/config/weapons.js
+export const WEAPON_ORDER = [ "fists", "crowbar", "machete", "pistol", "revolver", "smg", "shotgun", "rifle", "dmr", ];
+
+export const WEAPON_HOTKEY_MAP = Object.fromEntries( WEAPON_ORDER.slice(0, 9).map((weaponKey, index) => [ String(index + 1), weaponKey, ]), );
+
+export const WEAPON_HOTKEY_LABEL = WEAPON_ORDER.length <= 1 ? "1" : `1-${Math.min(WEAPON_ORDER.length, 9)}`;
+
+export const WEAPONS = { fists: { label: "Fists", type: "melee", reach: 1.05, arc: 1.2, damage: 14, cooldown: 0.42, }, crowbar: { label: "Crowbar", type: "melee", reach: 1.55, arc: 1.1, damage: 30, cooldown: 0.32, }, machete: { label: "Machete", type: "melee", reach: 1.7, arc: 1.45, damage: 24, cooldown: 0.2, }, pistol: { label: "Pistol", type: "ranged", damage: 22, cooldown: 0.28, bulletSpeed: 13, spread: 0.02, range: 12, ammoCost: 1, pellets: 1, }, revolver: { label: "Revolver", type: "ranged", damage: 42, cooldown: 0.5, bulletSpeed: 15.5, spread: 0.012, range: 13.5, ammoCost: 1, pellets: 1, }, smg: { label: "SMG", type: "ranged", damage: 10, cooldown: 0.08, bulletSpeed: 14, spread: 0.14, range: 10.5, ammoCost: 1, pellets: 1, }, shotgun: { label: "Shotgun", type: "ranged", damage: 11, cooldown: 0.9, bulletSpeed: 12, spread: 0.5, range: 6.2, ammoCost: 1, pellets: 6, }, rifle: { label: "Rifle", type: "ranged", damage: 19, cooldown: 0.12, bulletSpeed: 15, spread: 0.05, range: 13, ammoCost: 1, pellets: 1, }, dmr: { label: "DMR", type: "ranged", damage: 34, cooldown: 0.34, bulletSpeed: 17, spread: 0.015, range: 15, ammoCost: 1, pellets: 1, }, };
+
+export const WEAPON_SPAWN_PLAN = [ { weapon: "crowbar", percent: 0.1, spread: 8, supportDrops: 1 }, { weapon: "machete", percent: 0.18, spread: 8, supportDrops: 1 }, { weapon: "pistol", percent: 0.28, spread: 10, supportDrops: 2 }, { weapon: "revolver", percent: 0.4, spread: 10, supportDrops: 2 }, { weapon: "smg", percent: 0.52, spread: 12, supportDrops: 3 }, { weapon: "shotgun", percent: 0.64, spread: 12, supportDrops: 3 }, { weapon: "rifle", percent: 0.78, spread: 14, supportDrops: 3 }, { weapon: "dmr", percent: 0.9, spread: 14, supportDrops: 3 }, ];

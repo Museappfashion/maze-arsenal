@@ -1,0 +1,23 @@
+/* src/styles/minimapPointerFix.css */
+
+.maze-frame > canvas {
+  cursor: crosshair !important;
+}
+
+.maze-game-shell.mode-3d .maze-frame > canvas {
+  cursor: none !important;
+}
+
+.locator-arrow.player {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  margin-right: 6px;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 8px solid #38bdf8;
+  filter: drop-shadow(
+    0 0 4px
+      rgba(56, 189, 248, 0.72)
+  );
+}

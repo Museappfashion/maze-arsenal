@@ -78,7 +78,7 @@ security definer
 set search_path = public
 as $$
 declare
-  current_time timestamptz := clock_timestamp();
+  v_event_time timestamptz := clock_timestamp();
 
   clean_name text := nullif(
     left(trim(coalesce(p_player_name, '')), 20),
@@ -131,7 +131,7 @@ begin
   values (
     p_user_id,
     clean_name,
-    current_time
+    v_event_time
   )
   on conflict (user_id) do nothing;
 
@@ -147,7 +147,7 @@ begin
       floor(
         extract(
           epoch from (
-            current_time
+            v_event_time
             - coalesce(
               stats.last_playtime_at,
               stats.active_run_started_at
@@ -165,7 +165,7 @@ begin
         clean_name,
         last_player_name
       ),
-      last_seen_at = current_time
+      last_seen_at = v_event_time
     where user_id = p_user_id;
 
     return;
@@ -173,7 +173,7 @@ begin
 
   if p_event = 'game_start' then
     if stats.last_game_start_at is null
-       or current_time - stats.last_game_start_at
+       or v_event_time - stats.last_game_start_at
           >= interval '2 seconds' then
 
       credited_seconds := least(
@@ -190,10 +190,10 @@ begin
         games_started = games_started + 1,
         seconds_played =
           seconds_played + credited_seconds,
-        active_run_started_at = current_time,
-        last_playtime_at = current_time,
-        last_game_start_at = current_time,
-        last_seen_at = current_time
+        active_run_started_at = v_event_time,
+        last_playtime_at = v_event_time,
+        last_game_start_at = v_event_time,
+        last_seen_at = v_event_time
       where user_id = p_user_id;
     else
       update public.developer_usage_stats
@@ -202,7 +202,7 @@ begin
           clean_name,
           last_player_name
         ),
-        last_seen_at = current_time
+        last_seen_at = v_event_time
       where user_id = p_user_id;
     end if;
 
@@ -225,8 +225,8 @@ begin
         ),
         seconds_played =
           seconds_played + credited_seconds,
-        last_playtime_at = current_time,
-        last_seen_at = current_time
+        last_playtime_at = v_event_time,
+        last_seen_at = v_event_time
       where user_id = p_user_id;
     end if;
 
@@ -235,7 +235,7 @@ begin
 
   if p_event = 'game_finish' then
     if stats.active_run_started_at is not null
-       and current_time - stats.active_run_started_at
+       and v_event_time - stats.active_run_started_at
           >= interval '1 second' then
 
       credited_seconds := least(
@@ -255,7 +255,7 @@ begin
           seconds_played + credited_seconds,
         active_run_started_at = null,
         last_playtime_at = null,
-        last_seen_at = current_time
+        last_seen_at = v_event_time
       where user_id = p_user_id;
     end if;
 
@@ -264,7 +264,7 @@ begin
 
   if p_event = 'donation' then
     if stats.last_donation_at is null
-       or current_time - stats.last_donation_at
+       or v_event_time - stats.last_donation_at
           >= interval '2 seconds' then
 
       update public.developer_usage_stats
@@ -293,12 +293,12 @@ begin
               when p_donation_key = 'custom' then 1
               else 0
             end,
-        last_donation_at = current_time,
-        last_seen_at = current_time
+        last_donation_at = v_event_time,
+        last_seen_at = v_event_time
       where user_id = p_user_id;
     else
       update public.developer_usage_stats
-      set last_seen_at = current_time
+      set last_seen_at = v_event_time
       where user_id = p_user_id;
     end if;
   end if;

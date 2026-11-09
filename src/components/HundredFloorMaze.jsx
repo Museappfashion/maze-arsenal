@@ -4,8 +4,7 @@ import { drawCubeMaze } from "../game/cubeMazeRendering3D.js";
 import { CubeMazeMinimap } from "./CubeMazeMinimap.jsx";
 import { GAME_STYLES } from "../styles/gameStyles.js";
 import { VIEW_3D_MOUSE_SENSITIVITY } from "../config/constants.js";
-import { recordActivePlay, flushPlayerProgress } from "../services/playerProgress.js";
-import { recordGameStarted, recordPlaySeconds } from "../services/developerAnalytics.js";
+import { flushTrackedPlay, recordGameStarted, recordTrackedPlay } from "../services/developerAnalytics.js";
 import "../styles/hundredFloorMaze.css";
 
 const finePointer = () => typeof window !== "undefined" && window.matchMedia("(pointer: fine)").matches;
@@ -37,11 +36,10 @@ function CubeMazeRun({ onBack, playerName }) {
   const joystick=useRef({x:0,y:0}),lookStick=useRef({x:0,y:0});
   const mapRef=useRef(false),releasedRef=useRef(finePointer()),escapeArmed=useRef(false);
   const unlockIntent=useRef(null),ownsMouse=useRef(false),lockWanted=useRef(false),leaving=useRef(false);
-  const analyticsSeconds=useRef(0);
   const clearInput=useCallback(()=>{keys.current={};joystick.current={x:0,y:0};lookStick.current={x:0,y:0};drag.current=null;},[]);
   const stopForCursor=useCallback((value)=>{releasedRef.current=value;setReleased(value);},[]);
   const persist=useCallback(()=>{const saved=saveCubeMaze(playerName,world);setSaveFailed(!saved);return saved;},[playerName,world]);
-  const flushAnalytics=useCallback(()=>{const seconds=Math.floor(analyticsSeconds.current);if(seconds>0){analyticsSeconds.current-=seconds;void recordPlaySeconds({playerName},seconds);}},[playerName]);
+  const flushPlaytime = useCallback(() => flushTrackedPlay(playerName), [playerName]);
   const releaseMouse=useCallback((reason)=>{
     unlockIntent.current=reason;lockWanted.current=false;clearInput();
     if(document.pointerLockElement===canvasRef.current)document.exitPointerLock?.();
@@ -57,22 +55,22 @@ function CubeMazeRun({ onBack, playerName }) {
     const failed=()=>{if(lockWanted.current)setMouseNote("Click once to look · Esc releases mouse · Esc again exits");};
     try{canvas.requestPointerLock()?.catch(failed);}catch{failed();}
   },[stopForCursor,world]);
-  const leave=useCallback(()=>{if(leaving.current)return;leaving.current=true;releaseMouse("leave");persist();flushAnalytics();flushPlayerProgress();onBack();},[releaseMouse,persist,flushAnalytics,onBack]);
+  const leave=useCallback(()=>{if(leaving.current)return;leaving.current=true;releaseMouse("leave");persist();flushPlaytime();onBack();},[releaseMouse,persist,flushPlaytime,onBack]);
   const showMap=useCallback((value)=>{
     mapRef.current=value;setMapOpen(value);escapeArmed.current=false;clearInput();
-    if(value){releaseMouse("map");persist();flushAnalytics();flushPlayerProgress();}
-  },[clearInput,releaseMouse,persist,flushAnalytics]);
+    if(value){releaseMouse("map");persist();flushPlaytime();}
+  },[clearInput,releaseMouse,persist,flushPlaytime]);
   const releaseForEscape=useCallback(()=>{
-    escapeArmed.current=true;stopForCursor(true);releaseMouse("escape");persist();flushAnalytics();flushPlayerProgress();
+    escapeArmed.current=true;stopForCursor(true);releaseMouse("escape");persist();flushPlaytime();
     setMouseNote("Mouse free · click to look · press Esc again to leave");
-  },[stopForCursor,releaseMouse,persist,flushAnalytics]);
+  },[stopForCursor,releaseMouse,persist,flushPlaytime]);
   const useLift=useCallback((direction)=>{
     if(mapRef.current||world.completed)return;
     if(releasedRef.current)requestMouse();
     if(activateCubeLift(world,direction))setSnapshot(snapshotOf(world));
   },[requestMouse,world]);
   const restart=()=>{
-    flushAnalytics();releaseMouse("restart");const next=createCubeMaze();saveCubeMaze(playerName,next);
+    flushPlaytime();releaseMouse("restart");const next=createCubeMaze();saveCubeMaze(playerName,next);
     clearInput();leaving.current=false;escapeArmed.current=false;mapRef.current=false;setMapOpen(false);
     stopForCursor(finePointer());setWorld(next);setSnapshot(snapshotOf(next));
   };
@@ -96,11 +94,11 @@ function CubeMazeRun({ onBack, playerName }) {
       if(key==="e"&&!event.repeat)useLift(event.shiftKey?-1:1);
     };
     const up=(event)=>{keys.current[event.key.toLowerCase()]=false;};
-    const suspend=()=>{if(leaving.current)return;stopForCursor(true);escapeArmed.current=false;releaseMouse("blur");persist();flushAnalytics();flushPlayerProgress();};
+    const suspend=()=>{if(leaving.current)return;stopForCursor(true);escapeArmed.current=false;releaseMouse("blur");persist();flushPlaytime();};
     const visibility=()=>{if(document.hidden)suspend();};
     window.addEventListener("keydown",down);window.addEventListener("keyup",up,true);window.addEventListener("blur",suspend);window.addEventListener("pagehide",suspend);document.addEventListener("visibilitychange",visibility);
     return()=>{window.removeEventListener("keydown",down);window.removeEventListener("keyup",up,true);window.removeEventListener("blur",suspend);window.removeEventListener("pagehide",suspend);document.removeEventListener("visibilitychange",visibility);clearInput();};
-  },[clearInput,flushAnalytics,leave,persist,releaseForEscape,releaseMouse,showMap,stopForCursor,useLift,world]);
+  },[clearInput,flushPlaytime,leave,persist,releaseForEscape,releaseMouse,showMap,stopForCursor,useLift,world]);
 
   useEffect(()=>{
     const canvas=canvasRef.current;
@@ -112,7 +110,7 @@ function CubeMazeRun({ onBack, playerName }) {
         unlockIntent.current=null;escapeArmed.current=false;stopForCursor(false);clearInput();
       }else if(wasOwned){
         const intended=unlockIntent.current;unlockIntent.current=null;lockWanted.current=false;stopForCursor(true);clearInput();
-        if(!intended||intended==="escape"){escapeArmed.current=true;persist();flushAnalytics();flushPlayerProgress();setMouseNote("Mouse free · click to look · press Esc again to leave");}
+        if(!intended||intended==="escape"){escapeArmed.current=true;persist();flushPlaytime();setMouseNote("Mouse free · click to look · press Esc again to leave");}
       }
     };
     const mouseMove=(event)=>{
@@ -123,29 +121,30 @@ function CubeMazeRun({ onBack, playerName }) {
     const lockError=()=>{if(lockWanted.current)setMouseNote("Click once to look · Esc releases mouse · Esc again exits");};
     document.addEventListener("pointerlockchange",lockChange);document.addEventListener("pointerlockerror",lockError);document.addEventListener("mousemove",mouseMove);
     return()=>{releaseMouse("unmount");ownsMouse.current=false;document.removeEventListener("pointerlockchange",lockChange);document.removeEventListener("pointerlockerror",lockError);document.removeEventListener("mousemove",mouseMove);};
-  },[clearInput,flushAnalytics,persist,releaseMouse,stopForCursor,world]);
+  },[clearInput,flushPlaytime,persist,releaseMouse,stopForCursor,world]);
 
   useEffect(()=>{
     const canvas=canvasRef.current,ctx=canvas.getContext("2d");let viewport;
     const resize=()=>{const b=canvas.getBoundingClientRect();const ratio=Math.min(1.5,window.devicePixelRatio||1);viewport={width:Math.max(1,b.width),height:Math.max(1,b.height),ratio};canvas.width=Math.round(viewport.width*ratio);canvas.height=Math.round(viewport.height*ratio);};
     resize();const observer=new ResizeObserver(resize);observer.observe(canvas);globalThis.__mistCubeMazeWorld=world;
-    void recordGameStarted({playerName});analyticsSeconds.current=0;
+    void recordGameStarted({playerName});
     let previous=0,refresh=0,saveTime=0,frame;
     const loop=(now)=>{
       const dt=previous?Math.max(0,Math.min(.05,(now-previous)/1000)):0;previous=now;
       if(!mapRef.current&&!releasedRef.current&&!world.completed&&!document.hidden){
         const held=keys.current;
         updateCubeMaze(world,dt,{forward:Number(Boolean(held.w||held.arrowup))-Number(Boolean(held.s||held.arrowdown))-joystick.current.y,strafe:Number(Boolean(held.d))-Number(Boolean(held.a))+joystick.current.x,turn:Number(Boolean(held.arrowright))-Number(Boolean(held.arrowleft))+lookStick.current.x,look:Number(Boolean(held.pageup))-Number(Boolean(held.pagedown))-lookStick.current.y});
-        recordActivePlay(playerName,dt);analyticsSeconds.current+=dt;if(analyticsSeconds.current>=30)flushAnalytics();saveTime+=dt;if(saveTime>5){persist();saveTime=0;}
+        recordTrackedPlay(playerName, dt);
+        saveTime+=dt;if(saveTime>5){persist();saveTime=0;}
       }
       refresh+=dt;if(refresh>.1){setSnapshot(snapshotOf(world));refresh=0;}
       if(!mapRef.current){ctx.setTransform(viewport.ratio,0,0,viewport.ratio,0,0);drawCubeMaze(ctx,world,viewport.width,viewport.height,{playerName,showStatus:false});}
       frame=requestAnimationFrame(loop);
     };
     frame=requestAnimationFrame(loop);
-    return()=>{cancelAnimationFrame(frame);observer.disconnect();flushAnalytics();flushPlayerProgress();if(globalThis.__mistCubeMazeWorld===world)delete globalThis.__mistCubeMazeWorld;};
-  },[flushAnalytics,persist,playerName,world]);
-  useEffect(()=>{if(snapshot.completed){stopForCursor(true);releaseMouse("complete");persist();flushAnalytics();}},[snapshot.completed,stopForCursor,releaseMouse,persist,flushAnalytics]);
+    return()=>{cancelAnimationFrame(frame);observer.disconnect();flushPlaytime();if(globalThis.__mistCubeMazeWorld===world)delete globalThis.__mistCubeMazeWorld;};
+  },[flushPlaytime,persist,playerName,world]);
+  useEffect(()=>{if(snapshot.completed){stopForCursor(true);releaseMouse("complete");persist();flushPlaytime();}},[snapshot.completed,stopForCursor,releaseMouse,persist,flushPlaytime]);
   useEffect(()=>{if(mapOpen)document.querySelector(".cube-minimap-expanded canvas")?.focus({preventScroll:true});else canvasRef.current?.focus({preventScroll:true});},[mapOpen,world]);
   const latest=useRef({world,playerName});latest.current={world,playerName};
   useEffect(()=>()=>saveCubeMaze(latest.current.playerName,latest.current.world),[]);

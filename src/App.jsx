@@ -9,7 +9,7 @@ import { TowerDefenseGame } from "./components/TowerDefenseGame.jsx";
 import { HundredFloorMaze } from "./components/HundredFloorMaze.jsx";
 import { FirstTimePlayerName } from "./components/FirstTimePlayerName.jsx";
 import { getPlayerIdentity, savePlayerIdentity } from "./services/playerIdentity.js";
-import { flushPlayerProgress, getPlayerProgress, recordActivePlay, selectProgressPlayer } from "./services/playerProgress.js";
+import { flushPlayerProgress, getPlayerProgress, selectProgressPlayer } from "./services/playerProgress.js";
 import { StatCard } from "./components/StatCard.jsx";
 import { MizCounter } from "./components/MizCounter.jsx";
 import { MystPowersPanel } from "./components/MystPowersPanel.jsx";
@@ -35,7 +35,7 @@ import {
   setMinimapEnabled,
 } from "./features/settingsToggleEnhancement.js";
 import { GLOBAL_LEADERBOARD_ENABLED, addLeaderboardTime, createEmptyUserRanks, detectCountryCode, fetchGlobalLeaderboards, loadLeaderboards, saveLeaderboards, submitGlobalLeaderboardTime } from "./services/leaderboard.js";
-import { recordGameFinished, recordGameStarted, recordPlaySeconds, recordVisitorSeen } from "./services/developerAnalytics.js";
+import { flushTrackedPlay, recordGameFinished, recordGameStarted, recordTrackedPlay, recordVisitorSeen } from "./services/developerAnalytics.js";
 import { recordWorldExploration } from "./services/mizEconomy.js";
 import { clamp, formatTime } from "./utils/math.js";
 import { sanitizePlayerName } from "./utils/player.js";
@@ -80,7 +80,6 @@ const frameRef = useRef(0);
 const lastTimeRef = useRef(0);
 const hudAccumulatorRef = useRef(0);
 const recordedVictoryRef = useRef(false);
-const analyticsLastRecordedTimeRef = useRef(0);
 const analyticsRunEndedRef = useRef(false);
 const audioRef = useRef(null);
 const [audioEnabled, setAudioEnabled] = useState(true);
@@ -124,21 +123,8 @@ useEffect(() => {
   if (playerName) void recordVisitorSeen(playerName);
 }, [playerName]);
 
-const flushPlayAnalytics = useCallback((world = worldRef.current) => {
-  if (!selectedLevel || !world) {
-    return;
-  }
-
-  const currentTime = Math.max(0, Number(world.time) || 0);
-  const previousTime = analyticsLastRecordedTimeRef.current;
-  const deltaSeconds = Math.floor(currentTime - previousTime);
-
-  if (deltaSeconds <= 0) {
-    return;
-  }
-
-  analyticsLastRecordedTimeRef.current = currentTime;
-  void recordPlaySeconds(world, deltaSeconds);
+const flushPlaytime = useCallback((world = worldRef.current) => {
+  if (selectedLevel && world) flushTrackedPlay(world.playerName);
 }, [selectedLevel]);
 
 
@@ -582,7 +568,7 @@ const returnToLevelSelect = useCallback(() => {
     document.exitPointerLock?.();
   }
 
-  flushPlayAnalytics(worldRef.current);
+  flushPlaytime();
   audioRef.current?.stopMusic();
   keysRef.current = {};
   clearTouchInput();
@@ -590,7 +576,7 @@ const returnToLevelSelect = useCallback(() => {
   setControllerPaused(false);
   setControllerInventory(false);
   setSelectedLevel(null);
-}, [clearTouchInput, flushPlayAnalytics]);
+}, [clearTouchInput, flushPlaytime]);
 
 useEffect(() => {
   return () => {
@@ -642,7 +628,6 @@ const startLevel = useCallback((
   lastTimeRef.current = 0;
   hudAccumulatorRef.current = 0;
   recordedVictoryRef.current = false;
-  analyticsLastRecordedTimeRef.current = 0;
   analyticsRunEndedRef.current = false;
   void recordGameStarted(nextWorld);
   setGameMode(nextViewMode);
@@ -660,7 +645,7 @@ const resetWorld = useCallback(() => {
   }
 
   const currentWorld = worldRef.current;
-  flushPlayAnalytics(currentWorld);
+  flushPlaytime(currentWorld);
   const runOptions = currentWorld.labyrinthMode
     ? {
         difficulty: currentWorld.labyrinth.difficulty,
@@ -681,13 +666,12 @@ const resetWorld = useCallback(() => {
   lastTimeRef.current = 0;
   hudAccumulatorRef.current = 0;
   recordedVictoryRef.current = false;
-  analyticsLastRecordedTimeRef.current = 0;
   analyticsRunEndedRef.current = false;
   void recordGameStarted(nextWorld);
   forceRefresh();
 }, [
   clearTouchInput,
-  flushPlayAnalytics,
+  flushPlaytime,
   forceRefresh,
   gameMode,
   playerName,
@@ -719,10 +703,10 @@ const pauseForController = useCallback((paused) => {
   keysRef.current = {};
   clearTouchInput();
   if (document.pointerLockElement) document.exitPointerLock?.();
-  if (paused) flushPlayAnalytics(world);
+  if (paused) flushPlaytime(world);
   else setControllerInventory(false);
   setControllerPaused(paused);
-}, [clearTouchInput, flushPlayAnalytics]);
+}, [clearTouchInput, flushPlaytime]);
 
 const cycleControllerEquipment = useCallback((direction) => {
   const world = worldRef.current;
@@ -1030,15 +1014,9 @@ const loop = (timestamp) => {
   const world = worldRef.current;
 
   if (!world.gameOver && !world.victory && !world.controllerPaused) {
-    recordActivePlay(world.playerName, Math.min(.25, elapsed));
+    recordTrackedPlay(world.playerName, Math.min(.25, elapsed));
     world.time += dt;
     world.fogPulse += dt;
-
-    if (
-      world.time - analyticsLastRecordedTimeRef.current >= 30
-    ) {
-      flushPlayAnalytics(world);
-    }
 
     if (world.labyrinthMode) {
       updateLabyrinth(world);
@@ -1108,7 +1086,7 @@ const loop = (timestamp) => {
     !analyticsRunEndedRef.current
   ) {
     analyticsRunEndedRef.current = true;
-    flushPlayAnalytics(world);
+    flushPlaytime(world);
     void recordGameFinished(world);
     forceRefresh();
   }
@@ -1142,13 +1120,24 @@ const loop = (timestamp) => {
 
 frameRef.current = requestAnimationFrame(loop);
 
+const flushOnHide = () => {
+  lastTimeRef.current = 0;
+  if (document.hidden) flushPlaytime();
+};
+const flushOnPageHide = () => flushPlaytime();
+document.addEventListener("visibilitychange", flushOnHide);
+window.addEventListener("pagehide", flushOnPageHide);
+
 return () => {
   cancelAnimationFrame(frameRef.current);
+  document.removeEventListener("visibilitychange", flushOnHide);
+  window.removeEventListener("pagehide", flushOnPageHide);
+  flushPlaytime();
   flushPlayerProgress();
 };
 
 }, [
-  flushPlayAnalytics,
+  flushPlaytime,
   forceRefresh,
   recordLeaderboardScore,
   selectedLevel,

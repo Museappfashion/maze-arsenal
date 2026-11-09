@@ -11,6 +11,7 @@ let memory = { profiles: {}, lastPlayerName: "", anonymousIdentityClaimedBy: "" 
 let unsaved = false;
 let lastObserved = null;
 let sinceFlush = 0;
+let syncedPlaytime = null;
 
 const seconds = (value) => Number.isFinite(Number(value)) ? Math.min(1e10, Math.max(0, Number(value))) : 0;
 export const playerProgressId = (name) => `p:${sanitizePlayerName(name).toLowerCase() || "(anonymous)"}`;
@@ -73,13 +74,22 @@ export function adoptAnonymousPlaytime(name) {
 
 export function getPlayerProgress(name) {
   const id = playerProgressId(name);
-  const playedSeconds = seconds(read().profiles[id]?.seconds) + (pending.get(id) || 0);
+  const localSeconds = seconds(read().profiles[id]?.seconds) + (pending.get(id) || 0);
+  const playedSeconds = syncedPlaytime ?? localSeconds;
+  const unlockSeconds = Math.max(localSeconds, playedSeconds);
   const special = isSpecialUnlockName(name);
   return {
     playerName: sanitizePlayerName(name), playedSeconds, special,
-    towerDefense: special || playedSeconds >= MODE_UNLOCK_SECONDS.towerDefense,
-    hundredFloor: special || playedSeconds >= MODE_UNLOCK_SECONDS.hundredFloor,
+    towerDefense: special || unlockSeconds >= MODE_UNLOCK_SECONDS.towerDefense,
+    hundredFloor: special || unlockSeconds >= MODE_UNLOCK_SECONDS.hundredFloor,
   };
+}
+
+export function setSyncedPlaytime(value) {
+  const next = Number.isFinite(value) && value >= 0 ? value : null;
+  if (next === syncedPlaytime) return;
+  syncedPlaytime = next;
+  publish();
 }
 
 // The receipt lives in each wallet alongside its credit, so selecting or
@@ -108,13 +118,14 @@ export function flushPlayerProgress() {
 // Called by live simulation loops, never by the menu or wall-clock timers.
 // Cap resumed frames so a sleeping/hidden tab cannot earn hours in one tick.
 export function recordActivePlay(name, deltaSeconds) {
-  if (typeof document !== "undefined" && document.hidden) return;
+  if (typeof document !== "undefined" && document.hidden) return 0;
   const delta = Math.min(1, seconds(deltaSeconds));
-  if (!delta) return;
+  if (!delta) return 0;
   const id = playerProgressId(name);
   pending.set(id, (pending.get(id) || 0) + delta);
   sinceFlush += delta;
   if (sinceFlush >= 10) flushPlayerProgress();
+  return delta;
 }
 
 if (typeof window !== "undefined" && window.addEventListener) {

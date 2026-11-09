@@ -70,8 +70,8 @@ function sendJson(response, status, data) {
 }
 
 export default async function handler(request, response) {
-  if (request.method !== "POST") {
-    response.setHeader("Allow", "POST");
+  if (request.method !== "GET" && request.method !== "POST") {
+    response.setHeader("Allow", "GET, POST");
     return sendJson(response, 405, {
       code: "METHOD_NOT_ALLOWED",
       error: "Method not allowed.",
@@ -108,7 +108,7 @@ export default async function handler(request, response) {
     error: userError,
   } = await supabaseAdmin.auth.getUser(accessToken);
 
-  if (userError || !user) {
+  if (userError || !user?.id) {
     console.warn(
       "Developer analytics user verification failed:",
       userError?.message ?? "No user returned.",
@@ -117,6 +117,26 @@ export default async function handler(request, response) {
     return sendJson(response, 401, {
       code: "INVALID_ACCESS_TOKEN",
       error: "Unauthorized.",
+    });
+  }
+
+  if (request.method === "GET") {
+    const { data, error } = await supabaseAdmin
+      .from("developer_usage_stats")
+      .select("seconds_played")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Player playtime lookup failed:", error.message, error.code);
+      return sendJson(response, 500, {
+        code: "PLAYTIME_LOOKUP_FAILED",
+        error: "Could not load playtime.",
+      });
+    }
+
+    return sendJson(response, 200, {
+      playedSeconds: Number(data?.seconds_played ?? 0),
     });
   }
 

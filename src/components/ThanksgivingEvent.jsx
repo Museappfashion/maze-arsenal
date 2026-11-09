@@ -8,7 +8,7 @@ import { ThanksgivingArtwork } from "./ThanksgivingArtwork.jsx";
 import { TurkeyCosmeticCard } from "./TurkeyCosmeticCard.jsx";
 import { useHuxWallet } from "./useHuxWallet.js";
 import "../styles/thanksgiving.css";
-import { recordActivePlay, flushPlayerProgress } from "../services/playerProgress.js";
+import { flushTrackedPlay, recordGameFinished, recordGameStarted, recordTrackedPlay } from "../services/developerAnalytics.js";
 
 const clock = (seconds) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`;
 
@@ -60,6 +60,7 @@ function ThanksgivingRun({ onLeave, onRestart, wallet, playerName }) {
   const pausedRef = useRef(false);
   const canvasRef = useRef(null);
   const resultRef = useRef(null);
+  const reportedStart = useRef(false);
   const keys = useRef({});
   const joystick = useRef({ x: 0, y: 0 });
   const touchRescue = useRef(false);
@@ -67,8 +68,9 @@ function ThanksgivingRun({ onLeave, onRestart, wallet, playerName }) {
 
   const clearInput = useCallback(() => { keys.current = {}; joystick.current = { x: 0, y: 0 }; touchRescue.current = false; }, []);
   const setPause = useCallback((value) => {
+    if (value && !pausedRef.current) void flushTrackedPlay(playerName);
     pausedRef.current = value; setPaused(value); clearInput();
-  }, [clearInput]);
+  }, [clearInput, playerName]);
   const persistProgress = useCallback(() => {
     const previous = accounted.current;
     if (world.cornCollected > previous.corn) earnHux(world.cornCollected - previous.corn);
@@ -103,13 +105,16 @@ function ThanksgivingRun({ onLeave, onRestart, wallet, playerName }) {
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
     window.addEventListener("blur", blur);
+    window.addEventListener("pagehide", blur);
     document.addEventListener("visibilitychange", hidden);
     return () => {
       window.removeEventListener("keydown", down); window.removeEventListener("keyup", up);
-      window.removeEventListener("blur", blur); document.removeEventListener("visibilitychange", hidden);
-      clearInput(); persistProgress(); flushPlayerProgress();
+      window.removeEventListener("blur", blur); window.removeEventListener("pagehide", blur);
+      document.removeEventListener("visibilitychange", hidden);
+      clearInput(); persistProgress();
+      void flushTrackedPlay(playerName);
     };
-  }, [activate, clearInput, persistProgress, setPause, world]);
+  }, [activate, clearInput, persistProgress, playerName, setPause, world]);
 
   useEffect(() => {
     if (!paused && !snapshot.caught) { canvasRef.current?.focus({ preventScroll: true }); return; }
@@ -127,6 +132,10 @@ function ThanksgivingRun({ onLeave, onRestart, wallet, playerName }) {
   }, [paused, snapshot.caught]);
 
   useEffect(() => {
+    if (!reportedStart.current) {
+      reportedStart.current = true;
+      void recordGameStarted({ playerName });
+    }
     const canvas = canvasRef.current;
     const context = canvas.getContext("2d");
     let viewport = { width: 1, height: 1, ratio: 1 };
@@ -147,15 +156,20 @@ function ThanksgivingRun({ onLeave, onRestart, wallet, playerName }) {
       const dt = lastTime ? Math.min(.05, (now - lastTime) / 1000) : 0;
       lastTime = now;
       const wasCaught = world.caught;
-      if (!pausedRef.current && !world.caught) {
-        recordActivePlay(playerName, dt);
+      if (!document.hidden && !pausedRef.current && !world.caught) {
+        const previousTime = world.time;
         const held = keys.current;
         updateThanksgivingWorld(world, dt, {
           x: Number(Boolean(held.d || held.arrowright)) - Number(Boolean(held.a || held.arrowleft)) + joystick.current.x,
           y: Number(Boolean(held.s || held.arrowdown)) - Number(Boolean(held.w || held.arrowup)) + joystick.current.y,
           rescue: Boolean(held.e || held[" "] || touchRescue.current),
         });
+        recordTrackedPlay(playerName, world.time - previousTime);
         persistProgress();
+        if (world.caught) {
+          void flushTrackedPlay(playerName);
+          void recordGameFinished({ playerName });
+        }
       }
       refresh += dt;
       if (refresh > .1 || world.caught !== wasCaught) { setSnapshot(getThanksgivingSnapshot(world)); refresh = 0; }
@@ -164,7 +178,7 @@ function ThanksgivingRun({ onLeave, onRestart, wallet, playerName }) {
       frame = requestAnimationFrame(loop);
     };
     frame = requestAnimationFrame(loop);
-    return () => { cancelAnimationFrame(frame); observer.disconnect(); flushPlayerProgress(); };
+    return () => { cancelAnimationFrame(frame); observer.disconnect(); };
   }, [persistProgress, playerName, world]);
 
   return (

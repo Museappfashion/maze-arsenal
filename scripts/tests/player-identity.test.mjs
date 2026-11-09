@@ -85,10 +85,22 @@ test("visitor identification and otherwise unnamed analytics requests send the s
   const values = new Map([["mist-maze-player-identity-v1", JSON.stringify({ version: 1, playerName: "First Entry" })]]);
   Object.defineProperty(globalThis, "localStorage", { configurable: true, value: { getItem:key=>values.get(key)??null, setItem:(key,value)=>values.set(key,value) } });
   const calls = [];
+  let savedSeconds = 3721;
+  let reads = 0;
+  let holdHeartbeat;
   globalThis.fetch = async (url, options) => {
     assert.equal(url, "/api/developer-usage");
     assert.equal(options.headers.Authorization, "Bearer verified-session");
-    calls.push(JSON.parse(options.body));
+    if (options.method !== "POST") {
+      reads++;
+      return new Response(JSON.stringify({ playedSeconds: savedSeconds }));
+    }
+    const event = JSON.parse(options.body);
+    calls.push(event);
+    if (event.eventType === "playtime" && holdHeartbeat) {
+      await holdHeartbeat(event.seconds);
+      savedSeconds += event.seconds;
+    }
     return new Response(JSON.stringify({ ok: true }), { status: 200 });
   };
   const stub = "virtual:identity-analytics-session";
@@ -118,6 +130,37 @@ test("visitor identification and otherwise unnamed analytics requests send the s
     assert.equal(calls.at(-1).playerName, "Renamed Explorer", "whitespace-only analytics cannot erase identity");
     await analytics.recordGameStarted({ playerName: "Explicit Run" });
     assert.equal(calls.at(-1).playerName, "Explicit Run");
+
+    const progress = await server.ssrLoadModule("/src/services/playerProgress.js");
+    await analytics.refreshPlayerPlaytime();
+    assert.equal(progress.getPlayerProgress("Explicit Run").playedSeconds, 3721);
+    assert.equal(progress.getPlayerProgress("Explicit Run").towerDefense, true);
+
+    let releaseHeartbeat;
+    const heartbeat = new Promise((resolve) => { releaseHeartbeat = resolve; });
+    holdHeartbeat = async (seconds) => {
+      assert.equal(seconds, 2);
+      await heartbeat;
+    };
+    for (let frame = 0; frame < 4; frame++) analytics.recordTrackedPlay("Explicit Run", 0.5);
+    analytics.flushTrackedPlay("Explicit Run");
+    const refresh = analytics.refreshPlayerPlaytime();
+    await new Promise((resolve) => setImmediate(resolve));
+    const readsWhileWriting = reads;
+    releaseHeartbeat();
+    await refresh;
+    assert.equal(readsWhileWriting, 1, "the menu waits for the run's final heartbeat");
+    assert.equal(progress.getPlayerProgress("Explicit Run").playedSeconds, 3723);
+    assert.equal(JSON.parse(values.get(progress.PLAYER_PROGRESS_KEY)).profiles["p:explicit run"].seconds, 2);
+
+    await analytics.refreshPlayerPlaytime();
+    assert.equal(progress.getPlayerProgress("Explicit Run").playedSeconds, 3723, "refresh never adds the same history twice");
+
+    const local = JSON.parse(values.get(progress.PLAYER_PROGRESS_KEY));
+    local.profiles["p:explicit run"].seconds = 7200;
+    values.set(progress.PLAYER_PROGRESS_KEY, JSON.stringify(local));
+    assert.equal(progress.getPlayerProgress("Explicit Run").playedSeconds, 3723, "the display matches the saved account total");
+    assert.equal(progress.getPlayerProgress("Explicit Run").hundredFloor, true, "an existing local unlock is preserved");
   } finally {
     await server.close(); globalThis.fetch = oldFetch;
     if (oldStorage) Object.defineProperty(globalThis, "localStorage", oldStorage); else delete globalThis.localStorage;

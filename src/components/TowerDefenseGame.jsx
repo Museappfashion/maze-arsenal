@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { StatCard } from "./StatCard.jsx";
 import { ENEMY_TYPES } from "../config/enemies.js";
-import { recordGameStarted, recordGameFinished, recordPlaySeconds } from "../services/developerAnalytics.js";
-import { recordActivePlay, flushPlayerProgress } from "../services/playerProgress.js";
+import { flushTrackedPlay, recordGameStarted, recordGameFinished, recordTrackedPlay } from "../services/developerAnalytics.js";
 import { DEFENSE_COLUMNS, DEFENSE_ROWS, DEFENSE_LEVELS, getDefenseLevel, DEFENSE_TYPES, DEFENSE_WAVES, DEFENSE_MAX_LEVEL, DEFENSE_SPEEDS, createDefenseGame, placeDefense, upgradeDefense, sellDefense, startDefenseWave, stepDefense, setDefenseSpeed, defenseTowerStats, defenseStatSummary, defenseUpgradeCost, defenseSellValue, defenseWave, defenseWaveBrief } from "../game/towerDefense.js";
 import { drawDefenseGame, drawDefensePowerIcon, DEFENSE_CANVAS_WIDTH, DEFENSE_CANVAS_HEIGHT } from "../game/towerDefenseRenderer.js";
 import "../styles/towerDefense.css";
@@ -20,19 +19,9 @@ export function TowerDefenseGame({ onBack, playerName }) {
   const selected = game.towers.find((tower) => tower.id === game.selectedId);
   const ended = game.status === "defeat" || game.status === "victory";
   const selectedStats = selected && defenseTowerStats(selected);
-  const analytics = useRef({ game:null, seconds:0, finished:false });
+  const analytics = useRef({ game: null, finished: false });
   const levelDialog = useRef(null);
   useEffect(()=>{if(pendingLevel)levelDialog.current?.querySelector("button")?.focus({preventScroll:true});},[pendingLevel]);
-  function flushDefenseAnalytics() {
-    const seconds=Math.floor(analytics.current.seconds);
-    if(seconds>0){analytics.current.seconds-=seconds;void recordPlaySeconds({playerName},seconds);}
-  }
-  function updateDefenseAnalytics(current, active=0) {
-    if(analytics.current.game!==current){flushDefenseAnalytics();analytics.current={game:current,seconds:0,finished:false};void recordGameStarted({playerName});}
-    analytics.current.seconds+=active;
-    if(analytics.current.seconds>=30)flushDefenseAnalytics();
-    if(["defeat","victory"].includes(current.status)&&!analytics.current.finished){analytics.current.finished=true;flushDefenseAnalytics();void recordGameFinished({playerName});}
-  }
 
   useEffect(() => {
     const canvas = canvasRef.current, ctx = canvas.getContext("2d");
@@ -43,9 +32,19 @@ export function TowerDefenseGame({ onBack, playerName }) {
     const animate = (now) => {
       const dt = Math.max(0, Math.min((now - previous) / 1000, .1)); previous = now;
       const current = gameRef.current;
-      updateDefenseAnalytics(current);
+      if (analytics.current.game !== current) {
+        flushTrackedPlay(playerName);
+        analytics.current = { game: current, finished: false };
+        void recordGameStarted({ playerName });
+      }
       if (!document.hidden && current.status === "running" && !current.paused) {
-        const active=stepDefense(current,dt);recordActivePlay(playerName,active);updateDefenseAnalytics(current,active);
+        const active = stepDefense(current, dt);
+        recordTrackedPlay(playerName, active);
+      }
+      if (["defeat", "victory"].includes(current.status) && !analytics.current.finished) {
+        analytics.current.finished = true;
+        flushTrackedPlay(playerName);
+        void recordGameFinished({ playerName });
       }
       drawDefenseGame(ctx, current, hoverRef.current, placingRef.current);
       if (now - lastUi > 120) { lastUi = now; setRevision((value) => value + 1); }
@@ -54,13 +53,13 @@ export function TowerDefenseGame({ onBack, playerName }) {
     const suspend = () => {
       const current = gameRef.current;
       if (current.status === "running") { current.paused = true; current.message = "Paused while you were away. Resume when ready."; }
-      previous = performance.now(); flushPlayerProgress(); flushDefenseAnalytics(); setRevision((value) => value + 1);
+      previous = performance.now(); flushTrackedPlay(playerName); setRevision((value) => value + 1);
     };
     const visibility = () => { if (document.hidden) suspend(); previous = performance.now(); };
     window.addEventListener("blur", suspend); window.addEventListener("pagehide", suspend);
     document.addEventListener("visibilitychange", visibility);
     frame = requestAnimationFrame(animate);
-    return () => { cancelAnimationFrame(frame); window.removeEventListener("blur", suspend); window.removeEventListener("pagehide", suspend); document.removeEventListener("visibilitychange", visibility); flushPlayerProgress(); flushDefenseAnalytics(); };
+    return () => { cancelAnimationFrame(frame); window.removeEventListener("blur", suspend); window.removeEventListener("pagehide", suspend); document.removeEventListener("visibilitychange", visibility); flushTrackedPlay(playerName); };
   }, [playerName]);
 
   function choose(type) { placingRef.current = type; setPlacing(type); game.selectedId = null; refresh(); }
@@ -75,18 +74,18 @@ export function TowerDefenseGame({ onBack, playerName }) {
     const bounds = event.currentTarget.getBoundingClientRect();
     return { x: Math.max(0, Math.min(DEFENSE_COLUMNS - 1, Math.floor((event.clientX - bounds.left) / bounds.width * DEFENSE_COLUMNS))), y: Math.max(0, Math.min(DEFENSE_ROWS - 1, Math.floor((event.clientY - bounds.top) / bounds.height * DEFENSE_ROWS))) };
   }
-  function togglePause() { if (game.status === "running") { game.paused = !game.paused; game.message = game.paused ? "Paused. Resume to keep defending." : `Wave ${game.wave}: defend the core!`; flushPlayerProgress(); refresh(); } }
-  function restart() { flushPlayerProgress(); flushDefenseAnalytics(); gameRef.current = createDefenseGame(gameRef.current.levelKey); hoverRef.current = null; refresh(); }
+  function togglePause() { if (game.status === "running") { game.paused = !game.paused; game.message = game.paused ? "Paused. Resume to keep defending." : `Wave ${game.wave}: defend the core!`; flushTrackedPlay(playerName); refresh(); } }
+  function restart() { flushTrackedPlay(playerName); gameRef.current = createDefenseGame(gameRef.current.levelKey); hoverRef.current = null; refresh(); }
   function changeLevel(key) {
     const current=gameRef.current;
     if(key===current.levelKey)return;
     if(!["defeat","victory"].includes(current.status)&&(current.wave>0||current.towers.length)) {
-      setPendingLevel({key,wasPaused:current.paused});current.paused=true;flushPlayerProgress();refresh();return;
+      setPendingLevel({key,wasPaused:current.paused});current.paused=true;flushTrackedPlay(playerName);refresh();return;
     }
-    flushPlayerProgress();flushDefenseAnalytics();gameRef.current=createDefenseGame(key);hoverRef.current=null;refresh();
+    flushTrackedPlay(playerName);gameRef.current=createDefenseGame(key);hoverRef.current=null;refresh();
   }
   function cancelLevelChange() {gameRef.current.paused=pendingLevel.wasPaused;setPendingLevel(null);refresh();}
-  function confirmLevelChange() {flushDefenseAnalytics();gameRef.current=createDefenseGame(pendingLevel.key);hoverRef.current=null;setPendingLevel(null);refresh();}
+  function confirmLevelChange() {flushTrackedPlay(playerName);gameRef.current=createDefenseGame(pendingLevel.key);hoverRef.current=null;setPendingLevel(null);refresh();}
 
   function boardKeys(event) {
     if (event.altKey || event.ctrlKey || event.metaKey || pendingLevel) return;
@@ -118,7 +117,7 @@ export function TowerDefenseGame({ onBack, playerName }) {
     <aside className="td-sidebar" aria-label="Defense HUD">
       <header className="td-header">
         <div><p className="td-kicker">MIST MAZE · SURVIVAL</p><h1>Powerup Defense</h1></div>
-        <button className="td-button td-back" type="button" onClick={() => { flushPlayerProgress(); flushDefenseAnalytics(); onBack(); }}>Back to first page</button>
+        <button className="td-button td-back" type="button" onClick={() => { flushTrackedPlay(playerName); onBack(); }}>Back to first page</button>
       </header>
       <section className="td-level-select" aria-label="Tower defense levels">
         {Object.values(DEFENSE_LEVELS).map(level=><button key={level.key} type="button" className={`td-button ${game.levelKey===level.key?"td-level-active":""}`} aria-pressed={game.levelKey===level.key} onClick={()=>changeLevel(level.key)}>{level.title}</button>)}

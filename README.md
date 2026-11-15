@@ -1,5 +1,9 @@
 # Mist Maze
 
+This folder contains the full game, including game source, APIs, music, database scripts, and build configuration. Copy its contents into the repository root beside `package.json`, and allow files to merge. Keep your existing `.env.local` and Vercel environment settings.
+
+The November 14 Cube update scatters ramps and straight vertical lifts throughout the connected volume. Walk onto ramps; press E at a lift to call it or ride up, and Shift+E to ride down. The interactive 3D minimap remains available with M.
+
 ## Folder structure
 
 ```text

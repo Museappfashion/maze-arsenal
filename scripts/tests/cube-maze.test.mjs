@@ -4,7 +4,22 @@ import { CUBE_DIMENSIONS, CUBE_STORY_HEIGHT, CUBE_STORIES, CUBE_COLUMNS, CUBE_RO
 
 const id = (s, r, c) => `s${s}:r${r}:c${c}`;
 const position = (world, node, facing = 0) => { world.player = { x: node.x, y: node.y, z: node.z, facing, pitch: 0 }; world.activeRamp = null; world.currentNode = node.id; };
-const signature = (scene) => scene.edges.map((e) => `${e.id}:${e.kind}:${e.riseStories}`).sort();
+const signature = (scene) => scene.edges.map((e) => `${e.id}:${e.kind}:${e.riseStories}:${[e.a.x,e.a.y,e.a.z,e.b.x,e.b.y,e.b.z].join(",")}`).sort();
+const horizontalLength = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
+const facingBetween = (a, b) => Math.atan2(b.y - a.y, b.x - a.x);
+const rampsFor = (world, span) => getCubeOverview(world).ramps.filter(ramp => ramp.riseStories === span);
+function walkTo(world, target, inspect = () => {}) {
+  for (let frame = 0; frame < 1000; frame++) {
+    const remaining = horizontalLength(world.player, target);
+    if (remaining < 1e-6) return;
+    world.player.facing = facingBetween(world.player, target);
+    const before = { ...world.player };
+    updateCubeMaze(world, Math.min(.05, remaining / (world.haste > 0 ? 12 : 8)), { forward: 1 });
+    inspect(before, world.player);
+    if (horizontalLength(before, world.player) < 1e-9) assert.fail(`movement blocked before ${target.id}`);
+  }
+  assert.fail(`did not reach ${target.id}`);
+}
 function graphPath(world, from, to, story) {
   const queue = [from], previous = new Map([[from, null]]);
   for (let head = 0; head < queue.length && !previous.has(to); head++) {
@@ -42,48 +57,63 @@ test("all story junctions connect, and repeated one-story ramps join every heigh
 });
 
 test("every 1–10-story rise appears repeatedly, with real distinct endpoints and no out-of-bounds slopes", () => {
-  const world = createCubeMaze(98);
-  for (let span = 1; span <= 10; span++) {
-    const ids = new Set();
-    for (const story of [0, 4, 8, 12]) {
-      const node = getCubeNode(world, `r${story}:${span}:a`);
-      const ramp = getCubeNodeEdges(world, node.id).find((e) => e.kind === "ramp");
-      assert.equal(ramp.riseStories, span); assert.equal(ramp.b.z - ramp.a.z, span * 4);
-      assert.ok(ramp.b.x-ramp.a.x>=30&&ramp.b.x-ramp.a.x<=70); assert.ok(ramp.length > ramp.b.x-ramp.a.x);
-      for (const p of [ramp.a, ramp.b]) { assert.ok(p.x >= 0 && p.x <= 100 && p.y > 0 && p.y < 100 && p.z >= 0 && p.z < 100); }
-      ids.add(ramp.id);
+  for (const seed of [7, 98, 1234]) {
+    const world = createCubeMaze(seed);
+    for (let span = 1; span <= 10; span++) {
+      const ramps = rampsFor(world, span), ids = new Set();
+      assert.ok(ramps.length >= 2, `seed ${seed}: span ${span} has repeated routes`);
+      for (const ramp of ramps) {
+        assert.equal(ramp.b.z - ramp.a.z, span * 4);
+        const run = horizontalLength(ramp.a, ramp.b);
+        assert.ok(run > 0); assert.ok((ramp.b.z-ramp.a.z) / run <= .59, "walkable grade for every ramp orientation"); assert.ok(ramp.length > run);
+        for (const node of [ramp.a, ramp.b]) {
+          assert.ok(node.x > 0 && node.x < 100 && node.y > 0 && node.y < 100 && node.z >= 0 && node.z < 100);
+          assert.ok(getCubeNodeEdges(world, node.id).some(edge => edge.id === ramp.id), "both landings reach the same physical ramp");
+        }
+        ids.add(ramp.id);
+      }
+      assert.equal(ids.size, ramps.length, "routes have unique graph identities");
     }
-    assert.equal(ids.size, 4, `span ${span} has multiple repeated ramps`);
+  }
+});
+
+test("ramps change their launch positions across elevations and distribute climbing choices through the interior", () => {
+  for (const seed of [7, 98, 1234]) {
+    const world = createCubeMaze(seed), ramps = getCubeOverview(world).ramps;
+    const launches = ramps.map(ramp => ramp.a);
+    assert.ok(new Set(launches.map(node => `${node.x}:${node.y}`)).size >= 8, `seed ${seed}: ramps offer several distinct launch positions`);
+    for (const [xSide, ySide] of [[0,0],[0,1],[1,0],[1,1]]) {
+      assert.ok(launches.some(node => Number(node.x >= 50) === xSide && Number(node.y >= 50) === ySide), `seed ${seed}: ramps serve quadrant ${xSide},${ySide}`);
+    }
+    assert.ok(new Set(ramps.map(ramp => Math.sign(ramp.b.x-ramp.a.x) + ":" + Math.sign(ramp.b.y-ramp.a.y))).size >= 3, "ascending ramps run in varied directions");
   }
 });
 
 test("walking ascends and descends ramps gradually without loading a new floor or changing the seed", () => {
-  for (const [story, span] of [[0, 1], [5, 4], [12, 10]]) {
-    const world = createCubeMaze(123), a = getCubeNode(world, `r${story}:${span}:a`), b = getCubeNode(world, `r${story}:${span}:b`);
-    position(world, a, 0); const visited = world.visited;
-    let previous = world.player.z, intermediate = false;
-    for (let i = 0; i < Math.round((b.x-a.x)/.4); i++) {
-      updateCubeMaze(world, .05, { forward: 1 });
-      assert.ok(world.player.z >= previous - 1e-7); assert.ok(world.player.z - previous < .25, "height follows a slope, never a floor teleport");
-      intermediate ||= world.player.z > a.z + .1 && world.player.z < b.z - .1; previous = world.player.z;
-    }
-    assert.ok(intermediate); assert.ok(Math.abs(world.player.z - b.z) < 1e-6); assert.ok(Math.abs(world.player.x - b.x) < .01);
+  for (const span of [1, 4, 10]) {
+    const world = createCubeMaze(123), { a, b } = rampsFor(world, span)[0];
+    position(world, a, facingBetween(a, b)); const visited = world.visited;
+    let intermediate = false;
+    walkTo(world, b, (before, after) => {
+      assert.ok(after.z >= before.z - 1e-7); assert.ok(after.z - before.z < .25, "height follows a slope, never a floor teleport");
+      intermediate ||= after.z > a.z + .1 && after.z < b.z - .1;
+    });
+    assert.ok(intermediate); assert.ok(Math.abs(world.player.z - b.z) < 1e-6); assert.ok(horizontalLength(world.player, b) < .01);
     assert.equal(world.seed, 123); assert.equal(world.visited, visited, "one explored set persists throughout ascent");
-    world.player.facing = Math.PI;
-    for (let i = 0; i < Math.round((b.x-a.x)/.4); i++) updateCubeMaze(world, .05, { forward: 1 });
-    assert.ok(Math.abs(world.player.z - a.z) < 1e-6); assert.ok(Math.abs(world.player.x - a.x) < .01);
+    walkTo(world, a, (before, after) => assert.ok(after.z <= before.z + 1e-7));
+    assert.ok(Math.abs(world.player.z - a.z) < 1e-6); assert.ok(horizontalLength(world.player, a) < .01);
   }
 });
 
 test("floor connectors let a player walk into a ramp and turn, without an interaction teleport", () => {
-  const world = createCubeMaze(37), a = getCubeNode(world, "r0:3:a");
+  const world = createCubeMaze(37), { a, b } = rampsFor(world, 3)[0];
   const connector = getCubeNodeEdges(world, a.id).find((e) => e.kind !== "ramp");
   const room = connector.a.id === a.id ? connector.b : connector.a;
   position(world, room, Math.atan2(a.y - room.y, a.x - room.x));
-  for (let i = 0; i < 12; i++) updateCubeMaze(world, .05, { forward: 1 });
-  world.player.facing = 0;
+  walkTo(world, a);
+  world.player.facing = facingBetween(a, b);
   for (let i = 0; i < 30; i++) updateCubeMaze(world, .05, { forward: 1 });
-  assert.ok(world.player.z > 1 && world.player.z < 6); assert.equal(world.activeRamp?.riseStories, 3);
+  assert.ok(world.player.z > a.z + 1 && world.player.z < a.z + 6); assert.equal(world.activeRamp?.riseStories, 3);
 });
 
 test("walls, horizontal bounds, normalized movement, and resumed-frame limits remain solid", () => {
@@ -149,8 +179,8 @@ test("powerups are placed on real junctions, collected once, and retain their ef
 test("a name-isolated Cube save restores mid-ramp positions and leaves all old floor saves untouched", () => {
   const data = new Map([["mist-maze-hundred-floors-v1:player:alice", "original floor save"],["mist-maze-cube-v1:player:alice","original large Cube save"]]);
   const storage = { getItem: (key) => data.get(key) || null, setItem: (key, value) => data.set(key, value) };
-  const world = createCubeMaze(327), a = getCubeNode(world, "r12:7:a");
-  position(world, a); for (let i = 0; i < 130; i++) updateCubeMaze(world, .05, { forward: 1 });
+  const world = createCubeMaze(327), { a, b } = rampsFor(world, 7)[0];
+  position(world, a, facingBetween(a, b)); for (let i = 0; i < 50; i++) updateCubeMaze(world, .05, { forward: 1 });
   assert.equal(saveCubeMaze("Alice", world, storage), true);
   const resumed = loadCubeMaze("ALICE", storage);
   assert.deepEqual(resumed.player, world.player); assert.deepEqual([...resumed.visited].sort(), [...world.visited].sort());
@@ -165,6 +195,17 @@ test("a name-isolated Cube save restores mid-ramp positions and leaves all old f
   assert.deepEqual(restoreCubeMaze(JSON.stringify(malformed)).player, createCubeMaze(327).player);
 });
 
+test("previous Cube saves retain earned progress and resume safely when old ramp locations change", () => {
+  const previous = { version: 2, seed: 327, player: { x: 42, y: 65, z: 61.2, facing: 1.1, pitch: .2 }, visited: ["s0:r0:c0", "s8:r4:c4"], collected: ["s8:r4:c4"], elapsed: 2401, distance: 902, haste: 5, sonar: 2, lifts: {}, activeLift: null };
+  const restored = restoreCubeMaze(JSON.stringify(previous));
+  assert.ok(restored, "the update accepts existing Cube saves");
+  assert.equal(restored.elapsed, 2401); assert.equal(restored.distance, 902);
+  assert.ok(restored.visited.has("s8:r4:c4")); assert.ok(restored.collected.has("s8:r4:c4"));
+  assert.ok(Math.abs(restored.player.z - previous.player.z) <= CUBE_STORY_HEIGHT / 2, "a moved ramp resumes at a nearby safe altitude rather than the beginning");
+  const roundTrip = restoreCubeMaze(serializeCubeMaze(restored));
+  assert.deepEqual(roundTrip.player, restored.player, "the migrated position rests on a real floor or ramp");
+});
+
 test("only reaching the physical far upper exit completes the run, and completion stops time", () => {
   const world = createCubeMaze(19);
   world.player.x = world.goal.x; world.player.y = world.goal.y; updateCubeMaze(world, .05);
@@ -175,7 +216,7 @@ test("only reaching the physical far upper exit completes the run, and completio
 });
 
 
-test("both sides contain repeated lifters for every 1–10-story span, with bounded bidirectional stations",()=>{
+test("distributed lifters provide repeated 1–10-story spans, with bounded bidirectional stations",()=>{
  const world=createCubeMaze(1234);
  for(let span=1;span<=10;span++)for(const side of [0,1])for(const story of [0,4,8,12]){
   const node=getCubeNode(world,`l${side}:${span}:s${story}`);
@@ -192,9 +233,27 @@ test("both sides contain repeated lifters for every 1–10-story span, with boun
  assert.equal(seen.size,world.totalNodes);assert.ok(seen.has(world.goal.id));
 });
 
+test("straight ascenders are scattered inside the maze rather than confined to outer walls", () => {
+  for (const seed of [7, 98, 1234]) {
+    const world = createCubeMaze(seed), lifts = getCubeOverview(world).lifts;
+    const interior = lifts.filter(lift => lift.x > 15 && lift.x < 85 && lift.y > 15 && lift.y < 85);
+    assert.ok(interior.length >= 6, `seed ${seed}: several ascenders are within the maze`);
+    assert.ok(new Set(interior.map(lift => lift.x)).size >= 3, "interior ascenders span different columns");
+    assert.ok(new Set(interior.map(lift => lift.y)).size >= 3, "interior ascenders span different rows");
+    for (const [xSide, ySide] of [[0,0],[0,1],[1,0],[1,1]]) {
+      assert.ok(interior.some(lift => Number(lift.x >= 50) === xSide && Number(lift.y >= 50) === ySide), `seed ${seed}: interior ascenders serve quadrant ${xSide},${ySide}`);
+    }
+    const duplicate = getCubeOverview(createCubeMaze(seed)).lifts;
+    assert.deepEqual(duplicate.map(({ id, x, y, span, ux, uy }) => ({ id, x, y, span, ux, uy })), lifts.map(({ id, x, y, span, ux, uy }) => ({ id, x, y, span, ux, uy })), "placement remains deterministic for saves and map queries");
+  }
+});
+
 test("all lift spans carry the player gradually up and down on a real platform without changing the seed",()=>{
- for(let span=1;span<=10;span++){
-  const world=createCubeMaze(28),station=getCubeNode(world,`l0:${span}:s0`);position(world,station);
+ for(let span=1;span<=10;span++)for(const side of [0,1]){
+  const world=createCubeMaze(28),station=getCubeNode(world,`l${side}:${span}:s0`);
+  const approach = getCubeNodeEdges(world, station.id).find(edge => edge.kind === "liftApproach");
+  const landing = approach.a.id === station.id ? approach.b : approach.a;
+  position(world, landing); walkTo(world, station);
   assert.equal(getCubeLiftInteraction(world).span,span);assert.equal(activateCubeLift(world,1),true);
   let previous=world.player.z,intermediate=false;
   for(let frame=0;frame<Math.ceil((span*4/5+1)/.05);frame++){
@@ -239,14 +298,20 @@ test("mid-ride and mid-boarding saves resume exact platform positions and finish
 });
 
 
-test("reserved ramp lanes cannot intersect an unconnected ordinary passage at their endpoints or middles",()=>{
+test("reserved ramp lanes cannot intersect an unconnected ordinary passage at walkable heights",()=>{
  for(const seed of [1,42,99]){
-  const world=createCubeMaze(seed),scene=getCubeScene(world,{center:{x:50,y:50,z:0},radius:100,verticalRadius:2,maxNodes:2000});
-  const slopes=scene.ramps.filter(edge=>edge.a.story===0);
-  for(const floor of scene.edges.filter(edge=>edge.kind==="corridor"&&edge.a.id.startsWith("s")&&edge.b.id.startsWith("s")&&edge.a.story===0&&edge.a.x===edge.b.x))for(const ramp of slopes){
-   const crossesY=ramp.a.y>Math.min(floor.a.y,floor.b.y)&&ramp.a.y<Math.max(floor.a.y,floor.b.y);
-   const crossesX=floor.a.x>=ramp.a.x&&floor.a.x<=ramp.b.x;
-   assert.equal(crossesY&&crossesX,false,"a closed ramp room cannot visually block an invisible crossing corridor");
+  const world=createCubeMaze(seed);
+  for(const ramp of getCubeOverview(world).ramps){
+   const center = { x: (ramp.a.x+ramp.b.x)/2, y: (ramp.a.y+ramp.b.y)/2, z: (ramp.a.z+ramp.b.z)/2 };
+   const scene=getCubeScene(world,{center,radius:100,verticalRadius:32,maxNodes:2000});
+   for(const floor of scene.edges.filter(edge=>edge.kind==="corridor"&&edge.a.id.startsWith("s")&&edge.b.id.startsWith("s"))){
+    const ax=ramp.b.x-ramp.a.x,ay=ramp.b.y-ramp.a.y,bx=floor.b.x-floor.a.x,by=floor.b.y-floor.a.y;
+    const determinant=ax*by-ay*bx;if(Math.abs(determinant)<1e-8)continue;
+    const dx=floor.a.x-ramp.a.x,dy=floor.a.y-ramp.a.y,t=(dx*by-dy*bx)/determinant,u=(dx*ay-dy*ax)/determinant;
+    if(t<0||t>1||u<=0||u>=1)continue;
+    const z=ramp.a.z+(ramp.b.z-ramp.a.z)*t;
+    assert.ok(Math.abs(z-floor.a.z)>=2.9, `seed ${seed}: ${ramp.id} cannot cut through ordinary passage ${floor.id}`);
+   }
   }
  }
 });

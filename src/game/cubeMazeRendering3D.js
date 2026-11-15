@@ -38,6 +38,7 @@ function edgeMeshes(edge) {
   if (edge.kind === "lift") return [];
   const a = point(edge.a), originalB = point(edge.b);
   const originalLength = Math.hypot(originalB[0]-a[0],originalB[1]-a[1]);
+  if (originalLength < .001) return [];
   const b = edge.kind === "liftApproach" ? lerp(a,originalB,Math.max(0,1-1.46/originalLength)) : originalB;
   const dx = b[0] - a[0], dy = b[1] - a[1];
   const flatLength = Math.hypot(dx, dy), width = edge.width || 3;
@@ -60,8 +61,11 @@ function edgeMeshes(edge) {
     }
     // Stop side walls at the room portals; otherwise every junction would be
     // blocked by the side of the next corridor. Floor remains continuous.
-    const margin = Math.min(1.48 / flatLength, .24);
-    const wallT0 = Math.max(t0, margin), wallT1 = Math.min(t1, edge.kind === "liftApproach" ? 1 : 1 - margin);
+    // Meet the exact circular portal boundary in any direction. A fixed
+    // setback leaves thin seams when a diagonal approach turns into a room.
+    const startJoin = Math.sqrt(Math.max(0, (edge.a.radius || 2.1) ** 2 - (width / 2) ** 2)) / flatLength;
+    const endJoin = Math.sqrt(Math.max(0, (edge.b.radius || 2.1) ** 2 - (width / 2) ** 2)) / flatLength;
+    const wallT0 = Math.max(t0, startJoin), wallT1 = Math.min(t1, edge.kind === "liftApproach" ? 1 : 1 - endJoin);
     if (wallT1 > wallT0) {
       const s = lerp(a, b, wallT0), e = lerp(a, b, wallT1);
       for (const side of [-1, 1]) {
@@ -134,7 +138,7 @@ function liftMeshes(lift) {
     if(!open)quad(mesh,v(1.65,-1.7,z),v(1.65,1.7,z),v(1.65,1.7,z+2.9),v(1.65,-1.7,z+2.9),[100,99,84],{...material,surface:"trim",light:.95});
     quad(mesh,v(1.65,-1.7,z+2.9),v(1.65,1.7,z+2.9),v(1.65,1.7,z+4),v(1.65,-1.7,z+4),[109,106,95],material);
     const lamp=open?[85,173,105]:[176,144,76];
-    quad(mesh,v(1.67,-.28,z+3.1),v(1.67,.28,z+3.1),v(1.67,.28,z+3.28),v(1.67,-.28,z+3.28),lamp);
+    quad(mesh,v(1.67,-.28,z+2.35),v(1.67,.28,z+2.35),v(1.67,.28,z+2.5),v(1.67,-.28,z+2.5),lamp);
     result.push(mesh);
   }
   return result;

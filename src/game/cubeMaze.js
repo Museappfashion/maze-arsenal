@@ -10,10 +10,9 @@ export const CUBE_COLUMNS = 9;
 export const CUBE_ROWS = 9;
 export const CUBE_MAX_CACHED_STORIES = 16;
 const ROOM_RADIUS = 2.1;
-const SAVE_VERSION = 2;
+const SAVE_VERSION = 3;
 const runtimes = new WeakMap();
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
-const square = (n) => n * n;
 const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 const regularId = (s, r, c) => `s${s}:r${r}:c${c}`;
 const rampNodeId = (s, span, end) => `r${s}:${span}:${end}`;
@@ -40,42 +39,75 @@ function runtime(world) {
 function regularNode(story, row, col) {
   return { id: regularId(story, row, col), x: 10 + col * 10, y: 10 + row * 10, z: story * CUBE_STORY_HEIGHT, story, radius: ROOM_RADIUS };
 }
-function rampLayout(seed, span) {
-  // Each span owns a lane between the ordinary passage rows. Long slopes
-  // remain below 0.58 rise/run, with their endpoints inside the 100-unit cube.
-  const run = span <= 3 ? 3 : span <= 6 ? 5 : 7;
-  const col = hash(seed, span, 47) % (CUBE_COLUMNS - run);
-  return { col, run, row: Math.min(8, span - 1), y: 5 + (span - 1) * 10 };
+function rampDefinitions(world) {
+  const state = runtime(world);
+  if (state.rampDefinitions) return state.rampDefinitions;
+  const definitions = [];
+  // A protected walking chain joins every adjacent altitude. The other slopes
+  // share six interior lanes, but never occupy the same lane at overlapping
+  // heights: that leaves room to reverse a slope without intersecting another.
+  for (let story = 0; story < CUBE_STORIES - 1; story++) definitions.push({ story, span: 1, axis: "y", fixed: 5, from: 10, to: 40, row: 0, col: 0, endRow: 3, endCol: 0 });
+  const lanes = [15, 35, 55, 75, 85, 95];
+  const groups = [[2, 7], [3, 6], [4, 5], [8], [9], [10]];
+  const laneOrder = lanes.map((y, index) => ({ y, order: hash(world.seed, index, 271) })).sort((a, b) => a.order - b.order);
+  groups.forEach((group, index) => {
+    const sequence = [...group, ...group], rise = sequence.reduce((total, span) => total + span, 0);
+    let story = hash(world.seed, index, 293) % (CUBE_STORIES - rise - sequence.length + 1);
+    const y = laneOrder[index].y, row = Math.min(CUBE_ROWS - 1, Math.floor((y - 10) / 10));
+    sequence.forEach((span, occurrence) => {
+      const run = span <= 3 ? 3 : span <= 6 ? 5 : 7;
+      const startCol = hash(world.seed, story * 16 + span, 317) % (CUBE_COLUMNS - run);
+      const reverse = occurrence >= group.length;
+      const fromCol = reverse ? startCol + run : startCol, toCol = reverse ? startCol : startCol + run;
+      definitions.push({ story, span, axis: "x", fixed: y, from: 10 + fromCol * 10, to: 10 + toCol * 10, row, col: fromCol, endRow: row, endCol: toCol });
+      story += span + 1;
+    });
+  });
+  state.rampDefinitions = definitions;
+  state.rampById = new Map(definitions.map((definition) => [`${definition.story}:${definition.span}`, definition]));
+  return definitions;
 }
 function rampNodes(world, story, span) {
-  if (story < 0 || story + span >= CUBE_STORIES || span < 1 || span > 10) return null;
-  const layout = rampLayout(world.seed, span);
-  const a = { id: rampNodeId(story, span, "a"), x: 10 + layout.col * 10, y: layout.y, z: story * 4, story, radius: ROOM_RADIUS };
-  const b = { id: rampNodeId(story, span, "b"), x: a.x + layout.run * 10, y: layout.y, z: (story + span) * 4, story: story + span, radius: ROOM_RADIUS };
-  return { a, b, entry: regularNode(story, layout.row, layout.col), exit: regularNode(story + span, layout.row, layout.col + layout.run), span };
+  rampDefinitions(world);
+  const layout = runtime(world).rampById.get(`${story}:${span}`);
+  if (!layout) return null;
+  const a = { id: rampNodeId(story, span, "a"), x: layout.axis === "x" ? layout.from : layout.fixed, y: layout.axis === "y" ? layout.from : layout.fixed, z: story * 4, story, radius: ROOM_RADIUS };
+  const b = { id: rampNodeId(story, span, "b"), x: layout.axis === "x" ? layout.to : layout.fixed, y: layout.axis === "y" ? layout.to : layout.fixed, z: (story + span) * 4, story: story + span, radius: ROOM_RADIUS };
+  return { a, b, entry: regularNode(story, layout.row, layout.col), exit: regularNode(story + span, layout.endRow, layout.endCol), span };
 }
 const liftId = (side, span) => `lift:${side}:${span}`;
 const liftNodeId = (side, span, story) => `l${side}:${span}:s${story}`;
-function liftDefinition(side, span) {
-  const row = Math.min(CUBE_ROWS - 1, span - 1), col = side ? CUBE_COLUMNS - 1 : 0;
-  const x = side ? 95 : 5, y = 5 + (span - 1) * 10;
-  const regular = regularNode(0, row, col), length = Math.hypot(regular.x - x, regular.y - y);
-  return { id: liftId(side, span), side, span, x, y, row, col, ux: (regular.x-x)/length, uy: (regular.y-y)/length, width: 3, depth: 3 };
+function allLiftDefinitions(world) {
+  const state = runtime(world);
+  if (state.liftDefinitions) return state.liftDefinitions;
+  // Shafts sit in the unused centers of ordinary grid cells, rather than in
+  // perimeter banks or through an existing floor passage. Each has its own
+  // diagonal landing spur; all four interior quadrants contain ascenders.
+  const sites = [25, 45, 65].flatMap((y, band) => Array.from({ length: band === 1 ? 6 : 7 }, (_, column) => ({ x: 15 + column * 10 + (band === 1 ? 10 : 0), y })));
+  const shuffled = sites.map((site, index) => ({ ...site, order: hash(world.seed, index, 353) })).sort((a, b) => a.order - b.order);
+  state.liftDefinitions = shuffled.map((site, index) => {
+    const side = Math.floor(index / 10), span = index % 10 + 1;
+    const col = Math.floor((site.x - 10) / 10), row = Math.floor((site.y - 10) / 10);
+    const regular = regularNode(0, row, col), length = Math.hypot(regular.x - site.x, regular.y - site.y);
+    return { id: liftId(side, span), side, span, x: site.x, y: site.y, row, col, ux: (regular.x - site.x) / length, uy: (regular.y - site.y) / length, width: 3, depth: 3 };
+  });
+  return state.liftDefinitions;
 }
-function liftNode(side, span, story) {
+function liftDefinition(world, side, span) { return allLiftDefinitions(world).find((definition) => definition.side === side && definition.span === span); }
+function liftNode(world, side, span, story) {
   if (story < 0 || story >= CUBE_STORIES || span < 1 || span > 10 || side < 0 || side > 1) return null;
-  const lift = liftDefinition(side, span);
+  const lift = liftDefinition(world, side, span);
   return { id: liftNodeId(side, span, story), x: lift.x, y: lift.y, z: story * 4, story, radius: 1.5, kind: "liftStation", shaftId: lift.id, span, side };
 }
 function liftState(world, definition) {
   return world.lifts[definition.id] ||= { z: 0, targetZ: 0, phase: "idle" };
 }
 function liftEdges(world, story, side, span) {
-  const node = liftNode(side, span, story); if (!node) return [];
-  const def = liftDefinition(side, span);
+  const node = liftNode(world, side, span, story); if (!node) return [];
+  const def = liftDefinition(world, side, span);
   const approach = { ...edge(regularNode(story, def.row, def.col), node, "liftApproach"), shaftId: def.id };
   const result = [approach];
-  if (story + span < CUBE_STORIES) result.push({ ...edge(node, liftNode(side, span, story + span), "lift", span), shaftId: def.id });
+  if (story + span < CUBE_STORIES) result.push({ ...edge(node, liftNode(world, side, span, story + span), "lift", span), shaftId: def.id });
   return result;
 }
 function edge(a, b, kind = "corridor", riseStories = 0) {
@@ -85,17 +117,12 @@ function rampEdges(world, story, span) {
   const nodes = rampNodes(world, story, span);
   return nodes ? [edge(nodes.entry, nodes.a), edge(nodes.a, nodes.b, "ramp", span), edge(nodes.b, nodes.exit)] : [];
 }
-function allowedFloorEdge(seed, row, col, nr, nc) {
+function allowedFloorEdge(world, story, row, col, nr, nc) {
   if (nr === row) return true;
-  const lowY = 10 + Math.min(row, nr) * 10;
-  const highY = lowY + 10;
-  // Leave the dedicated slope lanes and their endpoint rooms clear. Without
-  // this reservation upper-floor corridors could cut straight through ramps.
-  for (let span = 1; span <= 10; span++) {
-    const ramp = rampLayout(seed, span);
-    if (ramp.y > lowY && ramp.y < highY && col >= ramp.col && col <= ramp.col + ramp.run) return false;
-  }
-  return true;
+  const lowY = 10 + Math.min(row, nr) * 10, highY = lowY + 10, x = 10 + col * 10;
+  // Reserve only slopes that actually share this altitude. Each interior lane
+  // has at most one active slope here, leaving a route around either end.
+  return !rampDefinitions(world).some((ramp) => ramp.axis === "x" && story >= ramp.story && story <= ramp.story + ramp.span && ramp.fixed > lowY && ramp.fixed < highY && x >= Math.min(ramp.from, ramp.to) && x <= Math.max(ramp.from, ramp.to));
 }
 function storyChunk(world, story) {
   const state = runtime(world);
@@ -108,7 +135,7 @@ function storyChunk(world, story) {
   const at = (r, c) => r * CUBE_COLUMNS + c;
   const candidates = (i) => {
     const r = Math.floor(i / CUBE_COLUMNS), c = i % CUBE_COLUMNS;
-    return [[r, c - 1], [r, c + 1], [r - 1, c], [r + 1, c]].filter(([nr, nc]) => nr >= 0 && nr < CUBE_ROWS && nc >= 0 && nc < CUBE_COLUMNS && allowedFloorEdge(world.seed, r, c, nr, nc)).map(([nr, nc]) => at(nr, nc));
+    return [[r, c - 1], [r, c + 1], [r - 1, c], [r + 1, c]].filter(([nr, nc]) => nr >= 0 && nr < CUBE_ROWS && nc >= 0 && nc < CUBE_COLUMNS && allowedFloorEdge(world, story, r, c, nr, nc)).map(([nr, nc]) => at(nr, nc));
   };
   const connect = (a, b) => { const item = edge(nodes[a], nodes[b]); links.set(item.id, item); };
   const visited = new Uint8Array(nodes.length), stack = [0]; visited[0] = 1;
@@ -135,7 +162,7 @@ export function getCubeNode(world, id) {
   match = /^r(\d+):(\d+):([ab])$/.exec(id || "");
   if (match) return rampNodes(world, Number(match[1]), Number(match[2]))?.[match[3]] || null;
   match = /^l([01]):(\d+):s(\d+)$/.exec(id || "");
-  return match ? liftNode(Number(match[1]), Number(match[2]), Number(match[3])) : null;
+  return match ? liftNode(world, Number(match[1]), Number(match[2]), Number(match[3])) : null;
 }
 export function getCubeNodeEdges(world, id) {
   const node = getCubeNode(world, id); if (!node) return [];
@@ -214,9 +241,11 @@ export function getCubeOverview(world) {
       const stride = Math.max(1, Math.floor(chunk.edges.length / 12));
       for (let index = 0; index < chunk.edges.length; index += stride) add(chunk.edges[index]);
     }
-    for (let story = 0; story < CUBE_STORIES; story += 4) for (let span = 1; span <= 10; span++) {
-      const item = rampEdges(world, story, span)[1]; if (item) add(item);
-      for (let side = 0; side < 2; side++) { const lift = liftEdges(world,story,side,span)[1]; if (lift) add(lift); }
+    // Show every real ascent in the navigable overview, including those whose
+    // launch floor lies between the representative horizontal slices.
+    for (const definition of rampDefinitions(world)) add(rampEdges(world, definition.story, definition.span)[1]);
+    for (let story = 0; story < CUBE_STORIES; story += 4) for (let span = 1; span <= 10; span++) for (let side = 0; side < 2; side++) {
+      const lift = liftEdges(world, story, side, span)[1]; if (lift) add(lift);
     }
     nodes.set(world.start.id, world.start); nodes.set(world.goal.id, world.goal);
     state.overview = { nodes: [...nodes.values()], edges: [...edges.values()] };
@@ -225,14 +254,12 @@ export function getCubeOverview(world) {
   return { ...state.overview, ramps: state.overview.edges.filter((item) => item.kind === "ramp"), pickups: [], sampled: true, lifts: cubeLiftScene(world,{x:50,y:50,z:50},100,100), goal: world.goal, start: world.start, dimensions: CUBE_DIMENSIONS, corridorWidth: CUBE_CORRIDOR_WIDTH, storyHeight: CUBE_STORY_HEIGHT };
 }
 
-let liftDefinitions;
-function allLiftDefinitions() { return liftDefinitions ||= Array.from({length:20},(_,i)=>liftDefinition(Math.floor(i/10),i%10+1)); }
 function insideLift(def,x,y,extra=0) {
   const dx=x-def.x,dy=y-def.y;
   return Math.abs(dx*def.ux+dy*def.uy)<=1.5+extra&&Math.abs(-dx*def.uy+dy*def.ux)<=1.5+extra;
 }
 function cubeLiftScene(world,center,radius,verticalRadius) {
-  return allLiftDefinitions().filter(def=>Math.hypot(def.x-center.x,def.y-center.y)<=radius+4).map(def=>{
+  return allLiftDefinitions(world).filter(def=>Math.hypot(def.x-center.x,def.y-center.y)<=radius+4).map(def=>{
     const state=liftState(world,def);
     return {...def,platformZ:state.z,phase:state.phase,lowStory:Math.max(0,Math.floor((center.z-verticalRadius)/4)),highStory:Math.min(CUBE_STORIES-1,Math.ceil((center.z+verticalRadius)/4)),active:world.activeLift?.shaftId===def.id};
   });
@@ -242,7 +269,7 @@ export function getCubeLiftInteraction(world) {
   if(world.activeLift) return {...world.activeLift,moving:true,ready:false,canUp:false,canDown:false,label:`Lifter moving to story ${world.activeLift.targetStory}`};
   const story=clamp(Math.round(world.player.z/4),0,CUBE_STORIES-1);
   if(Math.abs(world.player.z-story*4)>.18)return null;
-  const definitions=allLiftDefinitions().sort((a,b)=>Math.hypot(a.x-world.player.x,a.y-world.player.y)-Math.hypot(b.x-world.player.x,b.y-world.player.y));
+  const definitions=[...allLiftDefinitions(world)].sort((a,b)=>Math.hypot(a.x-world.player.x,a.y-world.player.y)-Math.hypot(b.x-world.player.x,b.y-world.player.y));
   const def=definitions[0];
   if(!def||Math.hypot(def.x-world.player.x,def.y-world.player.y)>6.6)return null;
   const rx=world.player.x-def.x,ry=world.player.y-def.y;
@@ -254,7 +281,7 @@ export function getCubeLiftInteraction(world) {
 export function activateCubeLift(world,direction=1) {
   const interaction=getCubeLiftInteraction(world);
   if(!interaction||interaction.moving)return false;
-  const def=allLiftDefinitions().find(item=>item.id===interaction.shaftId),state=liftState(world,def);
+  const def=allLiftDefinitions(world).find(item=>item.id===interaction.shaftId),state=liftState(world,def);
   if(!interaction.ready) {state.targetZ=interaction.story*4;state.phase="calling";world.message="Lifter called. Wait for the gated platform, then press E to ride.";world.messageTime=4;return true;}
   const signed=direction<0?-1:1;
   if(signed>0&&!interaction.canUp||signed<0&&!interaction.canDown)return false;
@@ -266,13 +293,13 @@ export function activateCubeLift(world,direction=1) {
   return true;
 }
 function advanceLifts(world,dt) {
-  for(const def of allLiftDefinitions()) {
+  for(const def of allLiftDefinitions(world)) {
     const state=world.lifts[def.id];if(!state||state.phase!=="calling")continue;
     const delta=state.targetZ-state.z,amount=Math.sign(delta)*Math.min(Math.abs(delta),dt*7);
     state.z+=amount;if(Math.abs(state.targetZ-state.z)<.001){state.z=state.targetZ;state.phase="idle";}
   }
   const active=world.activeLift;if(!active)return false;
-  const def=allLiftDefinitions().find(item=>item.id===active.shaftId),state=liftState(world,def);
+  const def=allLiftDefinitions(world).find(item=>item.id===active.shaftId),state=liftState(world,def);
   if(active.phase==="boarding") {
     active.boardTime+=dt;const t=Math.min(1,active.boardTime/.7);
     world.player.x=active.boardFrom.x+(def.x-active.boardFrom.x)*t;world.player.y=active.boardFrom.y+(def.y-active.boardFrom.y)*t;world.player.z=state.z;
@@ -292,7 +319,8 @@ function advanceLifts(world,dt) {
 export function createCubeMaze(seed = Math.floor(Math.random() * 0xFFFFFFFF)) {
   const safeSeed = Number.isInteger(seed) ? seed >>> 0 : 0;
   const start = regularNode(0, 0, 0), goal = regularNode(CUBE_STORIES - 1, CUBE_ROWS - 1, CUBE_COLUMNS - 1);
-  const world = { lifts: {}, activeLift: null, seed: safeSeed, dimensions: CUBE_DIMENSIONS, start, goal, player: { x: start.x, y: start.y, z: start.z, facing: 0, pitch: 0 }, visited: new Set([start.id]), collected: new Set(), elapsed: 0, distance: 0, moves: 0, completed: false, haste: 0, sonar: 0, compass: 0, compassCooldown: 0, activeRamp: null, currentNode: start.id, story: 1, totalNodes: CUBE_COLUMNS * CUBE_ROWS * CUBE_STORIES + 2 * (10 * CUBE_STORIES - 55) + 20 * CUBE_STORIES, message: "One connected cube. Walk ramps, or press E near a lifter to travel up; Shift+E travels down.", messageTime: 8 };
+  const world = { lifts: {}, activeLift: null, seed: safeSeed, dimensions: CUBE_DIMENSIONS, start, goal, player: { x: start.x, y: start.y, z: start.z, facing: 0, pitch: 0 }, visited: new Set([start.id]), collected: new Set(), elapsed: 0, distance: 0, moves: 0, completed: false, haste: 0, sonar: 0, compass: 0, compassCooldown: 0, activeRamp: null, currentNode: start.id, story: 1, message: "Explore for scattered ramps and vertical ascenders. Walk a slope, or press E near a lifter; Shift+E travels down.", messageTime: 8 };
+  world.totalNodes = CUBE_COLUMNS * CUBE_ROWS * CUBE_STORIES + 2 * rampDefinitions(world).length + allLiftDefinitions(world).length * CUBE_STORIES;
   const first = storyChunk(world, 0).adjacency.get(start.id)[0];
   if (first) { const next = first.a.id === start.id ? first.b : first.a; world.player.facing = Math.atan2(next.y - start.y, next.x - start.x); }
   return world;
@@ -382,7 +410,8 @@ export function cubeMazeHint(world, maxPoints = 60) {
   if (surface?.node?.id.startsWith("s")) ends.push(surface.node);
   const candidates = ends.length ? ends : chunk.nodes;
   const nearest = candidates.reduce((best, node) => distance(world.player, node) < distance(world.player, best) ? node : best, candidates[0]);
-  const span = Math.min(10, CUBE_STORIES - 1 - story), ramp = span ? rampNodes(world, story, span) : null;
+  const upwardRamps = rampDefinitions(world).filter((definition) => definition.story === story).map((definition) => rampNodes(world, story, definition.span));
+  const ramp = upwardRamps.sort((a, b) => distance(nearest, a.entry) - distance(nearest, b.entry))[0] || null;
   const target = ramp ? ramp.entry : world.goal;
   const queue = [nearest.id], previous = new Map([[nearest.id, null]]);
   for (let head = 0; head < queue.length && !previous.has(target.id); head++) for (const item of chunk.adjacency.get(queue[head]) || []) {
@@ -410,19 +439,24 @@ export function serializeCubeMaze(world) {
 export function restoreCubeMaze(serialized) {
   try {
     const saved = JSON.parse(serialized);
-    if (!saved || saved.version !== SAVE_VERSION || !Number.isInteger(saved.seed) || saved.seed < 0 || saved.seed > 0xFFFFFFFF) return null;
-    const world = createCubeMaze(saved.seed), p = saved.player;
+    if (!saved || ![2, SAVE_VERSION].includes(saved.version) || !Number.isInteger(saved.seed) || saved.seed < 0 || saved.seed > 0xFFFFFFFF) return null;
+    const world = createCubeMaze(saved.seed), p = saved.player, layoutChanged = saved.version !== SAVE_VERSION;
     for (let side=0;side<2;side++)for(let span=1;span<=10;span++) {
-      const def=liftDefinition(side,span),savedLift=saved.lifts?.[def.id];
+      const def=liftDefinition(world,side,span),savedLift=layoutChanged?null:saved.lifts?.[def.id];
       if(savedLift&&Number.isFinite(savedLift.z))world.lifts[def.id]={z:clamp(savedLift.z,0,96),targetZ:clamp(Number(savedLift.targetZ)||savedLift.z,0,96),phase:savedLift.phase==="calling"?"calling":"idle"};
     }
     if (p && [p.x, p.y, p.z, p.facing, p.pitch].every(Number.isFinite) && p.x >= 0 && p.x <= 100 && p.y >= 0 && p.y <= 100 && p.z >= 0 && p.z < 100) {
       const scene = getCubeScene(world, { center: p, radius: 15, verticalRadius: 2, maxNodes: 650 });
       const surface = surfaceAt(scene, p.x, p.y, p.z, .1);
       if (surface) { world.player = { x: p.x, y: p.y, z: surface.z, facing: p.facing, pitch: clamp(p.pitch, -.8, .8) }; world.activeRamp = surface.edge?.kind === "ramp" ? surface.edge : null; }
+      else if (layoutChanged) {
+        const story = clamp(Math.round(p.z / 4), 0, CUBE_STORIES - 1);
+        const node = storyChunk(world, story).nodes.reduce((nearest, candidate) => Math.hypot(candidate.x - p.x, candidate.y - p.y) < Math.hypot(nearest.x - p.x, nearest.y - p.y) ? candidate : nearest);
+        world.player = { x: node.x, y: node.y, z: node.z, facing: p.facing, pitch: clamp(p.pitch, -.8, .8) }; world.currentNode = node.id;
+      }
     }
-    if (saved.activeLift && p && [p.x,p.y,p.z,p.facing,p.pitch].every(Number.isFinite) && p.x>=0&&p.x<=100&&p.y>=0&&p.y<=100&&p.z>=0&&p.z<=96) {
-      const active=saved.activeLift, def=allLiftDefinitions().find(item=>item.id===active.shaftId);
+    if (!layoutChanged && saved.activeLift && p && [p.x,p.y,p.z,p.facing,p.pitch].every(Number.isFinite) && p.x>=0&&p.x<=100&&p.y>=0&&p.y<=100&&p.z>=0&&p.z<=96) {
+      const active=saved.activeLift, def=allLiftDefinitions(world).find(item=>item.id===active.shaftId);
       if(def&&["boarding","moving"].includes(active.phase)&&Number.isFinite(active.targetZ)&&Number.isInteger(active.targetZ/4)&&active.targetZ>=0&&active.targetZ<=96&&(insideLift(def,p.x,p.y,.35)||active.phase==="boarding"&&Math.hypot(p.x-def.x,p.y-def.y)<6.7)) {
         const state=liftState(world,def);state.z=clamp(p.z,0,96);state.targetZ=active.targetZ;state.phase=active.phase;
         world.player={...p,pitch:clamp(p.pitch,-.8,.8)};
@@ -437,7 +471,7 @@ export function restoreCubeMaze(serialized) {
     for (const key of ["haste", "sonar", "compass", "compassCooldown"]) world[key] = Number.isFinite(saved[key]) ? clamp(saved[key], 0, 30) : 0;
     world.moves = world.distance; world.story = Math.floor(world.player.z / 4) + 1;
     world.completed = saved.completed === true && distance(world.player, world.goal) < 2;
-    world.message = world.completed ? "The Cube is conquered. You reached the upper exit!" : "Welcome back. Your position in the same connected volume is restored.";
+    world.message = world.completed ? "The Cube is conquered. You reached the upper exit!" : layoutChanged ? "The Cube now has scattered ascent routes. Your progress is kept; your position was restored to a safe landing." : "Welcome back. Your position in the same connected volume is restored.";
     world.messageTime = 6; return world;
   } catch { return null; }
 }

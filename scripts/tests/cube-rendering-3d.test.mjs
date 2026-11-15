@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createCubeMaze, getCubeScene, getCubeNode, activateCubeLift, updateCubeMaze } from "../../src/game/cubeMaze.js";
+import { createCubeMaze, getCubeScene, getCubeOverview, activateCubeLift, updateCubeMaze, CUBE_DIMENSIONS } from "../../src/game/cubeMaze.js";
 import { createOutdoorRaster } from "../../src/game/outdoorGeometry3D.js";
 import { CUBE_EYE_HEIGHT, CUBE_NEAR, cubeCameraPoint, projectCubePoint, buildCubeGeometry, renderCubeGeometry, projectCubeMapPoint, cubeMapOverviewView, cubeMapScene, clipCubeMaterialPolygon, rasterCubeMaterialTriangle } from "../../src/game/cubeMazeRendering3D.js";
 import { cubeMaterialColor } from "../../src/game/cubeMazeMaterials3D.js";
@@ -9,6 +9,27 @@ const close=(a,b)=>assert.ok(Math.abs(a-b)<1e-8,`${a} should equal ${b}`);
 const node=(id,x,y,z)=>({id,x,y,z,radius:2.1});
 const a=node("a",0,0,0),b=node("b",24,0,8),c=node("c",24,12,8);
 const fixture={nodes:[a,b,c],edges:[{id:"a-b",a,b,kind:"ramp",riseStories:2,width:3},{id:"b-c",a:b,b:c,kind:"corridor",riseStories:0,width:3}]};
+
+// Route positions and directions are generated data, not fixed border lanes.
+function generatedRamp(world, span = 10) {
+ const ramp=getCubeOverview(world).ramps.find(edge=>edge.riseStories===span);
+ assert.ok(ramp,`the generated world contains a ${span}-story ramp`);
+ return ramp;
+}
+function generatedStation(world, span = 10) {
+ const scene=getCubeScene(world,{center:{x:CUBE_DIMENSIONS.length/2,y:CUBE_DIMENSIONS.width/2,z:0},radius:150,verticalRadius:2,maxNodes:2000});
+ const station=scene.nodes.find(node=>node.kind==="liftStation"&&node.span===span&&node.story===0);
+ assert.ok(station,`the generated world contains a ${span}-story lift landing`);
+ return station;
+}
+function generatedCenter(world) {
+ const center={x:CUBE_DIMENSIONS.length/2,y:CUBE_DIMENSIONS.width/2,z:32};
+ const nodes=getCubeScene(world,{center,radius:30,verticalRadius:2,maxNodes:650}).nodes.filter(node=>node.kind!=="liftStation"&&node.z===center.z);
+ const closest=nodes.sort((a,b)=>Math.hypot(a.x-center.x,a.y-center.y)-Math.hypot(b.x-center.x,b.y-center.y))[0];
+ assert.ok(closest,"the generated world has an ordinary central junction");
+ return closest;
+}
+
 
 test("Cube camera uses real player altitude and pitch before near-plane projection",()=>{
  const camera={x:0,y:0,z:0,facing:0,pitch:0};
@@ -63,7 +84,7 @@ test("3D minimap projects altitude and orbit and fits the full volume bounding b
  const p=projectCubeMapPoint([90,60,70],view,500,400),rotated=projectCubeMapPoint([90,60,70],{...view,yaw:view.yaw+Math.PI/2},500,400);
  assert.notEqual(p.x,rotated.x);
  const overview=cubeMapOverviewView();
- for(const x of [0,100])for(const y of [0,100])for(const z of [0,100]){
+ for(const x of [0,CUBE_DIMENSIONS.length])for(const y of [0,CUBE_DIMENSIONS.width])for(const z of [0,CUBE_DIMENSIONS.height]){
   const corner=projectCubeMapPoint([x,y,z],overview,500,400);
   assert.ok(corner.x>=0&&corner.x<=500&&corner.y>=0&&corner.y<=400,"whole volume fits in the overview without dropping vertical scale");
  }
@@ -133,7 +154,7 @@ function pointOnTriangle(point,face,epsilon=.0001){
 }
 
 test("junction floors and ceilings cover the whole walkable room and every ramp/corridor join",()=>{
- const world=createCubeMaze(42),center=getCubeNode(world,"s8:r4:c4"),scene=getCubeScene(world,{center,radius:24,verticalRadius:2,maxNodes:650});
+ const world=createCubeMaze(42),center=generatedCenter(world),scene=getCubeScene(world,{center,radius:24,verticalRadius:2,maxNodes:650});
  const faces=buildCubeGeometry(scene).flatMap(mesh=>mesh.triangles),floors=faces.filter(face=>face.material?.surface==="floor"),ceilings=faces.filter(face=>face.material?.surface==="ceiling");
  for(const node of scene.nodes.filter(node=>node.kind!=="liftStation"&&Math.hypot(node.x-center.x,node.y-center.y)<15&&node.z===center.z)){
   for(let i=0;i<16;i++){
@@ -153,17 +174,18 @@ test("junction floors and ceilings cover the whole walkable room and every ramp/
 
 test("actual compact Cube views have no holes at junctions, ramp ends, lift stations or steep looks",()=>{
  const world=createCubeMaze(42),target=createOutdoorRaster(112,88);
- for(const id of ["s0:r0:c0","s8:r4:c4","r4:10:a","r4:10:b","l0:4:s0"]){
-  const node=getCubeNode(world,id),scene=getCubeScene(world,{center:node,radius:54,verticalRadius:16,maxNodes:650}),meshes=buildCubeGeometry(scene);
+ const ramp=generatedRamp(world),stations=[world.start,generatedCenter(world),ramp.a,ramp.b,generatedStation(world,4)];
+ for(const node of stations){
+  const scene=getCubeScene(world,{center:node,radius:54,verticalRadius:16,maxNodes:650}),meshes=buildCubeGeometry(scene);
   for(let angle=0;angle<16;angle++){
    renderCubeGeometry(target,meshes,{...node,facing:angle*Math.PI/8,pitch:(angle%3-1)*.65});
-   assert.equal(target.depth.filter(Number.isFinite).length,target.depth.length,`${id} ${angle}: closed floors, rooms and cube shell leave no missing pixels`);
+   assert.equal(target.depth.filter(Number.isFinite).length,target.depth.length,`${node.id} ${angle}: closed floors, rooms and cube shell leave no missing pixels`);
   }
  }
 });
 
 test("lift geometry renders the carried cabin floor at its real intermediate elevation with closed landing gates",()=>{
- const world=createCubeMaze(12),station=getCubeNode(world,"l0:10:s0");Object.assign(world.player,station);
+ const world=createCubeMaze(12),station=generatedStation(world);Object.assign(world.player,station);
  assert.equal(activateCubeLift(world),true);for(let i=0;i<30;i++)updateCubeMaze(world,.05);
  assert.ok(world.player.z>0&&world.player.z<40);
  const scene=getCubeScene(world,{center:world.player}),lift=scene.lifts.find(item=>item.id===station.shaftId);
@@ -183,4 +205,58 @@ test("coplanar backing floors never punch noisy stripes through the visible corr
  rasterCubeMaterialTriangle(target,a,b,c,floor);const original=Uint8ClampedArray.from(target.pixels);
  rasterCubeMaterialTriangle(target,a,b,c,{surface:"rampMark",light:1});
  assert.deepEqual(target.pixels,original,"Float32 rounding cannot let coplanar shell textures flicker through the main floor");
+});
+
+
+test("ramp floors, walls and ceilings remain sealed for every horizontal direction",()=>{
+ for(let direction=0;direction<8;direction++){
+  const angle=direction*Math.PI/4,dx=Math.cos(angle)*20,dy=Math.sin(angle)*20;
+  const a=node("a",50,50,12),b=node("b",50+dx,50+dy,20),edge={id:"test-ramp",a,b,kind:"ramp",riseStories:2,width:3};
+  const meshes=buildCubeGeometry({nodes:[a,b],edges:[edge]}),faces=meshes.flatMap(mesh=>mesh.triangles);
+  for(const t of [.2,.5,.8]){
+   const center=[a.x+dx*t,a.y+dy*t,a.z+(b.z-a.z)*t];
+   for(const across of [-1,0,1]){
+    const floor=[center[0]-Math.sin(angle)*across,center[1]+Math.cos(angle)*across,center[2]];
+    assert.ok(faces.some(face=>face.material?.surface==="floor"&&pointOnTriangle(floor,face)),`floor supports direction ${direction}, t=${t}`);
+    assert.ok(faces.some(face=>face.material?.surface==="ceiling"&&pointOnTriangle([floor[0],floor[1],floor[2]+2.9],face)),`ceiling covers direction ${direction}, t=${t}`);
+   }
+   for(const across of [-1.5,1.5]){
+    const wall=[center[0]-Math.sin(angle)*across,center[1]+Math.cos(angle)*across,center[2]+1];
+    assert.ok(faces.some(face=>face.material?.surface==="wall"&&pointOnTriangle(wall,face)),`wall seals direction ${direction}, t=${t}`);
+   }
+  }
+ }
+});
+
+test("distributed diagonal lift approaches meet the actual cabin floor without a threshold gap",()=>{
+ const world=createCubeMaze(42),station=generatedStation(world,6),scene=getCubeScene(world,{center:station,radius:20,verticalRadius:2,maxNodes:650});
+ const approach=scene.edges.find(edge=>edge.kind==="liftApproach"&&edge.b.id===station.id);
+ assert.ok(approach,"the landing has an approach to its generated shaft");
+ const floor=buildCubeGeometry(scene).flatMap(mesh=>mesh.triangles).filter(face=>face.material?.surface==="floor");
+ const dx=approach.b.x-approach.a.x,dy=approach.b.y-approach.a.y,length=Math.hypot(dx,dy);
+ for(const t of [0,.1,.25,.5,.75,.9,1])for(const across of [-1,0,1]){
+  const point=[approach.a.x+dx*t-dy/length*across,approach.a.y+dy*t+dx/length*across,station.z];
+  assert.ok(floor.some(face=>pointOnTriangle(point,face)),`floor covers generated landing ${station.id}, t=${t}, across=${across}`);
+ }
+});
+
+
+test("side walls meet circular room portals exactly, including diagonal approaches",()=>{
+ const radius=2.1,width=3,join=Math.sqrt(radius*radius-width*width/4);
+ for(const angle of [0,Math.PI/4,Math.PI/2,Math.PI*1.25]){
+  const a=node("a",50,50,12),b=node("b",50+Math.cos(angle)*12,50+Math.sin(angle)*12,12);
+  const faces=buildCubeGeometry({nodes:[a,b],edges:[{id:"portal-test",a,b,width,kind:"corridor"}]}).flatMap(mesh=>mesh.triangles);
+  for(const side of [-1,1]){
+   const point=[a.x+Math.cos(angle)*(join+.0002)-Math.sin(angle)*width/2*side,a.y+Math.sin(angle)*(join+.0002)+Math.cos(angle)*width/2*side,a.z+1.2];
+   assert.ok(faces.some(face=>face.material?.surface==="wall"&&pointOnTriangle(point,face,.00001)),`no side-wall seam at angle ${angle}`);
+  }
+ }
+});
+
+test("lift ready/away indicator sits below the approach ceiling so the entrance is readable",()=>{
+ const world=createCubeMaze(42),station=generatedStation(world,6),scene=getCubeScene(world,{center:station,radius:15,verticalRadius:2,maxNodes:650});
+ const faces=buildCubeGeometry(scene).flatMap(mesh=>mesh.triangles);
+ const lamp=faces.filter(face=>face.color?.[0]===85&&face.color?.[1]===173&&face.color?.[2]===105);
+ assert.ok(lamp.length>0,"an open lift has a same-style green ready indicator");
+ assert.ok(lamp.some(face=>[face.a,face.b,face.c].every(vertex=>vertex[2]>station.z+2&&vertex[2]<station.z+2.9)),"indicator is below the room ceiling, not hidden above it");
 });

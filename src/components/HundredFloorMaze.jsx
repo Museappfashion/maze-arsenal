@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CUBE_DIMENSIONS, activateCubeLift, createCubeMaze, cubeMazeSaveKey, getCubeLiftInteraction, loadCubeMaze, saveCubeMaze, updateCubeMaze } from "../game/cubeMaze.js";
+import { createCubeMaze, cubeMazeSaveKey, loadCubeMaze, saveCubeMaze, updateCubeMaze } from "../game/cubeMaze.js";
 import { drawCubeMaze } from "../game/cubeMazeRendering3D.js";
 import { CubeMazeMinimap } from "./CubeMazeMinimap.jsx";
 import { GAME_STYLES } from "../styles/gameStyles.js";
@@ -8,7 +8,7 @@ import { flushTrackedPlay, recordGameStarted, recordTrackedPlay } from "../servi
 import "../styles/hundredFloorMaze.css";
 
 const finePointer = () => typeof window !== "undefined" && window.matchMedia("(pointer: fine)").matches;
-const snapshotOf = (world) => ({ completed:world.completed, haste:world.haste, sonar:world.sonar, lift:getCubeLiftInteraction(world), message:world.messageTime>0||world.completed ? world.message : "Walk onto ramps to climb. Use E / Shift+E for lifts. M opens the 3D map." });
+const snapshotOf = (world) => ({ completed:world.completed, haste:world.haste, sonar:world.sonar, message:world.messageTime>0||world.completed ? world.message : "Walk onto ramps to climb or descend. M opens the 3D map." });
 
 function CubeJoystick({ onMove, look = false }) {
   const pointer = useRef(null);
@@ -64,11 +64,6 @@ function CubeMazeRun({ onBack, playerName }) {
     escapeArmed.current=true;stopForCursor(true);releaseMouse("escape");persist();flushPlaytime();
     setMouseNote("Mouse free · click to look · press Esc again to leave");
   },[stopForCursor,releaseMouse,persist,flushPlaytime]);
-  const useLift=useCallback((direction)=>{
-    if(mapRef.current||world.completed)return;
-    if(releasedRef.current)requestMouse();
-    if(activateCubeLift(world,direction))setSnapshot(snapshotOf(world));
-  },[requestMouse,world]);
   const restart=()=>{
     flushPlaytime();releaseMouse("restart");const next=createCubeMaze();saveCubeMaze(playerName,next);
     clearInput();leaving.current=false;escapeArmed.current=false;mapRef.current=false;setMapOpen(false);
@@ -89,16 +84,15 @@ function CubeMazeRun({ onBack, playerName }) {
       }
       if(key==="m"&&!event.repeat&&!world.completed){event.preventDefault();showMap(!mapRef.current);return;}
       if(mapRef.current||releasedRef.current||world.completed)return;
-      if(["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright","pageup","pagedown","e"].includes(key))event.preventDefault();
+      if(["w","a","s","d","arrowup","arrowdown","arrowleft","arrowright","pageup","pagedown"].includes(key))event.preventDefault();
       keys.current[key]=true;
-      if(key==="e"&&!event.repeat)useLift(event.shiftKey?-1:1);
     };
     const up=(event)=>{keys.current[event.key.toLowerCase()]=false;};
     const suspend=()=>{if(leaving.current)return;stopForCursor(true);escapeArmed.current=false;releaseMouse("blur");persist();flushPlaytime();};
     const visibility=()=>{if(document.hidden)suspend();};
     window.addEventListener("keydown",down);window.addEventListener("keyup",up,true);window.addEventListener("blur",suspend);window.addEventListener("pagehide",suspend);document.addEventListener("visibilitychange",visibility);
     return()=>{window.removeEventListener("keydown",down);window.removeEventListener("keyup",up,true);window.removeEventListener("blur",suspend);window.removeEventListener("pagehide",suspend);document.removeEventListener("visibilitychange",visibility);clearInput();};
-  },[clearInput,flushPlaytime,leave,persist,releaseForEscape,releaseMouse,showMap,stopForCursor,useLift,world]);
+  },[clearInput,flushPlaytime,leave,persist,releaseForEscape,releaseMouse,showMap,stopForCursor,world]);
 
   useEffect(()=>{
     const canvas=canvasRef.current;
@@ -157,17 +151,16 @@ function CubeMazeRun({ onBack, playerName }) {
     const last=drag.current;if(event.pointerType!=="touch"||!last||last.id!==event.pointerId||mapRef.current||world.completed)return;
     world.player.facing+=(event.clientX-last.x)*.006;world.player.pitch=Math.max(-.8,Math.min(.8,world.player.pitch-(event.clientY-last.y)*.004));drag.current={id:last.id,x:event.clientX,y:event.clientY};
   };
-  const lift=snapshot.lift,busy=mapOpen||snapshot.completed;
+  const busy=mapOpen||snapshot.completed;
   return <main className="hundred-page cube-page cube-fullview mode-3d" data-mouse-locked={mouseLocked?"true":"false"} data-cursor-free={released?"true":"false"}>
     <style>{GAME_STYLES}</style>
     <section className="cube-stage" aria-label="The Cube 100 by 100 by 100 maze">
       <div className="cube-frame">
-        <canvas ref={canvasRef} className="hundred-canvas cube-canvas" tabIndex={0} role="application" aria-label="The Cube. Click once for mouse look. WASD walks, M opens the 3D map, E uses a lift upward and Shift E downward. First Escape releases the mouse, second Escape returns to the first page." onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={()=>{drag.current=null;}} onPointerCancel={()=>{drag.current=null;}} onLostPointerCapture={()=>{drag.current=null;}} onContextMenu={(event)=>event.preventDefault()} />
+        <canvas ref={canvasRef} className="hundred-canvas cube-canvas" tabIndex={0} role="application" aria-label="The Cube. Click once for mouse look. WASD walks and follows ramps between stories. M opens the 3D map. First Escape releases the mouse, second Escape returns to the first page." onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={()=>{drag.current=null;}} onPointerCancel={()=>{drag.current=null;}} onLostPointerCapture={()=>{drag.current=null;}} onContextMenu={(event)=>event.preventDefault()} />
         <button type="button" className="cube-back-button" aria-label="Back to first page" onClick={leave}>← Back</button>
         {!busy&&!mouseLocked&&<button type="button" className="cube-mouse-status" aria-label="Capture mouse" onClick={()=>requestMouse(true)}>{mouseNote}</button>}
         <div className="cube-map-float"><CubeMazeMinimap compact world={world} expanded={mapOpen} onToggle={()=>showMap(!mapRef.current)} /></div>
         <div className="hundred-message" role="status">{saveFailed?"Saving unavailable. Keep this run open to retain your position.":snapshot.message}</div>
-        {!busy&&lift&&<div className="cube-lift-prompt" aria-label="Lift controls"><span>{lift.label}</span><div><button type="button" disabled={lift.moving||!lift.canUp} onClick={()=>useLift(1)}>↑ {lift.span} stories <kbd>E</kbd></button><button type="button" disabled={lift.moving||!lift.canDown} onClick={()=>useLift(-1)}>↓ {lift.span} stories <kbd>Shift E</kbd></button></div></div>}
         {!busy&&<div className="hundred-touch cube-touch"><CubeJoystick onMove={(next)=>{if(!releasedRef.current)joystick.current=next;}} /><CubeJoystick look onMove={(next)=>{if(!releasedRef.current)lookStick.current=next;}} /></div>}
         {released&&!busy&&<div className="cube-touch-resume"><button type="button" onClick={()=>requestMouse()}>Continue maze</button></div>}
         {!busy&&(snapshot.haste>0||snapshot.sonar>0)&&<div className="cube-active-powers">{snapshot.haste>0&&<span>Haste · {Math.ceil(snapshot.haste)}s</span>}{snapshot.sonar>0&&<span>Sonar · {Math.ceil(snapshot.sonar)}s</span>}</div>}

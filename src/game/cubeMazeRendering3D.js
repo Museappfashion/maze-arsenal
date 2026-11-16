@@ -1,4 +1,4 @@
-import { getCubeScene, getCubeOverview, cubeMazeHint, CUBE_DIMENSIONS, CUBE_STORY_HEIGHT } from "./cubeMaze.js";
+import { getCubeScene, getCubeOverview, CUBE_DIMENSIONS, CUBE_STORY_HEIGHT } from "./cubeMaze.js";
 import { clipOutdoorPolygon, createOutdoorRaster, rasterOutdoorTriangle } from "./outdoorGeometry3D.js";
 import { cubeMaterialColor } from "./cubeMazeMaterials3D.js";
 
@@ -35,11 +35,7 @@ function quad(mesh, a, b, c, d, color, material) {
 }
 function meshAt(x, y, z, radius = 4) { return { x, y, z, radius, triangles: [] }; }
 function edgeMeshes(edge) {
-  if (edge.kind === "lift") return [];
-  const a = point(edge.a), originalB = point(edge.b);
-  const originalLength = Math.hypot(originalB[0]-a[0],originalB[1]-a[1]);
-  if (originalLength < .001) return [];
-  const b = edge.kind === "liftApproach" ? lerp(a,originalB,Math.max(0,1-1.46/originalLength)) : originalB;
+  const a = point(edge.a), b = point(edge.b);
   const dx = b[0] - a[0], dy = b[1] - a[1];
   const flatLength = Math.hypot(dx, dy), width = edge.width || 3;
   if (flatLength < .001) return [];
@@ -65,7 +61,7 @@ function edgeMeshes(edge) {
     // setback leaves thin seams when a diagonal approach turns into a room.
     const startJoin = Math.sqrt(Math.max(0, (edge.a.radius || 2.1) ** 2 - (width / 2) ** 2)) / flatLength;
     const endJoin = Math.sqrt(Math.max(0, (edge.b.radius || 2.1) ** 2 - (width / 2) ** 2)) / flatLength;
-    const wallT0 = Math.max(t0, startJoin), wallT1 = Math.min(t1, edge.kind === "liftApproach" ? 1 : 1 - endJoin);
+    const wallT0 = Math.max(t0, startJoin), wallT1 = Math.min(t1, 1 - endJoin);
     if (wallT1 > wallT0) {
       const s = lerp(a, b, wallT0), e = lerp(a, b, wallT1);
       for (const side of [-1, 1]) {
@@ -74,19 +70,78 @@ function edgeMeshes(edge) {
         quad(mesh, plus(sl, 0, 0, .14), plus(el, 0, 0, .14), plus(el, 0, 0, .19), plus(sl, 0, 0, .19), [91, 93, 78], { ...surface, surface: "trim", light: .8 });
         quad(mesh, plus(sl, 0, 0, 2.62), plus(el, 0, 0, 2.62), plus(el, 0, 0, 2.67), plus(sl, 0, 0, 2.67), [91, 93, 78], { ...surface, surface: "trim", light: .7 });
       }
-      quad(mesh, plus(s, nx, ny, CUBE_CEILING_HEIGHT), plus(s, -nx, -ny, CUBE_CEILING_HEIGHT), plus(e, -nx, -ny, CUBE_CEILING_HEIGHT), plus(e, nx, ny, CUBE_CEILING_HEIGHT), [55, 53, 46], { ...surface, surface: "ceiling", light: .75 });
     }
+    // Roofs follow the slope all the way through junction portals. Junction
+    // caps make matching cutouts where their flat plane would cross the ramp.
+    quad(mesh, plus(start, nx, ny, CUBE_CEILING_HEIGHT), plus(start, -nx, -ny, CUBE_CEILING_HEIGHT), plus(end, -nx, -ny, CUBE_CEILING_HEIGHT), plus(end, nx, ny, CUBE_CEILING_HEIGHT), [55, 53, 46], { ...surface, surface: "ceiling", light: .75 });
     result.push(mesh);
   }
   return result;
 }
+// Subtract an inclined passage's footprint from an occluding flat junction
+// cap. The passage floor/roof fills that area at its actual elevation instead.
+function clipCapPolygon(polygon, plane, inside) {
+  const output=[];
+  for(let i=0;i<polygon.length;i++){
+    const current=polygon[i],previous=polygon[(i+polygon.length-1)%polygon.length];
+    const value=plane(current),previousValue=plane(previous);
+    const keep=inside ? value>=-1e-9 : value<=1e-9;
+    const keptPrevious=inside ? previousValue>=-1e-9 : previousValue<=1e-9;
+    if(keep!==keptPrevious)output.push(lerp(previous,current,previousValue/(previousValue-value)));
+    if(keep)output.push(current);
+  }
+  return output;
+}
+function subtractPassage(polygon, cut) {
+  const relative=(point)=>[point[0]-cut.x,point[1]-cut.y];
+  const planes=[
+    point=>{const [x,y]=relative(point);return x*cut.dx+y*cut.dy;},
+    point=>{const [x,y]=relative(point);return -x*cut.dy+y*cut.dx+cut.half;},
+    point=>{const [x,y]=relative(point);return cut.half+x*cut.dy-y*cut.dx;},
+  ];
+  let remaining=polygon;
+  const result=[];
+  for(const plane of planes){
+    const outside=clipCapPolygon(remaining,plane,false);
+    if(outside.length>=3)result.push(outside);
+    remaining=clipCapPolygon(remaining,plane,true);
+    if(remaining.length<3)break;
+  }
+  return result;
+}
+function junctionCap(mesh,triangle,color,material,cuts){
+  let polygons=[triangle];
+  for(const cut of cuts)polygons=polygons.flatMap(polygon=>subtractPassage(polygon,cut));
+  for(const polygon of polygons)for(let i=1;i<polygon.length-1;i++)mesh.triangles.push({a:polygon[0],b:polygon[i],c:polygon[i+1],color,material});
+}
 function nodeMesh(node, incident) {
   const radius = node.radius || 2.1, mesh = meshAt(node.x, node.y, node.z, radius + CUBE_CEILING_HEIGHT);
   const center = [node.x, node.y, node.z];
-  const openings = incident.filter(edge=>edge.kind!=="lift").map((edge) => {
+  const openings = incident.map((edge) => {
     const other = edge.a.id === node.id ? edge.b : edge.a;
     return { angle:Math.atan2(other.y-node.y,other.x-node.x), half:Math.asin(Math.min(.99,(edge.width||3)/2/radius)) };
   });
+  const ramps=incident.flatMap(edge=>{
+    const other=edge.a.id===node.id ? edge.b : edge.a;
+    if(Math.abs(other.z-node.z)<1e-8)return [];
+    const length=Math.hypot(other.x-node.x,other.y-node.y);
+    return length>.001 ? [{x:node.x,y:node.y,dx:(other.x-node.x)/length,dy:(other.y-node.y)/length,half:(edge.width||3)/2,rise:other.z-node.z,slope:(other.z-node.z)/length}] : [];
+  });
+  const floorCuts=ramps.filter(ramp=>ramp.rise<0),ceilingCuts=ramps.filter(ramp=>ramp.rise>0);
+  // Flat caps and sloped passages meet at different heights along the two
+  // sides of a cutout. Close those risers inside the circular landing too;
+  // the ordinary corridor walls begin only at its outer portal boundary.
+  for(const [cuts,offset,color,kind,light] of [[floorCuts,0,[109,106,95],"wall",.82],[ceilingCuts,CUBE_CEILING_HEIGHT,[55,53,46],"ceiling",.75]]){
+    for(const cut of cuts){
+      const join=Math.sqrt(Math.max(0,radius*radius-cut.half*cut.half));
+      for(const side of [-1,1]){
+        const a=[node.x-cut.dy*cut.half*side,node.y+cut.dx*cut.half*side,node.z+offset];
+        const b=plus(a,cut.dx*join,cut.dy*join);
+        const c=plus(b,0,0,cut.slope*join);
+        mesh.triangles.push({a,b,c,color,material:{surface:kind,dx:cut.dx,dy:cut.dy,baseZ:node.z,light}});
+      }
+    }
+  }
   // Include exact portal boundaries in the room ring. Removing whole coarse
   // wall faces left triangular slits beside passages, especially on close turns.
   const angles=Array.from({length:24},(_,i)=>i*TAU/24);
@@ -96,8 +151,8 @@ function nodeMesh(node, incident) {
     const aa=sorted[i],ab=i===sorted.length-1?sorted[0]+TAU:sorted[i+1];
     const a=plus(center,Math.cos(aa)*radius,Math.sin(aa)*radius),b=plus(center,Math.cos(ab)*radius,Math.sin(ab)*radius);
     const surface={dx:1,dy:0,baseZ:node.z,centerAcross:node.y,width:radius*2};
-    mesh.triangles.push({a:center,b:a,c:b,color:[83,78,68],material:{...surface,surface:"floor",light:1.05}});
-    mesh.triangles.push({a:plus(center,0,0,CUBE_CEILING_HEIGHT),b:plus(b,0,0,CUBE_CEILING_HEIGHT),c:plus(a,0,0,CUBE_CEILING_HEIGHT),color:[55,53,46],material:{...surface,surface:"ceiling",light:.75}});
+    junctionCap(mesh,[center,a,b],[83,78,68],{...surface,surface:"floor",light:1.05},floorCuts);
+    junctionCap(mesh,[plus(center,0,0,CUBE_CEILING_HEIGHT),plus(b,0,0,CUBE_CEILING_HEIGHT),plus(a,0,0,CUBE_CEILING_HEIGHT)],[55,53,46],{...surface,surface:"ceiling",light:.75},ceilingCuts);
     const angle=(aa+ab)/2;
     if(openings.some(opening=>Math.abs(Math.atan2(Math.sin(angle-opening.angle),Math.cos(angle-opening.angle)))<opening.half-1e-8))continue;
     const length=Math.hypot(b[0]-a[0],b[1]-a[1]),wallSurface={...surface,dx:(b[0]-a[0])/length,dy:(b[1]-a[1])/length};
@@ -118,47 +173,21 @@ function cubeShell() {
   return mesh;
 }
 const shell=cubeShell();
-function liftMeshes(lift) {
-  const result=[],u=[lift.ux,lift.uy],n=[-lift.uy,lift.ux];
-  const v=(along,across,z)=>[lift.x+u[0]*along+n[0]*across,lift.y+u[1]*along+n[1]*across,z];
-  const material={dx:u[0],dy:u[1],baseZ:0,surface:"wall",light:.8};
-  const platform=meshAt(lift.x,lift.y,lift.platformZ,5);
-  const floor=[v(-1.6,-1.6,lift.platformZ),v(1.6,-1.6,lift.platformZ),v(1.6,1.6,lift.platformZ),v(-1.6,1.6,lift.platformZ)];
-  quad(platform,...floor,[89,91,82],{...material,baseZ:lift.platformZ,surface:"floor",light:1.1});
-  quad(platform,...floor.map(p=>plus(p,0,0,2.7)),[55,53,46],{...material,baseZ:lift.platformZ,surface:"ceiling",light:.75});
-  for(const [a,b] of [[v(-1.6,-1.6,lift.platformZ),v(-1.6,1.6,lift.platformZ)],[v(-1.6,-1.6,lift.platformZ),v(1.6,-1.6,lift.platformZ)],[v(-1.6,1.6,lift.platformZ),v(1.6,1.6,lift.platformZ)]])quad(platform,a,b,plus(b,0,0,2.7),plus(a,0,0,2.7),[105,101,89],{...material,baseZ:lift.platformZ});
-  if(lift.phase==="moving")quad(platform,v(1.6,-1.6,lift.platformZ),v(1.6,1.6,lift.platformZ),v(1.6,1.6,lift.platformZ+2.7),v(1.6,-1.6,lift.platformZ+2.7),[117,108,82],{...material,surface:"trim",light:1});
-  result.push(platform);
-  for(let story=lift.lowStory;story<=lift.highStory;story++) {
-    const z=story*4,mesh=meshAt(lift.x,lift.y,z,6);
-    for(const [a,b] of [[v(-1.7,-1.7,z),v(-1.7,1.7,z)],[v(-1.7,-1.7,z),v(1.7,-1.7,z)],[v(-1.7,1.7,z),v(1.7,1.7,z)]])quad(mesh,a,b,plus(b,0,0,4),plus(a,0,0,4),[101,99,88],material);
-    // Closed landing gates cover every shaft opening while the cabin is away.
-    // The platform overlaps the corridor threshold when its door is open.
-    const open=Math.abs(lift.platformZ-z)<.08&&["idle","boarding"].includes(lift.phase);
-    if(!open)quad(mesh,v(1.65,-1.7,z),v(1.65,1.7,z),v(1.65,1.7,z+2.9),v(1.65,-1.7,z+2.9),[100,99,84],{...material,surface:"trim",light:.95});
-    quad(mesh,v(1.65,-1.7,z+2.9),v(1.65,1.7,z+2.9),v(1.65,1.7,z+4),v(1.65,-1.7,z+4),[109,106,95],material);
-    const lamp=open?[85,173,105]:[176,144,76];
-    quad(mesh,v(1.67,-.28,z+2.35),v(1.67,.28,z+2.35),v(1.67,.28,z+2.5),v(1.67,-.28,z+2.5),lamp);
-    result.push(mesh);
-  }
-  return result;
-}
 
 export function buildCubeGeometry(scene) {
   const edges = scene.edges || [];
-  return [...(scene.lifts||[]).flatMap(liftMeshes), ...edges.flatMap(edgeMeshes), ...(scene.nodes || []).filter(node=>node.kind!=="liftStation").map((node) => nodeMesh(node, edges.filter((edge) => edge.a.id === node.id || edge.b.id === node.id))), shell];
+  return [...edges.flatMap(edgeMeshes), ...(scene.nodes || []).map((node) => nodeMesh(node, edges.filter((edge) => edge.a.id === node.id || edge.b.id === node.id))), shell];
 }
 function geometryFor(world, scene) {
   let cache = meshCaches.get(world);
   if (!cache) { cache = new Map(); meshCaches.set(world, cache); }
-  const result = (scene.lifts||[]).flatMap(liftMeshes);
+  const result = [];
   for (const edge of scene.edges) {
     const id = `edge:${edge.id}`;
     if (!cache.has(id)) cache.set(id, edgeMeshes(edge));
     result.push(...cache.get(id));
   }
   for (const node of scene.nodes) {
-    if(node.kind==="liftStation")continue;
     const incident = scene.edges.filter((edge) => edge.a.id === node.id || edge.b.id === node.id);
     const id = `node:${node.id}:${incident.map((edge) => edge.id).sort().join(",")}`;
     if (!cache.has(id)) cache.set(id, [nodeMesh(node, incident)]);
@@ -270,7 +299,6 @@ function boxMesh(center, half, height, color) {
   quad(mesh,...upper,color);
   return mesh;
 }
-function routeNodes() { return []; }
 
 function sceneDetails(world,scene) {
   const result=[];
@@ -282,13 +310,6 @@ function sceneDetails(world,scene) {
   if (goal) {
     result.push(boxMesh([goal.x,goal.y,goal.z+.02],.8,.12,[44,143,91]));
     result.push(boxMesh([goal.x,goal.y,goal.z+.14],.33,2,[74,222,128]));
-  }
-  const route=routeNodes(world);
-  for(let i=0;i<route.length-1;i++) {
-    const a=point(route[i]),b=point(route[i+1]);
-    const distance=Math.hypot(b[0]-a[0],b[1]-a[1]);
-    const count=Math.ceil(distance/3);
-    for(let step=0;step<count;step++) result.push(boxMesh(plus(lerp(a,b,(step+.5)/count),0,0,.045),.1,.035,[92,214,237]));
   }
   return result;
 }
@@ -350,19 +371,17 @@ export function drawCubeMinimap(ctx, world, width, height, view = {}, scene = cu
   const sorted = [...scene.edges].sort((a, b) => (p(a.a).depth + p(a.b).depth) - (p(b.a).depth + p(b.b).depth));
   for (const edge of sorted) {
     const explored = world.visited?.has(edge.a.id) || world.visited?.has(edge.b.id) || world.sonar > 0;
-    const lift = edge.kind === "lift", ramp = edge.kind === "ramp";
+    const ramp = edge.kind === "ramp";
     const distance = Math.abs((edge.a.z + edge.b.z) / 2 - center.z);
     const alpha = clamp(1 - distance / Math.max(8, view.band || 20), .18, 1);
     ctx.globalAlpha = alpha;
-    projectLine(edge.a, edge.b, lift ? "#fbbf24" : ramp ? "#67dcef" : explored ? "#8ca7c3" : "#405570", lift || ramp ? 2.3 : 1.6);
-    if ((lift || ramp) && width > 350 && Math.hypot(p(edge.a).x - p(edge.b).x, p(edge.a).y - p(edge.b).y) > 35) {
+    projectLine(edge.a, edge.b, ramp ? "#67dcef" : explored ? "#8ca7c3" : "#405570", ramp ? 2.3 : 1.6);
+    if (ramp && width > 350 && Math.hypot(p(edge.a).x - p(edge.b).x, p(edge.a).y - p(edge.b).y) > 35) {
       const middle = p({ x: (edge.a.x + edge.b.x) / 2, y: (edge.a.y + edge.b.y) / 2, z: (edge.a.z + edge.b.z) / 2 });
-      ctx.fillStyle = "#a5f3fc"; ctx.font = "700 9px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillText(`${lift ? "L" : ""}${Math.abs(edge.riseStories || 1)}s`, middle.x, middle.y - 4);
+      ctx.fillStyle = "#a5f3fc"; ctx.font = "700 9px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillText(`${Math.abs(edge.riseStories || 1)}s`, middle.x, middle.y - 4);
     }
   }
   ctx.globalAlpha = 1;
-  const route=routeNodes(world);
-  for(let i=0;i<route.length-1;i++)projectLine(route[i],route[i+1],"#e0f2fe",3);
   for (const node of scene.nodes) { const at = p(node); ctx.fillStyle = world.visited?.has(node.id) ? "#b8cbe0" : "#59718c"; ctx.beginPath(); ctx.arc(at.x, at.y, 1.6, 0, TAU); ctx.fill(); }
   const goal = world.goal || scene.goal;
   if (goal && Math.abs(goal.z - center.z) < (view.band || 20)) { const at = p(goal); ctx.fillStyle = "#4ade80"; ctx.fillRect(at.x - 4, at.y - 4, 8, 8); }

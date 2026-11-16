@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createCubeMaze, getCubeScene, getCubeOverview, activateCubeLift, updateCubeMaze, CUBE_DIMENSIONS } from "../../src/game/cubeMaze.js";
+import { createCubeMaze, getCubeScene, getCubeOverview, CUBE_DIMENSIONS } from "../../src/game/cubeMaze.js";
 import { createOutdoorRaster } from "../../src/game/outdoorGeometry3D.js";
 import { CUBE_EYE_HEIGHT, CUBE_NEAR, cubeCameraPoint, projectCubePoint, buildCubeGeometry, renderCubeGeometry, projectCubeMapPoint, cubeMapOverviewView, cubeMapScene, clipCubeMaterialPolygon, rasterCubeMaterialTriangle } from "../../src/game/cubeMazeRendering3D.js";
 import { cubeMaterialColor } from "../../src/game/cubeMazeMaterials3D.js";
@@ -16,15 +16,9 @@ function generatedRamp(world, span = 10) {
  assert.ok(ramp,`the generated world contains a ${span}-story ramp`);
  return ramp;
 }
-function generatedStation(world, span = 10) {
- const scene=getCubeScene(world,{center:{x:CUBE_DIMENSIONS.length/2,y:CUBE_DIMENSIONS.width/2,z:0},radius:150,verticalRadius:2,maxNodes:2000});
- const station=scene.nodes.find(node=>node.kind==="liftStation"&&node.span===span&&node.story===0);
- assert.ok(station,`the generated world contains a ${span}-story lift landing`);
- return station;
-}
 function generatedCenter(world) {
  const center={x:CUBE_DIMENSIONS.length/2,y:CUBE_DIMENSIONS.width/2,z:32};
- const nodes=getCubeScene(world,{center,radius:30,verticalRadius:2,maxNodes:650}).nodes.filter(node=>node.kind!=="liftStation"&&node.z===center.z);
+ const nodes=getCubeScene(world,{center,radius:30,verticalRadius:2,maxNodes:650}).nodes.filter(node=>node.z===center.z);
  const closest=nodes.sort((a,b)=>Math.hypot(a.x-center.x,a.y-center.y)-Math.hypot(b.x-center.x,b.y-center.y))[0];
  assert.ok(closest,"the generated world has an ordinary central junction");
  return closest;
@@ -156,11 +150,21 @@ function pointOnTriangle(point,face,epsilon=.0001){
 test("junction floors and ceilings cover the whole walkable room and every ramp/corridor join",()=>{
  const world=createCubeMaze(42),center=generatedCenter(world),scene=getCubeScene(world,{center,radius:24,verticalRadius:2,maxNodes:650});
  const faces=buildCubeGeometry(scene).flatMap(mesh=>mesh.triangles),floors=faces.filter(face=>face.material?.surface==="floor"),ceilings=faces.filter(face=>face.material?.surface==="ceiling");
- for(const node of scene.nodes.filter(node=>node.kind!=="liftStation"&&Math.hypot(node.x-center.x,node.y-center.y)<15&&node.z===center.z)){
+ for(const node of scene.nodes.filter(node=>Math.hypot(node.x-center.x,node.y-center.y)<15&&node.z===center.z)){
   for(let i=0;i<16;i++){
    const point=[node.x+Math.cos(i*Math.PI/8)*1.8,node.y+Math.sin(i*Math.PI/8)*1.8,node.z];
-   assert.ok(floors.some(face=>pointOnTriangle(point,face)),`room ${node.id} floor has no radial gap`);
-   assert.ok(ceilings.some(face=>pointOnTriangle([point[0],point[1],point[2]+2.9],face)),`room ${node.id} has a solid ceiling`);
+   let floorZ=node.z,ceilingZ=node.z+2.9;
+   for(const edge of scene.edges.filter(edge=>edge.a.id===node.id||edge.b.id===node.id)){
+    const other=edge.a.id===node.id ? edge.b : edge.a,length=Math.hypot(other.x-node.x,other.y-node.y);
+    const dx=(other.x-node.x)/length,dy=(other.y-node.y)/length,along=(point[0]-node.x)*dx+(point[1]-node.y)*dy,across=-(point[0]-node.x)*dy+(point[1]-node.y)*dx;
+    if(along>=0&&Math.abs(across)<=(edge.width||3)/2){
+     const height=node.z+(other.z-node.z)*along/length;
+     if(other.z<node.z)floorZ=height;
+     if(other.z>node.z)ceilingZ=height+2.9;
+    }
+   }
+   assert.ok(floors.some(face=>pointOnTriangle([point[0],point[1],floorZ],face)),`room ${node.id} floor joins its ramp without a radial gap`);
+   assert.ok(ceilings.some(face=>pointOnTriangle([point[0],point[1],ceilingZ],face)),`room ${node.id} ceiling joins its ramp without a gap`);
   }
  }
  for(const edge of scene.edges.filter(edge=>["corridor","ramp"].includes(edge.kind))){
@@ -172,10 +176,10 @@ test("junction floors and ceilings cover the whole walkable room and every ramp/
  }
 });
 
-test("actual compact Cube views have no holes at junctions, ramp ends, lift stations or steep looks",()=>{
+test("actual compact Cube views have no holes at junctions, ramp ends or steep looks",()=>{
  const world=createCubeMaze(42),target=createOutdoorRaster(112,88);
- const ramp=generatedRamp(world),stations=[world.start,generatedCenter(world),ramp.a,ramp.b,generatedStation(world,4)];
- for(const node of stations){
+ const ramp=generatedRamp(world),positions=[world.start,generatedCenter(world),ramp.a,ramp.b];
+ for(const node of positions){
   const scene=getCubeScene(world,{center:node,radius:54,verticalRadius:16,maxNodes:650}),meshes=buildCubeGeometry(scene);
   for(let angle=0;angle<16;angle++){
    renderCubeGeometry(target,meshes,{...node,facing:angle*Math.PI/8,pitch:(angle%3-1)*.65});
@@ -183,20 +187,6 @@ test("actual compact Cube views have no holes at junctions, ramp ends, lift stat
   }
  }
 });
-
-test("lift geometry renders the carried cabin floor at its real intermediate elevation with closed landing gates",()=>{
- const world=createCubeMaze(12),station=generatedStation(world);Object.assign(world.player,station);
- assert.equal(activateCubeLift(world),true);for(let i=0;i<30;i++)updateCubeMaze(world,.05);
- assert.ok(world.player.z>0&&world.player.z<40);
- const scene=getCubeScene(world,{center:world.player}),lift=scene.lifts.find(item=>item.id===station.shaftId);
- assert.equal(lift.platformZ,world.player.z);assert.equal(lift.phase,"moving");
- const faces=buildCubeGeometry(scene).flatMap(mesh=>mesh.triangles);
- assert.ok(faces.some(face=>face.material?.surface==="floor"&&pointOnTriangle([station.x,station.y,world.player.z],face)),"real platform floor supports the rider at intermediate Z");
- const target=createOutdoorRaster(112,88);
- renderCubeGeometry(target,buildCubeGeometry(scene),world.player);
- assert.equal(target.depth.filter(Number.isFinite).length,target.depth.length,"moving cabin is closed around the rider");
-});
-
 
 test("coplanar backing floors never punch noisy stripes through the visible corridor floor",()=>{
  const target=createOutdoorRaster(90,70);
@@ -209,8 +199,8 @@ test("coplanar backing floors never punch noisy stripes through the visible corr
 
 
 test("ramp floors, walls and ceilings remain sealed for every horizontal direction",()=>{
- for(let direction=0;direction<8;direction++){
-  const angle=direction*Math.PI/4,dx=Math.cos(angle)*20,dy=Math.sin(angle)*20;
+ for(let direction=0;direction<12;direction++){
+  const angle=direction<8?direction*Math.PI/4:(direction-8)*1.137+.281,dx=Math.cos(angle)*20,dy=Math.sin(angle)*20;
   const a=node("a",50,50,12),b=node("b",50+dx,50+dy,20),edge={id:"test-ramp",a,b,kind:"ramp",riseStories:2,width:3};
   const meshes=buildCubeGeometry({nodes:[a,b],edges:[edge]}),faces=meshes.flatMap(mesh=>mesh.triangles);
   for(const t of [.2,.5,.8]){
@@ -228,19 +218,6 @@ test("ramp floors, walls and ceilings remain sealed for every horizontal directi
  }
 });
 
-test("distributed diagonal lift approaches meet the actual cabin floor without a threshold gap",()=>{
- const world=createCubeMaze(42),station=generatedStation(world,6),scene=getCubeScene(world,{center:station,radius:20,verticalRadius:2,maxNodes:650});
- const approach=scene.edges.find(edge=>edge.kind==="liftApproach"&&edge.b.id===station.id);
- assert.ok(approach,"the landing has an approach to its generated shaft");
- const floor=buildCubeGeometry(scene).flatMap(mesh=>mesh.triangles).filter(face=>face.material?.surface==="floor");
- const dx=approach.b.x-approach.a.x,dy=approach.b.y-approach.a.y,length=Math.hypot(dx,dy);
- for(const t of [0,.1,.25,.5,.75,.9,1])for(const across of [-1,0,1]){
-  const point=[approach.a.x+dx*t-dy/length*across,approach.a.y+dy*t+dx/length*across,station.z];
-  assert.ok(floor.some(face=>pointOnTriangle(point,face)),`floor covers generated landing ${station.id}, t=${t}, across=${across}`);
- }
-});
-
-
 test("side walls meet circular room portals exactly, including diagonal approaches",()=>{
  const radius=2.1,width=3,join=Math.sqrt(radius*radius-width*width/4);
  for(const angle of [0,Math.PI/4,Math.PI/2,Math.PI*1.25]){
@@ -253,10 +230,48 @@ test("side walls meet circular room portals exactly, including diagonal approach
  }
 });
 
-test("lift ready/away indicator sits below the approach ceiling so the entrance is readable",()=>{
- const world=createCubeMaze(42),station=generatedStation(world,6),scene=getCubeScene(world,{center:station,radius:15,verticalRadius:2,maxNodes:650});
- const faces=buildCubeGeometry(scene).flatMap(mesh=>mesh.triangles);
- const lamp=faces.filter(face=>face.color?.[0]===85&&face.color?.[1]===173&&face.color?.[2]===105);
- assert.ok(lamp.length>0,"an open lift has a same-style green ready indicator");
- assert.ok(lamp.some(face=>[face.a,face.b,face.c].every(vertex=>vertex[2]>station.z+2&&vertex[2]<station.z+2.9)),"indicator is below the room ceiling, not hidden above it");
+
+
+test("generated random ramps render sealed floors, roofs and near-plane-safe views",()=>{
+ const world=createCubeMaze(327),ramps=getCubeOverview(world).ramps,target=createOutdoorRaster(96,72);
+ assert.ok(ramps.length>10,"the world provides repeated ramps, not a single specimen of each span");
+ const chosen=ramps.filter((_,index)=>index%Math.max(1,Math.floor(ramps.length/12))===0).slice(0,12);
+ for(const ramp of chosen){
+  const dx=ramp.b.x-ramp.a.x,dy=ramp.b.y-ramp.a.y,dz=ramp.b.z-ramp.a.z,length=Math.hypot(dx,dy);
+  const center={x:(ramp.a.x+ramp.b.x)/2,y:(ramp.a.y+ramp.b.y)/2,z:(ramp.a.z+ramp.b.z)/2};
+  const scene=getCubeScene(world,{center,radius:54,verticalRadius:16,maxNodes:650}),meshes=buildCubeGeometry(scene),faces=meshes.flatMap(mesh=>mesh.triangles);
+  for(const side of [-1,0,1]){
+   const floor=[center.x-dy/length*side,center.y+dx/length*side,center.z];
+   assert.ok(faces.some(face=>face.material?.surface==="floor"&&pointOnTriangle(floor,face)),`${ramp.id}: physical ramp floor`);
+   assert.ok(faces.some(face=>face.material?.surface==="ceiling"&&pointOnTriangle([floor[0],floor[1],floor[2]+2.9],face)),`${ramp.id}: physical ramp ceiling`);
+  }
+  for(const turn of [0,Math.PI/2,Math.PI,Math.PI*1.5]){
+   renderCubeGeometry(target,meshes,{...center,facing:Math.atan2(dy,dx)+turn,pitch:Math.atan2(dz,length)});
+   assert.equal(target.depth.filter(Number.isFinite).length,target.depth.length,`${ramp.id}: rendered volume remains closed through a turn`);
+   for(const depth of target.depth)assert.ok(Number.isFinite(depth)&&depth>=CUBE_NEAR-1e-5);
+  }
+ }
+});
+
+
+test("junction caps do not cut through the walkable slope at ramp entrances and exits",()=>{
+ for(const angle of [0,Math.PI/2,.713,Math.PI*1.27]){
+  const a=node("a",35,40,12),b=node("b",35+Math.cos(angle)*20,40+Math.sin(angle)*20,22);
+  const edge={id:"sloped-junction",a,b,kind:"ramp",riseStories:2.5,width:3},faces=buildCubeGeometry({nodes:[a,b],edges:[edge]}).flatMap(mesh=>mesh.triangles);
+  for(const along of [.3,.8,1.4])for(const across of [-1,0,1]){
+   const lower=[a.x+Math.cos(angle)*along-Math.sin(angle)*across,a.y+Math.sin(angle)*along+Math.cos(angle)*across];
+   const upper=[b.x-Math.cos(angle)*along-Math.sin(angle)*across,b.y-Math.sin(angle)*along+Math.cos(angle)*across];
+   const foot=b.z-along*.5,roof=a.z+along*.5+2.9;
+   assert.ok(!faces.some(face=>face.material?.surface==="floor"&&pointOnTriangle([upper[0],upper[1],b.z],face)),"no raised flat cap above the incoming ramp floor");
+   assert.ok(faces.some(face=>face.material?.surface==="floor"&&pointOnTriangle([upper[0],upper[1],foot],face)),"upper junction is supported at the actual ramp elevation");
+   assert.ok(!faces.some(face=>face.material?.surface==="ceiling"&&pointOnTriangle([lower[0],lower[1],a.z+2.9],face)),"no flat ceiling cutting across the outgoing slope");
+   assert.ok(faces.some(face=>face.material?.surface==="ceiling"&&pointOnTriangle([lower[0],lower[1],roof],face)),"lower junction has a continuous inclined roof");
+   for(const side of [-1,1]){
+    const upperSide=[b.x-Math.cos(angle)*along-Math.sin(angle)*1.5*side,b.y-Math.sin(angle)*along+Math.cos(angle)*1.5*side,b.z-along*.25];
+    const lowerSide=[a.x+Math.cos(angle)*along-Math.sin(angle)*1.5*side,a.y+Math.sin(angle)*along+Math.cos(angle)*1.5*side,a.z+2.9+along*.25];
+    assert.ok(faces.some(face=>face.material?.surface==="wall"&&pointOnTriangle(upperSide,face)),"upper cutout side riser closes the height difference inside the room");
+    assert.ok(faces.some(face=>face.material?.surface==="ceiling"&&pointOnTriangle(lowerSide,face)),"lower ceiling cutout side fascia closes the height difference inside the room");
+   }
+  }
+ }
 });

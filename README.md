@@ -2,7 +2,7 @@
 
 This folder contains the full game, including game source, APIs, music, database scripts, and build configuration. Copy its contents into the repository root beside `package.json`, and allow files to merge. Keep your existing `.env.local` and Vercel environment settings.
 
-The November 14 Cube update scatters ramps and straight vertical lifts throughout the connected volume. Walk onto ramps; press E at a lift to call it or ride up, and Shift+E to ride down. The interactive 3D minimap remains available with M.
+The Cube uses only walking ramps, with randomized positions, directions, and climbs of 1–10 stories. Walk onto a slope to climb or descend. The interactive 3D minimap remains available with M.
 
 ## Folder structure
 
@@ -375,17 +375,16 @@ to choose defenses; S cycles 1× / 2× / 3×. Current and next statistics remain
 visible before an upgrade. Playtime counts real active seconds at every speed.
 
 **The Cube** unlocks after two hours. It is one connected **100 × 100 × 100**
-maze, with four units per story (25 stories), repeated ramps rising 1–10 stories,
-and twenty gated lift shafts covering every 1–10-story span in both directions.
-Ramps carry the player continuously. Lifts call a real moving platform, board
-it, and carry the player smoothly; they do not teleport between separate mazes.
-Floors, room ceilings, passage portals, and the outer shell are sealed to close
-visible gaps. An absent lift platform stays behind a closed gate.
+maze, with four units per story (25 stories). Randomized ramps connect the
+stories with climbs of 1–10 stories. Every climb is walked continuously.
+A new Cube randomizes ramp locations, directions, lengths, and heights;
+a saved Cube retains its layout. Floors, ceilings, passage portals, and
+the outer shell remain sealed.
 
-The Cube now fills the whole viewport. It has no status dock or compass.
+The Cube fills the viewport and has no status dock or compass.
 Its compact **3D minimap** remains; expand it with M to orbit, pan, zoom, inspect
-altitude slices, follow the player, or see the whole volume. Gold lines are
-lifts and cyan lines are ramps. The map does not move the player.
+altitude slices, follow the player, or see the whole volume. Cyan lines are ramps.
+The map does not move the player.
 
 Cube controls:
 
@@ -393,15 +392,14 @@ Cube controls:
 - **First Escape** releases the cursor and suspends movement. **Second Escape**
   saves and returns to the first page. Clicking the maze captures the mouse again.
 - **WASD** walks; arrows move/turn. **Page Up / Page Down** look vertically.
-- **E** calls or rides a lift upward. **Shift+E** goes down. Contextual buttons
-  appear beside a lift; the platform must arrive before boarding.
+- Walk onto ramps to ascend or descend.
 - **M** opens/closes the navigable 3D map and releases the cursor for its controls.
-- On touchscreens, use the MOVE and LOOK joysticks, contextual lift buttons,
-  and Back. Continue maze resumes after the app loses focus.
+- On touchscreens, use the MOVE and LOOK joysticks and Back.
+  Continue maze resumes after the app loses focus.
 
-The compact Cube uses a new save key. Previous large-Cube and Hundred Floors
-saves are preserved separately. Position, collected powers, explored junctions,
-and mid-flight lift rides save every five active seconds and on release or exit.
+Position, collected powers, and explored junctions save every five active
+seconds and on release or exit. Previous Cube saves keep their progress;
+positions affected by the new layout move to a safe nearby landing.
 The original mazes, wallets, cosmetics, music, and Free the Flock remain intact.
 
 Entering **oibougvovov** as the player name unlocks both modes immediately and
@@ -420,7 +418,7 @@ Browser scenarios use a locally available Playwright installation through
 `expedition-browser.mjs`, and `cube-mouse-controls-browser.mjs` in scripts/tests.
 Checks include all 20 power mechanics, four earned-budget 60-wave victories,
 first-time identity and the developer API boundary, connected compact topology,
-all lift spans, continuous platform movement, saved rides, sealed geometry,
+random ramp placement and climbs, saved ramp positions, sealed geometry,
 mouse release/two-Escape exit, and real desktop/mobile controls and map navigation.
 
 ## Controller support: the five base games

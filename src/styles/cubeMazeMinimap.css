@@ -21,7 +21,6 @@
 .cube-map-bottom span { display:inline-flex; align-items:center; gap:5px; }
 .cube-map-bottom i { display:inline-block; width:10px; height:3px; }
 .cube-map-corridor-key { background:#8ca7c3; }.cube-map-ramp-key { background:#67dcef; }.cube-map-you-key { background:#e0f2fe; border-radius:50%; width:5px!important; height:5px!important; }
-.cube-map-lift-key { background:#fbbf24; }
 .cube-minimap-compact:not(.cube-minimap-expanded) .cube-map-canvas { height:145px; }
 .cube-minimap-compact:not(.cube-minimap-expanded) .cube-map-heading { padding:8px 10px;gap:6px; }
 .cube-minimap-compact:not(.cube-minimap-expanded) .cube-map-heading h2 { font-size:11px; }

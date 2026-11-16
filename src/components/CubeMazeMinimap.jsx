@@ -131,7 +131,7 @@ export function CubeMazeMinimap({ world, expanded = false, compact = false, onTo
     </div>
     <button type="button" className="cube-map-overview" aria-pressed={Boolean(view.overview)} onClick={() => change(cubeMapOverviewView())}>Whole cube · {CUBE_DIMENSIONS.length} × {CUBE_DIMENSIONS.width} × {CUBE_DIMENSIONS.height}</button>
     <div className="cube-map-slice"><label htmlFor={expanded ? "cube-expanded-altitude" : "cube-altitude"}>Altitude slice <strong>{Math.round(selectedAltitude)} / {CUBE_DIMENSIONS.height}</strong></label><input id={expanded ? "cube-expanded-altitude" : "cube-altitude"} aria-label="Map altitude slice" type="range" min="0" max={CUBE_DIMENSIONS.height - CUBE_STORY_HEIGHT} step={CUBE_STORY_HEIGHT} value={selectedAltitude} onChange={(event) => altitude(Number(event.target.value))} /></div>
-    <div className="cube-map-bottom"><span><i className="cube-map-corridor-key" />Passages</span><span><i className="cube-map-ramp-key" />Ramps · 1–10 stories</span><span><i className="cube-map-lift-key" />Lifts · 1–10 stories</span><span><i className="cube-map-you-key" />You</span></div>
+    <div className="cube-map-bottom"><span><i className="cube-map-corridor-key" />Passages</span><span><i className="cube-map-ramp-key" />Ramps · 1–10 stories</span><span><i className="cube-map-you-key" />You</span></div>
     <p className="cube-map-help">Drag to orbit · Shift-drag to pan · Scroll to zoom. Move the altitude slider to inspect passages above and below you.</p>
     </>}
   </section>;

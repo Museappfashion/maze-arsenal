@@ -10,7 +10,7 @@ const NOTICE_DATE = new Intl.DateTimeFormat("en-US", {
 
 const UPDATES = [
   // Add player-facing notices as { publishedAt: ISO timestamp with timezone, text: string }.
-  { publishedAt: "2026-11-14T00:00:00-08:00", text: "The Cube now has ramps and vertical lifts scattered throughout, with varied routes between stories." },
+  { publishedAt: "2026-11-14T00:00:00-08:00", text: "The Cube now uses randomized ramps throughout, with climbs of 1–10 stories." },
 ]
   .map((update) => ({ ...update, startsAt: Date.parse(update.publishedAt) }))
   .filter((update) => update.startsAt >= RESET_AT)

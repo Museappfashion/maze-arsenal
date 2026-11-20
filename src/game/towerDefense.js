@@ -6,8 +6,28 @@ export const DEFENSE_ROWS = 12;
 export const DEFENSE_WAVES = 60;
 export const DEFENSE_MAX_LEVEL = 6;
 export const DEFENSE_SPEEDS = Object.freeze([1, 2, 3]);
+export const DEFENSE_TARGET_MODES = Object.freeze([
+  Object.freeze({ key: "strongest", label: "Strongest", description: "Highest remaining health in range." }),
+  Object.freeze({ key: "weakest", label: "Weakest", description: "Lowest remaining health in range." }),
+  Object.freeze({ key: "first", label: "First", description: "Farthest along the route toward the core." }),
+  Object.freeze({ key: "last", label: "Last", description: "Nearest the start of the route." }),
+]);
+const targetModeKeys = new Set(DEFENSE_TARGET_MODES.map(({ key }) => key));
+const targetableTypes = new Set(["rapidFire", "demolition", "precision", "overcharge", "juggernaut", "breaker", "haste", "magnet", "pierce", "vampirism", "ammoSurge", "phaseWalk"]);
+
+export function defenseSupportsTargeting(towerOrType) {
+  return targetableTypes.has(typeof towerOrType === "string" ? towerOrType : towerOrType?.type);
+}
+
+export function setDefenseTargetMode(game, towerId, mode) {
+  const tower = game?.towers?.find((item) => item.id === towerId);
+  if (!tower || !defenseSupportsTargeting(tower) || !targetModeKeys.has(mode) || !["building", "running"].includes(game.status)) return false;
+  tower.targetMode = mode;
+  return true;
+}
+
 export const DEFENSE_TYPES = Object.freeze({
-  rapidFire: { ...POWER_UPS.rapidFire, cost: 90, damage: 7, cooldown: .24, range: 2.8, symbol: "R", description: "Fast bolts pick off the leading enemy." },
+  rapidFire: { ...POWER_UPS.rapidFire, cost: 90, damage: 7, cooldown: .24, range: 2.8, symbol: "R", description: "Fast bolts pick off a targeted enemy." },
   frost: { ...POWER_UPS.frost, cost: 110, damage: 0, cooldown: 0, range: 2.3, symbol: "F", description: "A constant field slows every enemy inside by 40%." },
   demolition: { ...POWER_UPS.demolition, cost: 180, damage: 28, cooldown: 1.25, range: 3.1, splash: 1.2, symbol: "D", description: "Explosive blasts damage groups of enemies." },
   precision: { ...POWER_UPS.precision, cost: 150, damage: 42, cooldown: 1.5, range: 4.5, symbol: "P", description: "Long-range shots break through Brute and Warden armor." },
@@ -21,11 +41,11 @@ export const DEFENSE_TYPES = Object.freeze({
   juggernaut: { ...POWER_UPS.juggernaut, cost: 230, damage: 60, cooldown: 2, range: 2.1, splash: .9, symbol: "J", description: "A heavy slam damages a group and briefly stuns it. Enemies recover between stuns." },
   breaker: { ...POWER_UPS.breaker, cost: 170, damage: 24, cooldown: .9, range: 3, symbol: "K", description: "Armor-breaking shells strip 18% armor before dealing damage. Only the strongest strip applies." },
   haste: { ...POWER_UPS.haste, cost: 145, damage: 4, cooldown: .14, range: 2.5, symbol: "H", description: "Fast bolts gain damage while continuously firing, up to 50% extra. Idle time clears the bonus." },
-  magnet: { ...POWER_UPS.magnet, cost: 175, damage: 12, cooldown: .75, range: 2.7, symbol: "M", description: "Shock the leading enemy and pull it back along its route. Shared recovery prevents permanent trapping." },
+  magnet: { ...POWER_UPS.magnet, cost: 175, damage: 12, cooldown: .75, range: 2.7, symbol: "M", description: "Shock a targeted enemy and pull it back along its route. Shared recovery prevents permanent trapping." },
   pierce: { ...POWER_UPS.pierce, cost: 210, damage: 18, cooldown: 1.15, range: 3.8, symbol: "I", description: "Piercing rounds hit five enemies and ignore half their armor." },
   vampirism: { ...POWER_UPS.vampirism, cost: 180, damage: 16, cooldown: .8, range: 2.8, symbol: "V", description: "Drain bolts restore 1 core health after every four enemies this defense defeats." },
   longArms: { ...POWER_UPS.longArms, cost: 155, damage: 18, cooldown: .7, range: 1.7, symbol: "L", description: "A close-range sweep damages every enemy around this defense." },
-  ammoSurge: { ...POWER_UPS.ammoSurge, cost: 190, damage: 5, cooldown: .35, range: 3.2, symbol: "A", description: "A three-shot barrage retargets as enemies fall. Upgrades add shots to each barrage." },
+  ammoSurge: { ...POWER_UPS.ammoSurge, cost: 190, damage: 5, cooldown: .35, range: 3.2, symbol: "A", description: "A three-shot barrage rechecks its target priority after each shot. Upgrades add shots to each barrage." },
   phaseWalk: { ...POWER_UPS.phaseWalk, cost: 225, damage: 24, cooldown: .95, range: 3.4, symbol: "W", description: "Phase bolts bypass armor and Warden protection, then leave a short damaging phase burn." },
 });
 
@@ -135,7 +155,8 @@ export function placeDefense(game, type, x, y) {
   const error = canPlaceDefense(game, type, x, y);
   if (error) { game.message = error; return false; }
   const cost = DEFENSE_TYPES[type].cost;
-  const tower = { id: game.nextId++, type, x: x + .5, y: y + .5, level: 1, cooldown: 0, spent: cost, kills: 0, angle: 0 };
+  const tower = { id: game.nextId++, type, x: x + .5, y: y + .5, level: 1, cooldown: 0, spent: cost, kills: 0, angle: 0,
+    ...(defenseSupportsTargeting(type) ? { targetMode: "first" } : {}) };
   game.towers.push(tower); game.energy -= cost; game.selectedId = tower.id;
   game.message = `${DEFENSE_TYPES[type].label} placed. Select it to upgrade or sell.`;
   return true;
@@ -238,6 +259,16 @@ function beam(game, tower, target, color) {
   game.effects.push({ type: "beam", x: tower.x, y: tower.y, x2: target.x, y2: target.y, color, ttl: .13, maxTtl: .13 });
 }
 
+function orderedDefenseTargets(game, tower, range) {
+  const mode = defenseSupportsTargeting(tower) && targetModeKeys.has(tower.targetMode) ? tower.targetMode : "first";
+  return game.enemies.filter((enemy) => enemy.hp > 0 && separation(tower, enemy) <= range).sort((a, b) => {
+    const progress = b.distance - a.distance;
+    const priority = mode === "strongest" ? b.hp - a.hp : mode === "weakest" ? a.hp - b.hp : mode === "last" ? -progress : progress;
+    const stableId = typeof a.id === "number" && typeof b.id === "number" ? a.id - b.id : String(a.id ?? "").localeCompare(String(b.id ?? ""));
+    return priority || progress || stableId;
+  });
+}
+
 /** Advance fixed, short simulation steps; callers cannot skip a wave with a background-tab delta. */
 export function stepDefense(game, elapsed) {
   if (game.paused || game.status !== "running" || !Number.isFinite(elapsed) || elapsed <= 0) return 0;
@@ -283,7 +314,7 @@ export function stepDefense(game, elapsed) {
       }
       tower.cooldown = Math.max(0, tower.cooldown - dt);
       if (tower.cooldown > 0) continue;
-      const targets = game.enemies.filter((enemy) => enemy.hp > 0 && separation(tower, enemy) <= stats.range).sort((a, b) => b.distance - a.distance);
+      const targets = orderedDefenseTargets(game, tower, stats.range);
       const target = targets[0]; if (!target) { tower.momentum = 0; continue; }
       tower.angle = Math.atan2(target.y - tower.y, target.x - tower.x); tower.cooldown = stats.cooldown;
       beam(game, tower, target, stats.color);
@@ -327,7 +358,8 @@ export function stepDefense(game, elapsed) {
         }
       } else if (tower.type === "ammoSurge") {
         for (let shot=0;shot<stats.shots;shot++) {
-          const next=targets.find(enemy=>enemy.hp>0);if (!next) break;
+          const next=orderedDefenseTargets(game,tower,stats.range)[0];if (!next) break;
+          tower.angle=Math.atan2(next.y-tower.y,next.x-tower.x);
           if (shot) beam(game,tower,next,stats.color); hurt(game,tower,next,stats.damage);
         }
       } else if (tower.type === "phaseWalk") {

@@ -4,3 +4,14 @@
 .turkey-cosmetic-previews > div { display: grid; justify-items: center; gap: 4px; min-width: 0; }
 .turkey-cosmetic-previews canvas { display: block; width: 96px; max-width: 100%; height: auto; }
 .turkey-cosmetic-previews span { font: inherit; font-size: 11px; text-align: center; }
+.cosmetic-buff-upgrades { display: grid; gap: 8px; margin-top: 12px; padding-top: 14px; border-top: 1px solid rgba(148, 163, 184, .18); }
+.turkey-cosmetic-card .cosmetic-buff-upgrades h4 { margin: 0; font-size: 11px; line-height: 1.4; }
+.turkey-cosmetic-card .cosmetic-buff-upgrades p { flex: initial; min-height: 0; margin: 0; font-size: 11px; line-height: 1.5; }
+.turkey-cosmetic-card .cosmetic-buff-upgrades .cosmetic-buff-balance,
+.turkey-cosmetic-card .cosmetic-buff-upgrades .cosmetic-buff-scope { font-size: 10px; color: #94a3b8; }
+.cosmetic-buff-next { color: #bbf7d0; }
+.cosmetic-buff-upgrade { width: 100%; margin-top: 2px; }
+.farm-store-item .cosmetic-buff-upgrades { border-color: #b4986138; }
+.farm-store-item .cosmetic-buff-next { color: #e8c271; }
+.turkey-cosmetic-card.farm-store-item .cosmetic-buff-balance,
+.turkey-cosmetic-card.farm-store-item .cosmetic-buff-scope { color: #a6ad94; }

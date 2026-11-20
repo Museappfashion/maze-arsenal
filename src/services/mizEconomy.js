@@ -1,5 +1,6 @@
 // src/services/mizEconomy.js
 import { CHARACTER_COSMETICS } from "../config/turkeyCosmetic.js";
+import { getCosmeticUpgradeLevel } from "../config/cosmeticPerks.js";
 
 export const MIZ_TILES_PER_COIN = 43;
 
@@ -288,6 +289,7 @@ const DEFAULT_STATE =
     lifetimeExploredTiles: 0,
     lifetimeMizEarned: 0,
     cosmetics: {},
+    cosmeticUpgrades: {},
     consumables: {},
     equippedCharacter: null,
     legacyTurkeyMigrated: false,
@@ -297,6 +299,7 @@ const DEFAULT_STATE =
 let memoryState = {
   ...DEFAULT_STATE,
   cosmetics: {},
+  cosmeticUpgrades: {},
   consumables: {},
 };
 
@@ -438,6 +441,7 @@ function sanitizeState(value) {
     return {
       ...DEFAULT_STATE,
       cosmetics: {},
+      cosmeticUpgrades: {},
       consumables: {},
     };
   }
@@ -468,6 +472,10 @@ function sanitizeState(value) {
         value.cosmetics,
         getCosmeticKeys(),
       ),
+    cosmeticUpgrades: Object.fromEntries(CHARACTER_COSMETICS.flatMap(({ key }) => {
+      const level = getCosmeticUpgradeLevel(value.cosmeticUpgrades?.[key]);
+      return value.cosmetics?.[key] === true && level > 0 ? [[key, level]] : [];
+    })),
     consumables:
       sanitizeCountMap(
         value.consumables,

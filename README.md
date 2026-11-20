@@ -322,13 +322,18 @@ Only the equipped character grants its perk, in any of the four combat mazes.
 Hats stay visual. The effects use run time, pause with the game, and reset on
 a new run. Labyrinth and Free the Flock do not use these combat-skin perks.
 
-| Skin | Perk | Effect |
-| --- | --- | --- |
-| Turkey Disguise | Lucky Peck | Ammo pickups give 10% more ammo, up to the normal cap |
-| Blobby Alien | Alien Recovery | Medkits heal 10% more, up to maximum health |
-| Shadow Wisp | Slip Away | Taking damage grants +15% speed for 2 seconds; 20-second cooldown |
-| Ember Spirit | Ember Strike | Every tenth successful weapon hit deals 3 extra fire damage |
-| Crystal Guardian | Crystal Shell | Absorb up to 5 damage from one hit; 25-second cooldown |
+Each owned skin has **three permanent buff upgrades**, costing **10,000 MIZ
+each**, including Turkey Disguise. Buying an upgrade preserves your equipped
+skin. Its card shows the current buff and the next tier before purchase;
+upgrades apply when you start your next maze. Levels save with your wallet.
+
+| Skin | Base buff | Upgrade 1 | Upgrade 2 | Upgrade 3 |
+| --- | --- | --- | --- | --- |
+| Turkey Disguise | +10% ammo from pickups | +15% | +20% | +25% |
+| Blobby Alien | +10% medkit healing | +15% | +20% | +25% |
+| Shadow Wisp | +15% speed for 2s; 20s cooldown | +20% for 2.5s; 18s cooldown | +25% for 3s; 16s cooldown | +30% for 3.5s; 14s cooldown |
+| Ember Spirit | +3 fire damage every 10 hits | +5 every 9 hits | +7 every 8 hits | +10 every 7 hits |
+| Crystal Guardian | Absorb 5 damage; 25s cooldown | Absorb 7; 23s cooldown | Absorb 9; 21s cooldown | Absorb 12; 18s cooldown |
 
 Ammo/health perks affect ground pickups only. Wisp and Crystal do not spend
 their effects on immune hits. Ember counts real melee and projectile hits,
@@ -373,6 +378,21 @@ Changing maps asks before discarding an active battle. Currencies and other
 mode progress remain untouched. Use 1–9, 0, minus, and the displayed letters
 to choose defenses; S cycles 1× / 2× / 3×. Current and next statistics remain
 visible before an upgrade. Playtime counts real active seconds at every speed.
+
+Pausing shades the frozen battlefield without a pause dialog or text. Use
+Resume in the sidebar, or Space / P with the board focused, to continue.
+Selecting an aimed defense exposes four target priorities:
+
+- **Strongest:** highest remaining health within range.
+- **Weakest:** lowest remaining health within range.
+- **First:** furthest along the route, closest to the core.
+- **Last:** least progress along the route, closest to the spawn.
+
+Each defense keeps its own selection, including after upgrading. The default
+is First. You can adjust priorities while paused; building, upgrading, selling,
+and simulation remain paused. Scattershot sprays, Long Arms sweeps, and support
+fields keep their area effects without a target selector. Targeted explosions
+and chains choose their initial enemy using the selected priority.
 
 **The Cube** unlocks after two hours. It is one connected **100 × 100 × 100**
 maze, with four units per story (25 stories). Randomized ramps connect the

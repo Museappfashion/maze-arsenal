@@ -28,7 +28,7 @@ import {
 } from "./labyrinth.js";
 import { createOwnedWeapons, indexOfTile } from "../utils/math.js";
 import { sanitizePlayerName } from "../utils/player.js";
-import { getPlayerCosmeticForTheme } from "../services/characterCosmetics.js";
+import { getPlayerCosmeticForTheme, getPlayerCosmeticUpgradeForTheme, loadCharacterCosmeticState } from "../services/characterCosmetics.js";
 
 export function getControlsForViewMode(viewMode) {
   if (viewMode === "3d") {
@@ -156,6 +156,7 @@ export function createWorld(
     level,
   );
   const normalizedViewMode = viewMode === "3d" ? "3d" : "2d";
+  const characterState = loadCharacterCosmeticState();
 
   const world = {
     ...maze,
@@ -213,7 +214,8 @@ export function createWorld(
       facingY: 0,
     },
     player: {
-      cosmetic: getPlayerCosmeticForTheme(level.themeKey),
+      cosmetic: getPlayerCosmeticForTheme(level.themeKey, characterState),
+      cosmeticUpgradeLevel: getPlayerCosmeticUpgradeForTheme(level.themeKey, characterState),
       x: 1.5,
       y: 1.5,
       radius: 0.24,

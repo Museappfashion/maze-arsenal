@@ -1,13 +1,23 @@
-import { COSMETIC_PERKS } from "../config/cosmeticPerks.js";
+import { getCosmeticPerkDefinition, getCosmeticUpgradeLevel } from "../config/cosmeticPerks.js";
+
+const resolvedPerks = new WeakMap();
 
 export function getCosmeticPerk(world) {
-  return !world?.labyrinthMode ? COSMETIC_PERKS[world?.player?.cosmetic] ?? null : null;
+  const player = world?.player;
+  if (world?.labyrinthMode || !player) return null;
+  const skin = player.cosmetic, upgradeLevel = getCosmeticUpgradeLevel(player.cosmeticUpgradeLevel);
+  let resolved = resolvedPerks.get(player);
+  if (!resolved || resolved.skin !== skin || resolved.upgradeLevel !== upgradeLevel) {
+    resolved = { skin, upgradeLevel, definition: getCosmeticPerkDefinition(skin, upgradeLevel) };
+    resolvedPerks.set(player, resolved);
+  }
+  return resolved.definition;
 }
 
-function stateFor(world) {
+function stateFor(world, perk) {
   const player = world.player;
-  if (player.cosmeticPerkState?.skin !== player.cosmetic) {
-    player.cosmeticPerkState = { skin: player.cosmetic, readyAt: 0, activeUntil: 0, hits: 0 };
+  if (player.cosmeticPerkState?.skin !== player.cosmetic || player.cosmeticPerkState?.upgradeLevel !== perk.upgradeLevel) {
+    player.cosmeticPerkState = { skin: player.cosmetic, upgradeLevel: perk.upgradeLevel, readyAt: 0, activeUntil: 0, hits: 0 };
   }
   return player.cosmeticPerkState;
 }
@@ -19,48 +29,53 @@ function flash(world, actor, color) {
 
 export function cosmeticPickupAmount(world, type, amount) {
   const gain = Math.max(0, Number(amount) || 0);
-  if (!getCosmeticPerk(world)) return gain;
-  return gain * ((type === "ammo" && world.player.cosmetic === "turkey") || (type === "medkit" && world.player.cosmetic === "alien") ? 1.1 : 1);
+  const perk = getCosmeticPerk(world);
+  if (!perk) return gain;
+  return gain * ((type === "ammo" && world.player.cosmetic === "turkey") || (type === "medkit" && world.player.cosmetic === "alien") ? 1 + perk.pickupBonus : 1);
 }
 
 export function cosmeticSpeedMultiplier(world) {
-  if (!getCosmeticPerk(world) || world.player.cosmetic !== "shadowWisp") return 1;
-  return stateFor(world).activeUntil > world.time ? 1.15 : 1;
+  const perk = getCosmeticPerk(world);
+  if (!perk || world.player.cosmetic !== "shadowWisp") return 1;
+  return stateFor(world, perk).activeUntil > world.time ? 1 + perk.speedBonus : 1;
 }
 
 export function cosmeticIncomingDamage(world, damage) {
-  if (!getCosmeticPerk(world) || world.player.cosmetic !== "crystalGuardian" || damage <= 0) return damage;
-  const state = stateFor(world);
+  const perk = getCosmeticPerk(world);
+  if (!perk || world.player.cosmetic !== "crystalGuardian" || damage <= 0) return damage;
+  const state = stateFor(world, perk);
   if (world.time < state.readyAt) return damage;
-  state.readyAt = world.time + 25;
+  state.readyAt = world.time + perk.cooldown;
   flash(world, world.player, "#a5f3fc");
-  return Math.max(0, damage - 5);
+  return Math.max(0, damage - perk.absorb);
 }
 
 export function cosmeticDamageTaken(world, damage) {
-  if (!getCosmeticPerk(world) || world.player.cosmetic !== "shadowWisp" || damage <= 0 || world.player.hp <= 0) return;
-  const state = stateFor(world);
+  const perk = getCosmeticPerk(world);
+  if (!perk || world.player.cosmetic !== "shadowWisp" || damage <= 0 || world.player.hp <= 0) return;
+  const state = stateFor(world, perk);
   if (world.time < state.readyAt) return;
-  state.readyAt = world.time + 20;
-  state.activeUntil = world.time + 2;
+  state.readyAt = world.time + perk.cooldown;
+  state.activeUntil = world.time + perk.duration;
   flash(world, world.player, "#c4b5fd");
 }
 
 // Called once for each real melee/projectile hit, before changing enemy health.
 export function cosmeticWeaponHitBonus(world, enemy) {
-  if (!getCosmeticPerk(world) || world.player.cosmetic !== "emberSpirit" || !(enemy.hp > 0)) return 0;
-  const state = stateFor(world);
-  state.hits = (state.hits + 1) % 10;
+  const perk = getCosmeticPerk(world);
+  if (!perk || world.player.cosmetic !== "emberSpirit" || !(enemy.hp > 0)) return 0;
+  const state = stateFor(world, perk);
+  state.hits = (state.hits + 1) % perk.hitsRequired;
   if (state.hits !== 0) return 0;
   flash(world, enemy, "#fb923c");
-  return 3;
+  return perk.extraDamage;
 }
 
 export function cosmeticPerkStatus(world) {
   const perk = getCosmeticPerk(world);
   if (!perk) return "";
-  const state = stateFor(world);
-  if (world.player.cosmetic === "emberSpirit") return `${perk.label} · ${state.hits}/10`;
+  const state = stateFor(world, perk);
+  if (world.player.cosmetic === "emberSpirit") return `${perk.label} · ${state.hits}/${perk.hitsRequired}`;
   if (state.activeUntil > world.time) return `${perk.label} · ${(state.activeUntil - world.time).toFixed(1)}s`;
   if (state.readyAt > world.time) return `${perk.label} · ${Math.ceil(state.readyAt - world.time)}s recharge`;
   return `${perk.label} · ready`;

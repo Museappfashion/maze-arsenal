@@ -39,7 +39,7 @@ try{
  const progress=()=>page.evaluate(async()=>(await import("/src/services/playerProgress.js")).getPlayerProgress("oibougvovov").playedSeconds);
  const active=await progress();assert.ok(active>3&&active<5);
  await page.getByRole("button",{name:"Pause",exact:true}).click();const paused=await progress();await page.clock.runFor(1000);assert.equal(await progress(),paused);
- await page.getByRole("button",{name:"Resume battle",exact:true}).click();await page.getByRole("button",{name:"3×",exact:true}).click();await page.clock.runFor(10000);
+ await page.getByRole("button",{name:"Resume",exact:true}).click();await page.getByRole("button",{name:"3×",exact:true}).click();await page.clock.runFor(10000);
  await page.getByRole("button",{name:"Start wave 2",exact:true}).waitFor();await page.screenshot({path:`${out}/td-twenty-powers.png`});
  const keptEnergy=await page.locator(".td-energy").innerText();await page.locator(".td-level-select").getByRole("button",{name:"Abandoned City",exact:true}).click();await page.getByRole("alertdialog").waitFor();await page.getByRole("button",{name:"Keep this battle",exact:true}).click();assert.equal(await page.locator(".td-energy").innerText(),keptEnergy);
  await page.locator(".td-level-select").getByRole("button",{name:"Abandoned City",exact:true}).click();await page.getByRole("button",{name:"Start selected level",exact:true}).click();assert.equal(await page.locator(".td-energy").innerText(),"270");assert.deepEqual(await balances(),{miz:1000000,hux:10000});

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { StatCard } from "./StatCard.jsx";
 import { ENEMY_TYPES } from "../config/enemies.js";
 import { flushTrackedPlay, recordGameStarted, recordGameFinished, recordTrackedPlay } from "../services/developerAnalytics.js";
-import { DEFENSE_COLUMNS, DEFENSE_ROWS, DEFENSE_LEVELS, getDefenseLevel, DEFENSE_TYPES, DEFENSE_WAVES, DEFENSE_MAX_LEVEL, DEFENSE_SPEEDS, createDefenseGame, placeDefense, upgradeDefense, sellDefense, startDefenseWave, stepDefense, setDefenseSpeed, defenseTowerStats, defenseStatSummary, defenseUpgradeCost, defenseSellValue, defenseWave, defenseWaveBrief } from "../game/towerDefense.js";
+import { DEFENSE_COLUMNS, DEFENSE_ROWS, DEFENSE_LEVELS, getDefenseLevel, DEFENSE_TYPES, DEFENSE_WAVES, DEFENSE_MAX_LEVEL, DEFENSE_SPEEDS, DEFENSE_TARGET_MODES, defenseSupportsTargeting, setDefenseTargetMode, createDefenseGame, placeDefense, upgradeDefense, sellDefense, startDefenseWave, stepDefense, setDefenseSpeed, defenseTowerStats, defenseStatSummary, defenseUpgradeCost, defenseSellValue, defenseWave, defenseWaveBrief } from "../game/towerDefense.js";
 import { drawDefenseGame, drawDefensePowerIcon, DEFENSE_CANVAS_WIDTH, DEFENSE_CANVAS_HEIGHT } from "../game/towerDefenseRenderer.js";
 import "../styles/towerDefense.css";
 
@@ -19,6 +19,7 @@ export function TowerDefenseGame({ onBack, playerName }) {
   const selected = game.towers.find((tower) => tower.id === game.selectedId);
   const ended = game.status === "defeat" || game.status === "victory";
   const selectedStats = selected && defenseTowerStats(selected);
+  const selectedTargetMode = DEFENSE_TARGET_MODES.find((mode) => mode.key === selected?.targetMode) || DEFENSE_TARGET_MODES.find((mode) => mode.key === "first");
   const analytics = useRef({ game: null, finished: false });
   const levelDialog = useRef(null);
   useEffect(()=>{if(pendingLevel)levelDialog.current?.querySelector("button")?.focus({preventScroll:true});},[pendingLevel]);
@@ -46,13 +47,13 @@ export function TowerDefenseGame({ onBack, playerName }) {
         flushTrackedPlay(playerName);
         void recordGameFinished({ playerName });
       }
-      drawDefenseGame(ctx, current, hoverRef.current, placingRef.current);
+      drawDefenseGame(ctx, current, current.paused ? null : hoverRef.current, placingRef.current);
       if (now - lastUi > 120) { lastUi = now; setRevision((value) => value + 1); }
       frame = requestAnimationFrame(animate);
     };
     const suspend = () => {
       const current = gameRef.current;
-      if (current.status === "running") { current.paused = true; current.message = "Paused while you were away. Resume when ready."; }
+      if (current.status === "running") current.paused = true;
       previous = performance.now(); flushTrackedPlay(playerName); setRevision((value) => value + 1);
     };
     const visibility = () => { if (document.hidden) suspend(); previous = performance.now(); };
@@ -67,14 +68,14 @@ export function TowerDefenseGame({ onBack, playerName }) {
     hoverRef.current = { x, y };
     const tower = game.towers.find((item) => Math.floor(item.x) === x && Math.floor(item.y) === y);
     if (tower) { game.selectedId = tower.id; game.message = `${DEFENSE_TYPES[tower.type].label}, level ${tower.level}. Upgrade for more power and range.`; }
-    else placeDefense(game, placingRef.current, x, y);
+    else if (!game.paused) placeDefense(game, placingRef.current, x, y);
     refresh();
   }
   function pointerTile(event) {
     const bounds = event.currentTarget.getBoundingClientRect();
     return { x: Math.max(0, Math.min(DEFENSE_COLUMNS - 1, Math.floor((event.clientX - bounds.left) / bounds.width * DEFENSE_COLUMNS))), y: Math.max(0, Math.min(DEFENSE_ROWS - 1, Math.floor((event.clientY - bounds.top) / bounds.height * DEFENSE_ROWS))) };
   }
-  function togglePause() { if (game.status === "running") { game.paused = !game.paused; game.message = game.paused ? "Paused. Resume to keep defending." : `Wave ${game.wave}: defend the core!`; flushTrackedPlay(playerName); refresh(); } }
+  function togglePause() { if (game.status === "running") { game.paused = !game.paused; flushTrackedPlay(playerName); refresh(); } }
   function restart() { flushTrackedPlay(playerName); gameRef.current = createDefenseGame(gameRef.current.levelKey); hoverRef.current = null; refresh(); }
   function changeLevel(key) {
     const current=gameRef.current;
@@ -110,8 +111,9 @@ export function TowerDefenseGame({ onBack, playerName }) {
           onPointerMove={(event) => { hoverRef.current = pointerTile(event); }} onPointerLeave={() => { hoverRef.current = null; }}
           onPointerDown={(event) => { if (event.button !== 0) return; event.currentTarget.focus({ preventScroll: true }); const tile = pointerTile(event); chooseTile(tile.x, tile.y); }} />
         <div className="td-arena-label"><strong>POWERUP DEFENSE</strong><span>{getDefenseLevel(game).title} · Wave {game.wave || 1} / {DEFENSE_WAVES}</span></div>
-        <div className="td-arena-message" role="status">{game.message}</div>
-        {(game.paused || ended) && <div className="td-overlay"><div><p className="td-kicker">{ended ? "RUN COMPLETE" : "TAKE YOUR TIME"}</p><h2>{game.status === "victory" ? "Core protected!" : game.status === "defeat" ? "The core has fallen" : "Paused"}</h2><p>{ended ? `${game.kills} enemies defeated · ${game.wave} waves reached` : "Your defenses and enemies are waiting."}</p><button type="button" className="td-button td-primary" onClick={ended ? restart : togglePause}>{ended ? "Play again" : "Resume battle"}</button></div></div>}
+        {!game.paused && <div className="td-arena-message" role="status">{game.message}</div>}
+        {game.paused && !ended && <div className="td-pause-shade" aria-hidden="true" />}
+        {ended && <div className="td-overlay"><div><p className="td-kicker">RUN COMPLETE</p><h2>{game.status === "victory" ? "Core protected!" : "The core has fallen"}</h2><p>{game.kills} enemies defeated · {game.wave} waves reached</p><button type="button" className="td-button td-primary" onClick={restart}>Play again</button></div></div>}
       </div>
     </section>
     <aside className="td-sidebar" aria-label="Defense HUD">
@@ -140,6 +142,11 @@ export function TowerDefenseGame({ onBack, playerName }) {
           <p className="td-current-stats"><strong>Current:</strong> {defenseStatSummary(selected)}</p>
           <p className="td-next-stats">{selected.level < DEFENSE_MAX_LEVEL ? <><strong>Next · Lv. {selected.level + 1}:</strong> {defenseStatSummary({ ...selected, level: selected.level + 1 })}</> : <strong>Maximum level · these are your final stats.</strong>}</p>
           <p>{selected.kills} enemies defeated</p>
+          {defenseSupportsTargeting(selected) && <fieldset className="td-targeting" disabled={ended}>
+            <legend>Targeting</legend>
+            <div className="td-targeting-modes">{DEFENSE_TARGET_MODES.map((mode) => <button key={mode.key} type="button" className={`td-button ${selectedTargetMode.key === mode.key ? "td-target-active" : ""}`} aria-pressed={selectedTargetMode.key === mode.key} onClick={() => { if (setDefenseTargetMode(game, selected.id, mode.key)) refresh(); }}>{mode.label}</button>)}</div>
+            <p className="td-targeting-help">{selectedTargetMode.description}</p>
+          </fieldset>}
           <div>{selected.level < DEFENSE_MAX_LEVEL ? <button type="button" className="td-button td-primary" disabled={game.energy < defenseUpgradeCost(selected) || game.paused || ended} onClick={() => { upgradeDefense(game, selected.id); refresh(); }}>Upgrade · {defenseUpgradeCost(selected)}</button> : <span className="td-maxed">Maximum level</span>}<button type="button" className="td-button" disabled={game.paused || ended} onClick={() => { sellDefense(game, selected.id); refresh(); }}>Sell · {defenseSellValue(selected)}</button></div>
         </section>}
       </div>
@@ -153,7 +160,7 @@ export function TowerDefenseGame({ onBack, playerName }) {
         })}</div>
         <div className="td-wave-details">{(game.coreRepairs > 0 || game.coreDamageBlocked > 0) && <p className="td-wave-preview">Core support · {game.coreRepairs} health repaired · {game.coreDamageBlocked} damage blocked</p>}<p className="td-wave-preview">{game.status === "building" ? "Next wave" : "This wave"}: {defenseWave(previewWave).length} enemies · {wavePreview}</p><p className="td-wave-traits">{defenseWaveBrief(previewWave)}</p></div>
         <p className="td-tip">Cover several bends with one defense. Frost holds groups in place for Demolition; Precision handles armored Brutes and Wardens. Choose from all twenty powers: add slams, piercing rounds, drain bolts, sweeps, barrages and phase burns to your damage, then combine support fields, repairs and shields. Upgrade through six tiers to survive all 60 waves.</p>
-        <p id="td-board-help" className="td-help">Click or tap an empty tile to build; select a defense to upgrade or sell. Arrows + Enter to build · 1–9, 0, − and displayed letters choose powerup · Space starts or pauses · S changes speed. Energy resets each run; playtime counts real active time at every speed.</p>
+        <p id="td-board-help" className="td-help">Click or tap an empty tile to build; select a defense to upgrade, sell or set its targeting. Sprays, circular sweeps and support fields keep their area effects. Arrows + Enter to build · 1–9, 0, − and displayed letters choose powerup · Space or P pauses/resumes · S changes speed. Energy resets each run; playtime counts real active time at every speed.</p>
       </div>
     </aside>
     {pendingLevel&&<div className="td-level-modal" ref={levelDialog} onKeyDown={(event)=>{

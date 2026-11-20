@@ -5,7 +5,7 @@ import { createServer } from "vite";
 
 // Exercise actual component handlers and successive HUD renders. Canvas pixel
 // output is verified separately by native-scenes-qa.mjs.
-test("defense UI switches speed, shows exact next stats under current stats, and updates them after purchase", async () => {
+test("defense UI shows targeting and upgrade previews, pauses with an empty shade, and retains battle controls", async () => {
   const hooksId="virtual:defense-ui-hooks";
   const source=`let cursor=0; const slots=[];
     export function begin(){cursor=0;}
@@ -40,6 +40,19 @@ test("defense UI switches speed, shows exact next stats under current stats, and
     canvas.props.onPointerDown({button:0,clientX:175,clientY:225,currentTarget:{focus(){},getBoundingClientRect(){return{x:0,y:0,left:0,top:0,width:900,height:600};}}});
     tree=render();assert.equal(game.towers.length,1);
     const tower=game.towers[0];
+    const targeting=byClass(tree,"td-targeting");
+    assert.equal(targeting.type,"fieldset");assert.equal(text(nodes(targeting).find(n=>n.type==="legend")),"Targeting");
+    assert.deepEqual(nodes(targeting).filter(n=>n.type==="button").map(text),["Strongest","Weakest","First","Last"]);
+    assert.equal(button(targeting,"First").props["aria-pressed"],true);
+    const targetEnergy=game.energy,targetCooldown=tower.cooldown;
+    for(const mode of engine.DEFENSE_TARGET_MODES){
+      button(tree,mode.label).props.onClick();tree=render();
+      assert.equal(tower.targetMode,mode.key);
+      assert.equal(button(tree,mode.label).props["aria-pressed"],true);
+      assert.equal(text(byClass(tree,"td-targeting-help")),mode.description);
+      assert.equal(game.energy,targetEnergy);assert.equal(tower.cooldown,targetCooldown);
+    }
+    button(tree,"First").props.onClick();tree=render();
     const current=byClass(tree,"td-current-stats"), next=byClass(tree,"td-next-stats");
     assert.match(text(current),/Current:.*7 damage.*0\.24s cooldown.*2\.80 tile range/);
     assert.match(text(next),/Next · Lv\. 2:.*11 damage.*0\.21s cooldown.*3\.15 tile range/);
@@ -61,7 +74,19 @@ test("defense UI switches speed, shows exact next stats under current stats, and
     assert.equal(nodes(byClass(tree,"td-shop")).filter(n=>n.props?.className?.split(" ").includes("td-power")).length,20);
     button(tree,"Start wave 1").props.onClick();tree=render();button(tree,"Pause").props.onClick();tree=render();
     assert.equal(game.paused,true);assert.equal(button(tree,`Sell · ${engine.defenseSellValue(tower)}`).props.disabled,true);
-    button(tree,"Resume battle").props.onClick();tree=render();assert.equal(game.paused,false);
+    const shade=byClass(tree,"td-pause-shade");assert.ok(shade);assert.equal(shade.props["aria-hidden"],"true");assert.equal(text(shade),"");assert.equal(shade.props.children,undefined);
+    assert.equal(byClass(tree,"td-overlay"),undefined);assert.equal(byClass(tree,"td-arena-message"),undefined);
+    assert.equal(button(tree,"Resume battle"),undefined);assert.equal(nodes(tree).some(n=>n.type==="h2"&&text(n)==="Paused"),false);
+    const pausedEnergy=game.energy,pausedTime=game.time,pausedCooldown=tower.cooldown;
+    button(tree,"Weakest").props.onClick();tree=render();assert.equal(tower.targetMode,"weakest");
+    assert.equal(game.energy,pausedEnergy);assert.equal(game.time,pausedTime);assert.equal(tower.cooldown,pausedCooldown);
+    game.selectedId=null;tree=render();
+    nodes(tree).find(n=>n.type==="canvas").props.onPointerDown({button:0,clientX:175,clientY:225,currentTarget:{focus(){},getBoundingClientRect(){return{left:0,top:0,width:900,height:600};}}});tree=render();assert.equal(game.selectedId,tower.id,"paused towers remain selectable");assert.ok(byClass(tree,"td-targeting"));
+    const pausedMessage=game.message,pausedCount=game.towers.length;
+    nodes(tree).find(n=>n.type==="canvas").props.onPointerDown({button:0,clientX:75,clientY:75,currentTarget:{focus(){},getBoundingClientRect(){return{left:0,top:0,width:900,height:600};}}});tree=render();assert.equal(game.towers.length,pausedCount);assert.equal(game.energy,pausedEnergy);assert.equal(game.message,pausedMessage,"paused empty tiles cannot build or replace the frozen scene message");
+    button(tree,"Resume").props.onClick();tree=render();assert.equal(game.paused,false);assert.equal(byClass(tree,"td-pause-shade"),undefined);assert.ok(byClass(tree,"td-arena-message"));
+    nodes(tree).find(n=>n.type==="canvas").props.onKeyDown({key:"p",preventDefault(){}});tree=render();assert.equal(game.paused,true);
+    nodes(tree).find(n=>n.type==="canvas").props.onKeyDown({key:" ",preventDefault(){}});tree=render();assert.equal(game.paused,false);
     nodes(tree).find((n)=>n.type==="canvas").props.onKeyDown({key:"s",preventDefault(){}});assert.equal(game.speed,1);
     nodes(tree).find(n=>n.type==="canvas").props.onKeyDown({key:"0",preventDefault(){}});tree=render();
     assert.match(text(byClass(tree,"td-power-selected")),/Regeneration.*key 0/);
@@ -70,6 +95,7 @@ test("defense UI switches speed, shows exact next stats under current stats, and
     nodes(tree).find(n=>n.type==="canvas").props.onPointerDown({button:0,clientX:75,clientY:75,currentTarget:{focus(){},getBoundingClientRect(){return {left:0,top:0,width:900,height:600};}}});tree=render();
     assert.match(text(byClass(tree,"td-current-stats")),/2 core shield per wave/);
     assert.match(text(byClass(tree,"td-next-stats")),/3 core shield per wave/);
+    assert.equal(byClass(tree,"td-targeting"),undefined,"support fields do not expose ineffective target controls");
     const levels=byClass(tree,"td-level-select");
     assert.equal(nodes(levels).filter(n=>n.type==="button").length,4);
     assert.equal(button(tree,"Orbital Ruins").props["aria-pressed"],true);
@@ -83,7 +109,21 @@ test("defense UI switches speed, shows exact next stats under current stats, and
     assert.equal(button(tree,"Abandoned City").props["aria-pressed"],true);
     button(tree,"Restart").props.onClick();tree=render();assert.equal(hooks.slot(0).current.levelKey,"city");
     button(tree,"Emerald Wilds").props.onClick();tree=render();assert.equal(hooks.slot(0).current.levelKey,"jungle");assert.equal(byClass(tree,"td-level-modal"),undefined);
-
-
+    const latest=hooks.slot(0).current;
+    for(const type of ["scattershot","longArms","frost","berserk","sonar","bounty","regen","shield"]){
+      latest.towers=[{id:900,type,x:2.5,y:1.5,level:1,kills:0,spent:100,cooldown:0}];latest.selectedId=900;tree=render();
+      assert.equal(byClass(tree,"td-targeting"),undefined,`${type} has no targeting modes`);
+    }
+    for(const type of Object.keys(engine.DEFENSE_TYPES).filter(key=>engine.defenseSupportsTargeting(key))){
+      latest.towers=[{id:901,type,x:2.5,y:1.5,level:1,kills:0,spent:100,cooldown:0}];latest.selectedId=901;tree=render();
+      assert.ok(byClass(tree,"td-targeting"),`${type} exposes its effective targeting modes`);
+      assert.equal(button(tree,"First").props["aria-pressed"],true,"older defenses without an explicit mode display First");
+    }
+    for(const status of ["victory","defeat"]){
+      latest.status=status;latest.paused=true;tree=render();
+      assert.equal(byClass(tree,"td-pause-shade"),undefined);
+      const overlay=byClass(tree,"td-overlay");assert.ok(overlay);assert.match(text(overlay),status==="victory"?/Core protected!/:/The core has fallen/);assert.ok(button(overlay,"Play again"));
+      assert.equal(byClass(tree,"td-targeting").props.disabled,true);
+    }
   } finally {await server.close();}
 });
